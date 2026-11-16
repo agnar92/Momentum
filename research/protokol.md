@@ -291,3 +291,6 @@ Miary: średnia korelacja rang per kwartał (IC), mediana błędu bezwzględnego
 faktycznej zmiany na prognozę (odporna: regresja kwantylowa mediany) = trwałość wzrostu.
 (b) Rozkład 12-mies. zmiany ceny (skorygowanej) członków S&P 500 point-in-time 1998-2025: percentyle 5/25/50/75/95, odsetek
 > +50 % i > +100 %, w podziale na kwintyle faktycznego (z wiedzą o przyszłości) wzrostu EPS w tym samym roku (2012-2025).
+Wynik etapu 25 (2026-11-16): portfele z arkusza 8,7-11,5 % rocznie, poniżej równych wag (12,8 %) i SPY (14,1 %); CEM10 z filtrem PEG < 1 10,6 % vs 21,9 %. Żaden lepszy.
+Wynik etapu 25b (2026-11-16): wartość g x EPS nie przewiduje ceny za rok (IC -0,001 i -0,011, decyle płaskie ~ +11 %).
+Wynik etapu 26 (2026-11-16): wszystkie prognozy z przeszłego wzrostu EPS mają UJEMNE IC (-0,10..-0,19) - wzrost zysku wraca do średniej; najmniejszy błąd dają "zero" i obcięty CAGR (~25-27 pp); tylko wzrost przychodów ma słabo dodatnie IC. Roczna zmiana ceny S&P 500: mediana +9,5 %, 50 % w -9..+29 %, 90 % w -41..+69 %.
