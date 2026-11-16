@@ -336,3 +336,8 @@ Wynik etapu 29 (2026-11-16): wersja realna (CAGR od początku) 7,1-11,7 %, żadn
 Wariant B (prognoza jak analityk), N = 20 i 10, bez przycinania: częstotliwość decyzji (kwartalnie, trzymaj w top 2N jak etap 28 /
 raz w roku jak etap 29 R1) x filtr PEG <= 1 (bez / z).
 Wynik etapu 29b: różnica wynika z częstotliwości decyzji (kwartalnie 26,4 % vs raz w roku 16-20 %); filtr PEG <= 1 nie szkodzi (przy rocznych decyzjach pomaga +1,3..+4 pp). Kwartalne decyzje z prognozą opartą na przyszłości korzystają z niej częściej - to część przewagi nierealnej.
+
+## Etap 29c: sprawdzanie PEG i wartości (fair value) co miesiąc (zapisane 2026-11-16 PRZED uruchomieniem)
+Jak etap 29 (PEG <= 1 i IV > cena = akcja "tania", ranking po potencjale IV), bez przycinania, ale decyzje: co miesiąc / co kwartał /
+raz w roku. Trzymanie: (R1) dopóki tania (IV > cena i PEG <= 1), (R3) dopóki w top 2N. Wolne miejsca = kolejni z rankingu, kwota =
+kapitał / N z gotówki. Wzrost A (CAGR EPS od początku, realne) i B (jak analityk, nierealne). N = 10 i 20. Reszta jak etap 29.
