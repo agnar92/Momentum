@@ -305,3 +305,4 @@ Sprawdziany: (1) trafność g i g_kor dla wzrostu EPS (IC, mediana błędu) i IV
 (2) portfele jak etap 25: top 20 najwyższy potencjał IV (= najniższy PEG trailing), top 20 najniższy forward PEG,
 wszystkie z IV > cena, wszystkie z forward PEG < 1, top 20 najwyższy potencjał IV_kor; równe wagi, decyzje kwartalne.
 Uniwersum, okres (2011-2026, połowy 2011-2018 / 2019-2026), koszty, odniesienia i kryterium "lepszy" jak etap 25.
+Wynik etapu 27 (2026-11-16): żaden portfel nie lepszy od równych wag (najlepszy: wszystkie z forward PEG < 1, 12,6 % vs 12,8 %); korekta uczy się ujemnego nachylenia (-0,07..-0,13); IV nie przewiduje ceny za rok (IC -0,008 i 0,000).
