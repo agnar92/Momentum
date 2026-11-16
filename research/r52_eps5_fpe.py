@@ -1,4 +1,4 @@
-"""Etap 31: EPS 5 lat > 15 % i niskie forward P/E (forward EPS z ważonej średniej przychodów).
+"""Etap 31: top 40 po EPS 5 lat, z nich najniższe forward P/E (forward EPS z ważonej średniej przychodów).
 Etap 30:
 Etap 29c:
 Etap 29: strategia użytkownika - PEG <= 1, top N po IV, roczna przebudowa, kwartalne przycinanie.
@@ -323,19 +323,24 @@ for k, T in TT.items():
         e0, t0 = zn.index[-1], zn.ttm.iloc[-1]
         c = zn[(zn.index <= e0 - pd.Timedelta(days=5 * 365 - 45)) & (zn.index >= e0 - pd.Timedelta(days=5 * 365 + 45))]
         if len(c) and t0 > 0 and c.ttm.iloc[-1] > 0: G5[i, j] = (t0 / c.ttm.iloc[-1]) ** (1 / 5) - 1
-print('EPS 5 lat: wartości', np.isfinite(G5).sum(), 'z nich > 15 %', np.nansum(G5 > 0.15), flush=True)
+print('EPS 5 lat: wartości', np.isfinite(G5).sum(), flush=True)
 rng_ = np.random.default_rng(20261116); Z2 = rng_.standard_normal((NT, NS))
 GWS = {'A: ważona średnia przychodów (metoda użytkownika)': GRW, 'B: bez estymaty (trailing P/E)': np.where(np.isfinite(EPS0), 0.0, np.nan),
        'C: jak analityk, błąd 10 pp (nierealne)': GF + 0.05 + 0.10 * Z2}
 ew = rowne(); rows = []
 for gn, G in GWS.items():
     fe = EPS0 * (1 + G)
-    fpe = np.where((fe > 0) & (EPS0 > 0) & (G5 > 0.15), Cv / fe, np.nan)
-    P_ = -fpe                                    # strat2 sortuje malejąco -> najniższe forward P/E pierwsze
+    P_ = np.full((NT, NS), np.nan)
+    for i in range(NT):
+        a = np.flatnonzero(U[i] & np.isfinite(G5[i]) & (np.nan_to_num(EPS0[i]) > 0) & np.isfinite(Cv[i]))
+        if len(a) < 40: continue
+        top40 = a[np.argsort(-G5[i, a])][:40]
+        ok = top40[np.nan_to_num(fe[i, top40], nan=-1) > 0]
+        P_[i, ok] = -(Cv[i, ok] / fe[i, ok])      # strat2 sortuje malejąco -> najniższe forward P/E pierwsze
     ile = [np.sum(U[im_[m]] & np.isfinite(P_[im_[m]])) for m in mies if m.month == 2]
     print(gn, 'kandydatów w lutym: mediana', np.median(ile), flush=True)
     for N in (10, 20):
-        for regula, rn in (('R1', 'dopóki EPS 5 l. > 15 %'), ('R3', 'dopóki w top 2N')):
+        for regula, rn in (('R1', 'dopóki w top 40 po EPS 5 l.'), ('R3', 'dopóki w top 2N')):
             for cz, mm in CZ.items():
                 e = strat2(P_, N, mm, regula)
                 d = (e.pct_change() - ew.pct_change()).dropna(); lo, hi = blok(d.values)
@@ -344,6 +349,6 @@ for gn, G in GWS.items():
                                  z_10k=round(10000 * e.iloc[-1]), roznica_vs_rowne=f'{d.mean()*100:+.2f} ({lo*100:.2f}…{hi*100:.2f})', lepszy=c1 > b1 and c2 > b2 and lo > 0))
         print(gn, N, flush=True)
 T = pd.DataFrame(rows)
-out = ['# Etap 31: EPS 5 lat > 15 % + najniższe forward P/E (S&P 500 z danymi SEC, 2011-2026)', '',
+out = ['# Etap 31: top 40 po CAGR EPS 5 lat -> 10 z najniższym forward P/E (S&P 500 z danymi SEC, 2011-2026)', '',
        'Odniesienia: równe wagi uniwersum 12,8 %, SPY 14,1 %, CEM10 21,9 %.', '', T.round(3).to_markdown(index=False), '']
 open(os.path.join(HERE, 'wyniki', 'r52_eps5_fpe.md'), 'w').write('\n'.join(out)); print('\n'.join(out))

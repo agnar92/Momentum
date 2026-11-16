@@ -358,3 +358,7 @@ cena / (EPS TTM x (1 + g)), tylko forward EPS > 0. g (estymata wzrostu EPS): (A)
 metoda użytkownika), (B) g = 0 (zwykłe trailing P/E, kontrola: czy estymata coś dodaje), (C) faktyczny wzrost + błąd 10 pp (jak analityk, nierealne).
 N = 10 i 20; decyzje co miesiąc / kwartał / rok; trzymanie (R1) dopóki spełnia warunek EPS 5 lat > 15 %, (R3) dopóki w top 2N.
 Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium "lepszy" jak etap 29c. 36 wariantów, rozpoznawcze.
+Poprawka etapu 31 (2026-11-16, PRZED wynikami; pierwsze uruchomienie przerwane bez wyników): użytkownik doprecyzował regułę: zamiast progu
+EPS 5 lat > 15 % -> co decyzję 40 spółek z najwyższym CAGR EPS z 5 lat (wśród członków S&P 500 z dodatnim EPS), z nich 10 z najniższym
+forward P/E. N = 10 (dodatkowo 20 dla porównania). Trzymanie: (R1) dopóki spółka jest w top 40 po EPS 5 lat, (R3) dopóki w top 2N rankingu forward P/E
+wśród tej czterdziestki. Reszta bez zmian.
