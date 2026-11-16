@@ -341,3 +341,4 @@ Wynik etapu 29b: różnica wynika z częstotliwości decyzji (kwartalnie 26,4 % 
 Jak etap 29 (PEG <= 1 i IV > cena = akcja "tania", ranking po potencjale IV), bez przycinania, ale decyzje: co miesiąc / co kwartał /
 raz w roku. Trzymanie: (R1) dopóki tania (IV > cena i PEG <= 1), (R3) dopóki w top 2N. Wolne miejsca = kolejni z rankingu, kwota =
 kapitał / N z gotówki. Wzrost A (CAGR EPS od początku, realne) i B (jak analityk, nierealne). N = 10 i 20. Reszta jak etap 29.
+Wynik etapu 29c (2026-11-16): realne (CAGR EPS) 8,7-12,5 %, żaden lepszy; z prognozą jak analityk co miesiąc 26-27 % (DD -21..-28 %), co kwartał podobnie, raz w roku 18-20 %.
