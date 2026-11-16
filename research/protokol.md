@@ -330,3 +330,4 @@ potencjale IV / cena - 1; N = 10 i 20. Przebudowa raz w roku (koniec lutego): (R
 (oraz bez przycinania); gotówka czeka (0 %) do następnej przebudowy rocznej. Wzrost g: (A) CAGR EPS od początku danych
 (metoda z etapu 27, realna), (B) faktyczny wzrost + błąd N(+5 pp, 10 pp) (symulacja jakości analityka, wiedza o przyszłości,
 nierealne, górna granica). Koszt 0,1 %/stronę (także przycięcia). Uniwersum, okres, połowy, odniesienia, kryterium jak etap 27.
+Wynik etapu 29 (2026-11-16): wersja realna (CAGR od początku) 7,1-11,7 %, żadna nie lepsza od równych wag; z prognozą jakości analityka (nierealne) 15-20 %, 10 z 12 lepszych; przycinanie 7 % kosztuje 4-5 pp przy N = 10.
