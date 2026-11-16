@@ -262,3 +262,4 @@ Wynik etapu 24 (2026-11-16): limit 10 % obniża CAGR CEM10 (S&P N=10 18,1 vs 19,
 ## Etap 24b: rebalancing raz w roku (zapisane 2026-11-16 PRZED uruchomieniem)
 Jak etap 24, ale wyrównanie wszystkich pozycji do kapitał / N raz w roku (koniec grudnia); dla porównania co kwartał
 (marzec, czerwiec, wrzesień, grudzień) i co miesiąc. Pozostałe zasady, okresy, N i kryterium bez zmian. Rozpoznawcze.
+Wynik etapu 24b (2026-11-16): rebalancing (rocznie, kwartalnie, miesięcznie) nie poprawia CEM10; żaden wariant nie spełnia kryteriów (szczegóły w wyniki/r41_rebal_rok.md).
