@@ -156,11 +156,29 @@ które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_h
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
 **No Windows script any more** (user, Nov 2026: "po co nam ps1 … chcę tylko desktopowe CEM10"): `cem10_windows/CEM10.bat`, `cem10.ps1`, `CZYTAJ.txt`, `sklad_usa.json` and the in-browser `computeFromRaw` (`dane.js`) were removed; the PC version is the desktop program in agnar92/MomentumDesktop (CEM10 only since Nov 2026). `cem10_windows/sklad_gpw.json` stays (the monthly job reads it).
 
+## Wycena: PEG and intrinsic value (`wycena.py`, `momentum/wycena.py`, `docs/wycena.html`, `docs/js/wycena.js`)
+
+User, Nov 2026: "zrób w momentum stronę, która da nam listę z niedowartościowanymi akcjami z największym potencjałem wzrostowym, tak jak w
+tym excelu … grow jest z yfinance z growth estimates" (web only, not in the desktop app). Formulas of the user's Google Sheet:
+P/E = price / trailing EPS (TTM), g = analysts' EPS growth for the NEXT fiscal year (yfinance `growth_estimates` `stockTrend` `+1y`),
+PEG = P/E / (100 g), intrinsic value (fair value, "price in a year") = EPS x 100 g (Peter Lynch), potential = value / price - 1 (= 1 / PEG - 1),
+forward PEG = price / (EPS (1 + g)) / (100 g); no positive EPS or g <= 0 -> no PEG / value. Default list: PEG <= 1, value > price,
+>= 3 analysts (`earnings_estimate` `numberOfAnalysts` for `+1y`), sorted by potential, top 10 / 20 green; the page has PEG max,
+min analysts, index, top N, search, header sort (settings in localStorage `wycena_opt`). Universe = Finviz idx_sp500 + idx_ndx (count
+check 400–600 / 80–120 = job error); `wycena.py` fetches yfinance per ticker (info + growth_estimates + earnings_estimate, retries),
+< 80 % of tickers with data = nothing written. Workflow `wycena.yml` ("Wycena Monthly", 1st of the month 07:41 UTC + manual) commits only
+`docs/data/wycena.json` and deploys Pages. Research (research/wyniki/r42–r50, stages 25–29c): with HISTORICAL EPS growth the method does not beat
+the market (≈ 10–12 %/yr, value does not predict next-year price, past EPS growth mean-reverts); with an accurate forecast (simulation with
+future knowledge, ±10 pp) top 10–20 checked monthly / quarterly ≈ 25–27 %/yr, yearly ≈ 18–20 %; trimming to 7–10 % hurt. Consensus is public
+and priced in, so the real result is in between — the page says it is a screen, not a buy signal.
+
 ## CI (`.github/workflows/`)
 
 - `refresh.yml` ("Weekly Refresh"): Saturday 03:17 UTC + manual; runs `python watchlist.py`, commits `docs/data/` and `data/` with
   `[skip ci]` (reset onto current `origin/main`, retry loop) and deploys Pages.
 - `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
+  (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
+- `wycena.yml` ("Wycena Monthly"): 1st of the month 07:41 UTC + manual; runs `python wycena.py`, commits only `docs/data/wycena.json`
   (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest, ESLint + `node --test`.
@@ -173,6 +191,7 @@ Code comments and CLI messages are in Polish; keep that convention.
 pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
 python cem10.py
+python wycena.py [--max-tickers N]
 python -m pytest -q && ruff check .
 npm ci && npm test && npm run lint
 cd docs && python3 -m http.server
