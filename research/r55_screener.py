@@ -322,7 +322,7 @@ print('kandydaci (miesiąc): mediana', np.median(KAND.sum(axis=1)[im_[mies[0]]:]
 
 
 # --- bilans z SEC (r55a_sec_bilans.py) -> ROE i dług / kapitał na koniec każdego miesiąca ---
-B = json.load(open('/home/user/ndx/bilans.json'))
+BIL = json.load(open('/home/user/ndx/bilans.json'))
 ROE = np.full((NT, NS), np.nan); DE = np.full((NT, NS), np.nan)
 kon = {m: m.to_timestamp(how='end') for m in DECm}
 
@@ -337,7 +337,7 @@ def ostatni(rows, t):
 
 
 nb = 0
-for k, d in B.items():
+for k, d in BIL.items():
     if not d or not d.get('eq'): continue
     q = kwartaly([[s_, e_, v_, f_] for s_, e_, v_, f_ in d.get('ni', [])])
     NIq = pd.DataFrame([(pd.Timestamp(e), v, pd.Timestamp(f)) for e, (v, f) in q.items()], columns=['end', 'eps', 'filed']).sort_values('end')
