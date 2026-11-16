@@ -217,3 +217,12 @@ filtr SPY < SMA 12, koszt 0,1 %. S&P 500 1998-2026 (połowy 1998-2012 / 2013-202
 N = 5 i 10. Porównanie z rankingiem 6M (CEM10) przy tych samych ustawieniach. "Lepszy": wyższy CAGR w obu połowach i dolna
 granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Rozpoznawcze (okresy znane, 16 porównań).
 Wynik etapu 21 (2026-11-15): ranking łączony 1M + 6M gorszy od 6M we wszystkich 16 porównaniach; żaden nie spełnia kryteriów.
+
+## Etap 22: filtr beta 0,9-1,1 (zapisane 2026-11-16 PRZED uruchomieniem)
+Pomysł użytkownika: kupować tylko spółki o becie 0,9-1,1. Beta = cov(r_spółki, r_SPY) / var(r_SPY) z TYGODNIOWYCH zwrotów
+(tabela w, SPY z rynek_w), liczona na koniec każdego miesiąca z okien 52, 156 i 260 tygodni (1, 3, 5 lat); wymagane >= 80 %
+tygodni z danymi. Filtr przy wejściu: 0,9 <= beta <= 1,1; reszta zasad CEM10 (wejście > SMA 10, 6M > 30 % oraz wariant bez progu,
+ranking 6M, wyjście < SMA 10, brak zakupów przy SPY < SMA 12, koszt 0,1 %). S&P 500 1998-2026 (połowy 1998-2012 / 2013-2026),
+NDX 2008-2026 (połowy 2008-2016 / 2017-2026), N = 5 i 10. Porównanie z CEM10 bez filtra. "Lepszy": wyższy CAGR w obu połowach
+i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Dodatkowo opis: rozkład bety spółek kupowanych przez
+CEM10 i odsetek kandydatów z betą 0,9-1,1. Rozpoznawcze (24 porównania, okresy znane).
