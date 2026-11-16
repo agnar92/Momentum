@@ -312,3 +312,11 @@ Dla końców kwartałów 2012-2025 (spółki z danymi SEC, TTM > 0): przeszły C
 w przedziałach < 0, 0-10, 10-20, 20-30, 30-50, > 50 %; w każdym: mediana i kwartyle faktycznej zmiany EPS za 1 rok, odsetek
 przypadków, gdy faktyczny wzrost >= przeszły CAGR, oraz faktyczny CAGR za kolejne 3 lata (gdy dostępny, oba końce > 0).
 Wynik etapu 27b (2026-11-16): im wyższy przeszły CAGR EPS, tym niższy przyszły wzrost (CAGR 3 l. > 50 %: mediana za rok -5 %, za 3 lata 5 %/rok; < 0 %: +28 % / 23 %/rok); kolejne lata zbiegają do ~10 %.
+
+## Etap 28: wartość wewnętrzna z prognozą jakości analityków (zapisane 2026-11-16 PRZED uruchomieniem)
+Historii konsensusu analityków brak (EODHD fundamentals niedostępne w tym planie: 403). Symulacja: g_hat = faktyczny wzrost
+EPS TTM za 4 kwartały (wiedza o przyszłości) + błąd; błąd ~ N(b, s): (s, b) = (0, 0) idealna prognoza, (10 pp, +5 pp),
+(20 pp, +5 pp), (35 pp, +5 pp) (analitycy są przeciętnie zbyt optymistyczni); ziarno 20261116. Odniesienie: g = 10 % dla wszystkich.
+IV = EPS TTM x 100 g_hat (arkusz, tylko g_hat > 0); potencjał = IV / cena - 1. Sprawdziany (decyzje kwartalne 2011-2025):
+(1) IC potencjału z faktyczną zmianą ceny za rok i kwintyle; (2) portfele: top 20 najwyższy potencjał (trzymaj w top 40) i
+wszystkie z IV > cena, jak etap 27. Uniwersum, okres, koszty, odniesienia jak etap 27. Opisowe (wiedza o przyszłości - nierealne).
