@@ -1,7 +1,49 @@
 """Etap 24b (bazuje na r40): CEM10 z limitem udziału pozycji (przycinanie zwycięzców), protokół etap 24."""
 import os, numpy as np, pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
-exec(open(os.path.join(HERE, 'r36_laczony.py')).read().split('rows = []
+exec(open(os.path.join(HERE, 'r36_laczony.py')).read().split('rows = []')[0])   # macierze, U_SP, U_ND, blok, cagr, etf
+SPYm = etf['SPY']
+spr = np.array([SPYm.get(ms[i + 1], np.nan) / SPYm.get(ms[i], np.nan) - 1 if i + 1 < NT else 0 for i in range(NT)])
+
+
+def sim(U, N, od, do, L=None, spy=False, rebal=None, k=0.001):
+    i0, i1 = im[pd.Period(od, 'M')], im[pd.Period(do, 'M')]
+    poz, got, eq, obrot = {}, 1.0, [1.0], 0.0
+    for i in range(i0, i1):
+        c = Cm[i]
+        for j in list(poz):
+            if not np.isfinite(c[j]) or (np.isfinite(S10[i, j]) and c[j] < S10[i, j]): got += poz.pop(j) * (1 - k)
+        e = got + sum(poz.values())
+        if L is not None:
+            for j in poz:
+                if poz[j] > L * e:
+                    x = poz[j] - L * e; poz[j] -= x; got += x * (1 - k); obrot += x / e
+        ok = U[i] & np.isfinite(c) & np.isfinite(S10[i]) & (c > S10[i]) & (np.nan_to_num(R6[i], nan=-9) > 0.30)
+        kand = np.flatnonzero(ok); kand = kand[np.argsort(-R6[i, kand])]
+        if not BEAR[i]:
+            e = got + sum(poz.values())
+            for j in kand:
+                if len(poz) >= N: break
+                if j in poz: continue
+                kw = min(e / N, got)
+                if kw <= 1e-9: break
+                got -= kw; poz[j] = kw * (1 - k)
+        if rebal and poz and ms[i].month in rebal:
+            e = got + sum(poz.values()); cel = e / N
+            for j in poz:
+                d = cel - poz[j]
+                if d > 0: d = min(d, got)
+                got -= d; poz[j] += d - abs(d) * k
+        c1 = Cm[i + 1]
+        for j in list(poz):
+            if np.isfinite(c1[j]) and np.isfinite(c[j]) and c[j] > 0: poz[j] *= c1[j] / c[j]
+            else: got += poz.pop(j) * (1 - k)
+        if spy and np.isfinite(spr[i]): got *= 1 + spr[i]
+        eq.append(got + sum(poz.values()))
+    return pd.Series(eq, index=pd.period_range(od, periods=len(eq), freq='M'))
+
+
+rows = []
 for un, U, od, pol in (('S&P 500', U_SP, '1998-01', '2012-12'), ('NDX', U_ND, '2008-01', '2016-12')):
     for N in (10, 20):
         e0 = sim(U, N, od, '2026-09')
