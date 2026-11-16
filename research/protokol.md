@@ -226,3 +226,4 @@ ranking 6M, wyjście < SMA 10, brak zakupów przy SPY < SMA 12, koszt 0,1 %). S&
 NDX 2008-2026 (połowy 2008-2016 / 2017-2026), N = 5 i 10. Porównanie z CEM10 bez filtra. "Lepszy": wyższy CAGR w obu połowach
 i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Dodatkowo opis: rozkład bety spółek kupowanych przez
 CEM10 i odsetek kandydatów z betą 0,9-1,1. Rozpoznawcze (24 porównania, okresy znane).
+Wynik etapu 22 (2026-11-16): filtr beta 0,9-1,1 obniża CAGR we wszystkich 24 wariantach (S&P ~10-11 %, NDX 4-13 %), w 16 istotnie; mediana bety kupowanych przez CEM10 1,2-1,3, w przedziale 0,9-1,1 tylko 9-18 % zakupów.
