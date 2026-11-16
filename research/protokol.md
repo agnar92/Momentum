@@ -311,3 +311,4 @@ Wynik etapu 27 (2026-11-16): żaden portfel nie lepszy od równych wag (najlepsz
 Dla końców kwartałów 2012-2025 (spółki z danymi SEC, TTM > 0): przeszły CAGR EPS TTM (3 lata, 5 lat, od początku danych, min. 3 lata)
 w przedziałach < 0, 0-10, 10-20, 20-30, 30-50, > 50 %; w każdym: mediana i kwartyle faktycznej zmiany EPS za 1 rok, odsetek
 przypadków, gdy faktyczny wzrost >= przeszły CAGR, oraz faktyczny CAGR za kolejne 3 lata (gdy dostępny, oba końce > 0).
+Wynik etapu 27b (2026-11-16): im wyższy przeszły CAGR EPS, tym niższy przyszły wzrost (CAGR 3 l. > 50 %: mediana za rok -5 %, za 3 lata 5 %/rok; < 0 %: +28 % / 23 %/rok); kolejne lata zbiegają do ~10 %.
