@@ -350,3 +350,4 @@ Wariant: średnia arytmetyczna tych 4 zmian. g używane jako prognoza wzrostu EP
 forward PEG jak etap 29. Sprawdziany: (1) IC g z faktyczną zmianą EPS TTM za 4 kwartały i potencjału IV z ceną za rok (decyzje kwartalne);
 (2) portfele jak etap 29c: kandydaci PEG <= 1 i IV > cena, ranking po potencjale, N = 10 i 20, decyzje co miesiąc / kwartał / rok,
 trzymanie dopóki tania (R1) albo w top 2N (R3), bez przycinania. Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium jak etap 29c.
+Wynik etapu 30 (2026-11-16): ważony wzrost przychodów najlepiej z historycznych prognoz przewiduje wzrost EPS (IC 0,133, t 11,8), ale potencjał IV z nim nie przewiduje ceny (IC -0,04); portfele 10,8-15,8 % (najlepszy N=10 co miesiąc 14,6 % ważona / 15,8 % arytm.), żaden nie spełnia kryteriów; wynik w całości z 2019-2026 (2011-18: 2,7-6,4 %).
