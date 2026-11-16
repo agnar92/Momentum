@@ -294,3 +294,14 @@ faktycznej zmiany na prognozę (odporna: regresja kwantylowa mediany) = trwało�
 Wynik etapu 25 (2026-11-16): portfele z arkusza 8,7-11,5 % rocznie, poniżej równych wag (12,8 %) i SPY (14,1 %); CEM10 z filtrem PEG < 1 10,6 % vs 21,9 %. Żaden lepszy.
 Wynik etapu 25b (2026-11-16): wartość g x EPS nie przewiduje ceny za rok (IC -0,001 i -0,011, decyle płaskie ~ +11 %).
 Wynik etapu 26 (2026-11-16): wszystkie prognozy z przeszłego wzrostu EPS mają UJEMNE IC (-0,10..-0,19) - wzrost zysku wraca do średniej; najmniejszy błąd dają "zero" i obcięty CAGR (~25-27 pp); tylko wzrost przychodów ma słabo dodatnie IC. Roczna zmiana ceny S&P 500: mediana +9,5 %, 50 % w -9..+29 %, 90 % w -41..+69 %.
+
+## Etap 27: forward PEG i wartość wewnętrzna z CAGR "od początku" z korektą (zapisane 2026-11-16 PRZED uruchomieniem)
+Metoda użytkownika: g = CAGR EPS TTM od pierwszego dodatniego TTM w danych SEC (ok. 2008-2010) do bieżącego (okno rosnące,
+min. 3 lata, oba > 0); co kwartał liczone na nowo z nowymi danymi. EPS za rok = EPS x (1 + g). Forward P/E = cena / EPS za rok;
+forward PEG = forward P/E / (100 g); wartość wewnętrzna IV = EPS x 100 g (arkusz); potencjał = IV / cena - 1.
+Korekta (wariant K): co kwartał regresja mediany faktycznego wzrostu TTM za rok na prognozę g ze WSZYSTKICH wcześniejszych par
+(spółka, data), których wynik był już znany (min. 500 par); g_kor = a + b g; IV_kor = EPS x 100 g_kor.
+Sprawdziany: (1) trafność g i g_kor dla wzrostu EPS (IC, mediana błędu) i IV/cena dla zmiany ceny za rok (IC, decyle);
+(2) portfele jak etap 25: top 20 najwyższy potencjał IV (= najniższy PEG trailing), top 20 najniższy forward PEG,
+wszystkie z IV > cena, wszystkie z forward PEG < 1, top 20 najwyższy potencjał IV_kor; równe wagi, decyzje kwartalne.
+Uniwersum, okres (2011-2026, połowy 2011-2018 / 2019-2026), koszty, odniesienia i kryterium "lepszy" jak etap 25.
