@@ -280,3 +280,14 @@ dla par (spółka, koniec lutego / maja / sierpnia / listopada) 2011-2025 z uniw
 faktycznie = cena skorygowana za 12 mies. / cena - 1 (bez dywidend poza korektą ceny). Miary: mediana i średnia faktycznej
 zmiany w decylach prognozy; odsetek przypadków, gdy cena za rok >= wartość; mediana błędu (faktyczna - prognoza); średnia
 korelacja rang (IC) prognozy z faktyczną zmianą per data z t-statystyką Newey-West (lag 4). K = 3 i 5. Opisowe.
+
+## Etap 26: jak szacować wzrost zysku i ile akcja rośnie w rok (zapisane 2026-11-16 PRZED uruchomieniem)
+Pytanie użytkownika: jak poprawnie "interpolować" wzrost i ile akcja może urosnąć w rok. Opisowe.
+(a) Trafność prognoz wzrostu EPS TTM na następny rok (spółki z danymi SEC, końce kwartałów 2012-2025, TTM bieżący > 0):
+E1 średnia arytmetyczna 3 zmian r/r (arkusz), E2 średnia 5 zmian r/r, E3 CAGR 3 lata, E4 CAGR 5 lat, E5 mediana 5 zmian r/r,
+E6 nachylenie regresji log(TTM) z 5 lat (20 kwartałów, wymagane wszystkie TTM > 0), E7 ostatnia zmiana r/r, E8 zero (brak wzrostu),
+E9 CAGR 3 lata obcięty do 0-30 %, E10 CAGR 3 lata przychodów (TTM). Cel: faktyczna zmiana EPS TTM za 4 kwartały.
+Miary: średnia korelacja rang per kwartał (IC), mediana błędu bezwzględnego, odsetek błędów <= 10 pp, nachylenie regresji
+faktycznej zmiany na prognozę (odporna: regresja kwantylowa mediany) = trwałość wzrostu.
+(b) Rozkład 12-mies. zmiany ceny (skorygowanej) członków S&P 500 point-in-time 1998-2025: percentyle 5/25/50/75/95, odsetek
+> +50 % i > +100 %, w podziale na kwintyle faktycznego (z wiedzą o przyszłości) wzrostu EPS w tym samym roku (2012-2025).
