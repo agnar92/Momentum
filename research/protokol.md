@@ -320,3 +320,4 @@ EPS TTM za 4 kwartały (wiedza o przyszłości) + błąd; błąd ~ N(b, s): (s, 
 IV = EPS TTM x 100 g_hat (arkusz, tylko g_hat > 0); potencjał = IV / cena - 1. Sprawdziany (decyzje kwartalne 2011-2025):
 (1) IC potencjału z faktyczną zmianą ceny za rok i kwintyle; (2) portfele: top 20 najwyższy potencjał (trzymaj w top 40) i
 wszystkie z IV > cena, jak etap 27. Uniwersum, okres, koszty, odniesienia jak etap 27. Opisowe (wiedza o przyszłości - nierealne).
+Wynik etapu 28 (2026-11-16): z wiedzą o przyszłym wzroście (nawet z błędem 35 pp) top 20 IV daje 24-27 % rocznie; bez prognozy (g = 10 %) 10 %. IV porządkuje spółki (IC 0,08-0,14), ale jako cena docelowa myli się o ~70 pp. Symulowany błąd jest niezależny od informacji rynku - zawyża wynik względem konsensusu, który jest już w cenie.
