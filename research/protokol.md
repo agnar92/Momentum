@@ -388,3 +388,13 @@ niższa niż 3 miesiące wcześniej. Warianty: P i S, każdy z regułą (b) i be
 Uniwersum: członkowie S&P 500 z danymi SEC, 2011-2026 (połowy 2011-2018 / 2019-2026) i od 2015-03. Odniesienia: równe wagi, SPY, CEM10 (etap 27).
 "Lepszy": wyższy CAGR w obu połowach i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze.
 Wynik etapu 33 (2026-11-16): 6,7-11,4 % rocznie (od 2015: 6,4-12,8 % vs równe wagi 11,4 %, CEM10 25,9 %); najlepsze: sprzedaż tylko przy spadku r/r, bez ceny docelowej i bez przycinania (11,4 %); wariant 'pogorszenie' istotnie gorszy od równych wag.
+
+## Etap 34: screener użytkownika (Scrab) - mały indeks top 10 po potencjale ceny docelowej (zapisane 2026-11-16 PRZED uruchomieniem)
+Kryteria ze screenshotu i ich odtworzenie z danych dostępnych na datę decyzji (prognoz analityków i ich cen docelowych brak w historii):
+forward PEG <= 1,5 (cena / (EPS TTM x (1 + g)) / (100 g)); wzrost EPS na 2 lata >= 10 % -> g >= 10 % (g = ważona średnia kwartalnych zmian
+przychodów r/r, estymata użytkownika); P/E (TTM) <= 40 i > 0; ROE >= 15 % (zysk netto TTM / ostatni kapitał własny > 0, SEC); dług / kapitał <= 1
+(dług = LongTermDebt albo część długoterminowa + bieżąca, + krótkoterminowe pożyczki i commercial paper; brak tagów długu = 0);
+potencjał ceny docelowej >= 50 %, cena docelowa = mediana P/E z 36 mies. x EPS TTM x (1 + g) (definicja użytkownika z etapu 33).
+Co miesiąc ranking malejąco po potencjale, portfel = top 10 (równe kwoty dla nowych; wypadnięcie z top 10 = sprzedaż, wolne miejsce = kolejna
+z rankingu). Warianty: Z1 pełny screener; Z2 bez progu potencjału 50 % (sam ranking); Z3 jak Z1, decyzje co kwartał; Z4 jak Z1 z g jak analityk
+(faktyczny wzrost EPS + błąd 10 pp, nierealne). Uniwersum S&P 500 PIT z danymi SEC, 2011-2026 i od 2015-03; koszty, odniesienia, kryterium jak etap 33.
