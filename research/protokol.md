@@ -257,3 +257,4 @@ większa niż L kapitału jest sprzedawana do L. L = 10 % (wskazane przez użytk
 N = 10 i 20 (przy N = 10 równa waga = 10 %, więc limit 10 % przycina każdego zwycięzcę). Zasady CEM10 (6M > 30 %, > SMA 10, ranking 6M,
 wyjście < SMA 10, SPY < SMA 12), koszt 0,1 %/stronę od każdej transakcji (także przycięć). S&P 500 1998-2026 (połowy 1998-2012 /
 2013-2026), NDX 2008-2026 (połowy 2008-2016 / 2017-2026). "Lepszy": wyższy CAGR w obu połowach i dolna granica 95 % różnicy > 0. Rozpoznawcze.
+Wynik etapu 24 (2026-11-16): limit 10 % obniża CAGR CEM10 (S&P N=10 18,1 vs 19,0 %, NDX N=10 21,1 vs 23,6 %, istotnie), lekko spłyca spadki; limity 15-20 % bez istotnej zmiany; nadwyżka w SPY pogłębia DD; żaden wariant nie spełnia kryteriów.
