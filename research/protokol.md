@@ -306,3 +306,8 @@ Sprawdziany: (1) trafność g i g_kor dla wzrostu EPS (IC, mediana błędu) i IV
 wszystkie z IV > cena, wszystkie z forward PEG < 1, top 20 najwyższy potencjał IV_kor; równe wagi, decyzje kwartalne.
 Uniwersum, okres (2011-2026, połowy 2011-2018 / 2019-2026), koszty, odniesienia i kryterium "lepszy" jak etap 25.
 Wynik etapu 27 (2026-11-16): żaden portfel nie lepszy od równych wag (najlepszy: wszystkie z forward PEG < 1, 12,6 % vs 12,8 %); korekta uczy się ujemnego nachylenia (-0,07..-0,13); IV nie przewiduje ceny za rok (IC -0,008 i 0,000).
+
+## Etap 27b: przeszły CAGR EPS a przyszły wzrost EPS w przedziałach (zapisane 2026-11-16 PRZED uruchomieniem, opisowe)
+Dla końców kwartałów 2012-2025 (spółki z danymi SEC, TTM > 0): przeszły CAGR EPS TTM (3 lata, 5 lat, od początku danych, min. 3 lata)
+w przedziałach < 0, 0-10, 10-20, 20-30, 30-50, > 50 %; w każdym: mediana i kwartyle faktycznej zmiany EPS za 1 rok, odsetek
+przypadków, gdy faktyczny wzrost >= przeszły CAGR, oraz faktyczny CAGR za kolejne 3 lata (gdy dostępny, oba końce > 0).
