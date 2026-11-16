@@ -351,3 +351,10 @@ forward PEG jak etap 29. Sprawdziany: (1) IC g z faktyczną zmianą EPS TTM za 4
 (2) portfele jak etap 29c: kandydaci PEG <= 1 i IV > cena, ranking po potencjale, N = 10 i 20, decyzje co miesiąc / kwartał / rok,
 trzymanie dopóki tania (R1) albo w top 2N (R3), bez przycinania. Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium jak etap 29c.
 Wynik etapu 30 (2026-11-16): ważony wzrost przychodów najlepiej z historycznych prognoz przewiduje wzrost EPS (IC 0,133, t 11,8), ale potencjał IV z nim nie przewiduje ceny (IC -0,04); portfele 10,8-15,8 % (najlepszy N=10 co miesiąc 14,6 % ważona / 15,8 % arytm.), żaden nie spełnia kryteriów; wynik w całości z 2019-2026 (2011-18: 2,7-6,4 %).
+
+## Etap 31: EPS 5 lat > 15 % i niskie forward P/E (zapisane 2026-11-16 PRZED uruchomieniem)
+Strategia użytkownika: kandydaci = CAGR EPS TTM z 5 lat > 15 % (oba końce > 0, znane na datę decyzji); ranking rosnąco po forward P/E =
+cena / (EPS TTM x (1 + g)), tylko forward EPS > 0. g (estymata wzrostu EPS): (A) ważona średnia kwartalnych zmian przychodów r/r (etap 30,
+metoda użytkownika), (B) g = 0 (zwykłe trailing P/E, kontrola: czy estymata coś dodaje), (C) faktyczny wzrost + błąd 10 pp (jak analityk, nierealne).
+N = 10 i 20; decyzje co miesiąc / kwartał / rok; trzymanie (R1) dopóki spełnia warunek EPS 5 lat > 15 %, (R3) dopóki w top 2N.
+Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium "lepszy" jak etap 29c. 36 wariantów, rozpoznawcze.
