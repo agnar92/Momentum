@@ -53,3 +53,73 @@ def test_build_leader_market_filter_and_rows():
     assert [r["t"] for r in cem10.usa_candidates(u["rows"], u["lead"])] == ["AAA"]
     assert [r["t"] for r in cem10.gpw_candidates(g["rows"])] == ["PKO"] and g["missing"] == []
     assert not g["bear"]
+
+
+def test_finviz_members(monkeypatch):
+    from momentum import finviz
+    calls = []
+
+    class R:
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, params=None, **k):
+        calls.append(params["f"])
+        return R()
+    monkeypatch.setattr(finviz, "parse_page", lambda text: ([{"ticker": "BRK.B", "company": "Berkshire"}, {"ticker": "MRNA", "company": "Moderna"}], 2))
+    out = script.finviz_members("idx_sp500", get=get, pause=0)
+    assert out == {"BRK-B": "Berkshire", "MRNA": "Moderna"} and calls == ["idx_sp500"]
+    monkeypatch.setattr(finviz, "parse_page", lambda text: ([], None))
+    try:
+        script.finviz_members("x", get=get, pause=0)
+        assert False
+    except ValueError:
+        pass
+    assert script.INDEX_FILTERS == ("idx_sp500", "idx_ndx")
+
+
+def test_index_members_only_for_leader_and_main_order(monkeypatch, tmp_path):
+    import json
+    calls = []
+    sp = {f"S{i}": "x" for i in range(500)}
+    nq = {f"N{i}": "x" for i in range(100)}
+    monkeypatch.setattr(script, "finviz_members", lambda f, get=None, pause=0.7: calls.append(f) or (sp if f == "idx_sp500" else nq))
+    assert script.index_members("SP", log=lambda *a: None) == {"sp": sp, "nq": {}} and calls == ["idx_sp500"]
+    calls.clear()
+    assert script.index_members("NDX", log=lambda *a: None) == {"sp": {}, "nq": nq} and calls == ["idx_ndx"]
+    monkeypatch.setattr(script, "finviz_members", lambda f, get=None, pause=0.7: {"A": "a"})
+    try:
+        script.index_members("SP", log=lambda *a: None)
+        assert False
+    except ValueError:
+        pass
+    n, order = 24, []
+    monkeypatch.setattr(script, "finviz_members", lambda f, get=None, pause=0.7: calls.append(f) or nq)
+
+    def fake_download(tickers, log=print):
+        order.append(list(tickers))
+        mk = {"SPY": [100] * n, "QQQ": [100 * 1.03 ** i for i in range(n)], "N0": [50] * 12 + [50 * 1.1 ** i for i in range(12)]}
+        return {t: _px(mk.get(t, [10] * n)) for t in tickers}
+    monkeypatch.setattr(script, "download", fake_download)
+    monkeypatch.setattr(script, "last_closed_month", lambda today: _px([1] * n)[0][-1][:7])
+    calls.clear()
+    out = tmp_path / "c.json"
+    assert script.main(["--out", str(out)]) == 0
+    assert order[0] == ["SPY", "QQQ"] and len([t for t in order[1] if not t.endswith(".WA")]) == 100 and calls == ["idx_ndx"]
+    u = json.loads(out.read_text(encoding="utf-8"))["usa"]
+    assert u["lead"] == "NDX" and u["index"] == {"lead": "NDX", "n": 100}
+    assert [r["t"] for r in script.cem10.usa_candidates(u["rows"], "NDX")] == ["N0"]
+
+
+def test_download_single_ticker_chunk_with_multiindex_columns(monkeypatch):
+    import sys
+    import types
+
+    import pandas as pd
+    idx = pd.to_datetime(["2026-09-01", "2026-10-01"])
+    df = pd.DataFrame([[10.0, 9.0], [11.0, 10.0]], index=idx, columns=pd.MultiIndex.from_product([["AAA"], ["Close", "Adj Close"]]))
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=lambda part, **k: df))
+    out = script.download(["AAA"], log=lambda *a: None)
+    assert out["AAA"] == (["2026-09-01", "2026-10-01"], [9.0, 10.0], [10.0, 11.0])

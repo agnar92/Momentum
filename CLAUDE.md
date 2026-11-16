@@ -144,15 +144,38 @@ final CEM10 rules from the study (NOT the Finviz scanner of the main list): **US
 (user: Stooq offers 5 months; 5M ≈ 6M in the tests, 91 % same leader), candidates from the leader's index (S&P 500 / Nasdaq-100): 6M > +30 % and
 monthly close over SMA 10, ranked by 6M; no buys while SPY closes the month under SMA 12. **GPW** 5 positions, NO leader (WIG20 + mWIG40 together),
 C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-weight index of the current components (mean monthly return,
-|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (USA also leaving both indexes), stop −40 % (shown in the rules only).
-Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) reads S&P 500 / Nasdaq-100 members from Wikipedia
-(`List_of_S%26P_500_companies`, `List_of_NASDAQ-100_companies`; on error the previous file's members stay), WIG20 / mWIG40 from `cem10_gpw.json`
+|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (index membership is NOT an exit condition — user, Nov 2026: a stock with +200 % results cannot drop out of a top-10 ranking, and Wikipedia is an unverified source), stop −40 % (shown in the rules only).
+Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) FIRST decides the leader (downloads only SPY + QQQ, `leader(m)`), THEN takes ONLY the ticker LIST of the LEADER's index from Finviz (no return filter; user, Nov 2026: "z finviz pobieraj liste tickerow indeksu ktory wygrywa, potem ceny z yfinance na koniec miesiaca i ranking po zwrocie z 6 msc") (user, Nov 2026: "po co pobierasz NDX skoro liderem jest SPY"; the other index stays empty), no Wikipedia
+(user, Nov 2026: "zrób sito 30 % … po co nam 20 … sprawdzanie wiki szkodzi"; `finviz_members` = Overview view v=111, 20 rows/page, `idx_sp500` or `idx_ndx`
+= membership only; Finviz error or a count outside 400–600 (S&P) / 80–120 (NDX) = job error, no fallback; `usa.index` {lead, n}). Finviz only gives TODAY's membership; every number of the rule (6M, SMA 10, leader, SPY vs SMA 12) comes from Yahoo month-end closes (current month dropped), so no candidate is lost to Finviz measuring 26 weeks from today's price (the earlier `ta_perf_26w30o` sieve missed 8 of 70, e.g. PLTR). Cost: ~500 Yahoo calls when SPY leads, ~100 when QQQ leads (yfinance, 100 per batch). WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
 (update by hand after each GPW revision: March, June, September, December), yfinance MONTHLY candles 2 y (user: "po co pobierasz dzienne";
 13 closes for 12M + SMA 12 of the market filter; `auto_adjust=False`: returns / SMA on `Adj Close`, displayed prices raw) -> CLOSED months only (`prices.last_closed_month`) -> `docs/data/cem10.json`
 (`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
 With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (leader, market filter), buy list (green = first N), "Sprawdź spółki,
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
+**No Windows script any more** (user, Nov 2026: "po co nam ps1 … chcę tylko desktopowe CEM10"): `cem10_windows/CEM10.bat`, `cem10.ps1`, `CZYTAJ.txt`, `sklad_usa.json` and the in-browser `computeFromRaw` (`dane.js`) were removed; the PC version is the desktop program in agnar92/MomentumDesktop (CEM10 only since Nov 2026). `cem10_windows/sklad_gpw.json` stays (the monthly job reads it).
+
+## Wycena: PEG and intrinsic value (`wycena.py`, `momentum/wycena.py`, `docs/wycena.html`, `docs/js/wycena.js`)
+
+User, Nov 2026: "zrób w momentum stronę, która da nam listę z niedowartościowanymi akcjami z największym potencjałem wzrostowym, tak jak w
+tym excelu … grow jest z yfinance z growth estimates" (web only, not in the desktop app). Formulas of the user's Google Sheet:
+P/E = price / trailing EPS (TTM), g = analysts' EPS growth for the NEXT fiscal year (yfinance `growth_estimates` `stockTrend` `+1y`),
+PEG = P/E / (100 g), intrinsic value (fair value, "price in a year") = EPS x 100 g (Peter Lynch), potential = value / price - 1 (= 1 / PEG - 1),
+forward PEG = price / (EPS (1 + g)) / (100 g); no positive EPS or g <= 0 -> no PEG / value. Default list: PEG <= 1, value > price,
+>= 3 analysts (`earnings_estimate` `numberOfAnalysts` for `+1y`), sorted by potential, top 10 / 20 green; the page has PEG max,
+min analysts, index, top N, search, header sort (settings in localStorage `wycena_opt`). Universe = Finviz idx_sp500 + idx_ndx (count
+check 400–600 / 80–120 = job error); `wycena.py` fetches yfinance per ticker (info + growth_estimates + earnings_estimate, retries),
+< 80 % of tickers with data = nothing written. Workflow `wycena.yml` ("Wycena Monthly", 1st of the month 07:41 UTC + manual) commits only
+`docs/data/wycena.json` and deploys Pages. Research (research/wyniki/r42–r50, stages 25–29c): with HISTORICAL EPS growth the method does not beat
+the market (≈ 10–12 %/yr, value does not predict next-year price, past EPS growth mean-reverts); with an accurate forecast (simulation with
+future knowledge, ±10 pp) top 10–20 checked monthly / quarterly ≈ 25–27 %/yr, yearly ≈ 18–20 %; trimming to 7–10 % hurt. Consensus is public
+and priced in, so the real result is in between — the page says it is a screen, not a buy signal.
+**DCF mode** (user, Nov 2026: "dodaj jeszcze DCF Mode"): toggle `#mode` (PEG / DCF, `o.mode`). Two-stage DCF (`wycena.dcf_value` = JS `dcfValue`, same numbers, tested in
+both): FCF TTM (yfinance `freeCashflow`) grows `years` years at the analysts' EPS growth clipped to 0…`gmax`, then fades linearly over 5 years to the terminal
+growth `tg`; terminal value FCF × (1 + tg) / (r − tg); discount rate `r`; value per share = (PV + `totalCash` − `totalDebt`) / `sharesOutstanding`.
+Defaults r 9 %, tg 2.5 %, 5 years, gmax 25 % (`wycena.DCF`), editable on the page (computed in the browser, `withDcf`); rows carry `fcf`, `sh`, `cash`, `debt`
+in millions. No positive FCF (banks) = no DCF. DCF is NOT backtested (the research data has no FCF history).
 
 ## Quality ranking (`quality.py`, `momentum/quality.py`, `docs/quality.html`, `docs/js/quality.js`)
 
@@ -219,6 +242,8 @@ Workflow `flip.yml` ("FLIP Monthly", 2nd of the month 07:41 UTC + manual) commit
   `[skip ci]` (reset onto current `origin/main`, retry loop) and deploys Pages.
 - `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
   (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
+- `wycena.yml` ("Wycena Monthly"): 1st of the month 07:41 UTC + manual; runs `python wycena.py`, commits only `docs/data/wycena.json`
+  (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
 - `quality.yml` ("Quality Yearly"): Jan 2 05:41 UTC + manual; runs `python quality.py`, commits only `docs/data/quality.json`, deploys Pages.
 - `flip.yml` ("FLIP Monthly"): 2nd of the month 07:41 UTC + manual; runs `python flip.py`, commits only `docs/data/flip.json`, deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
@@ -232,6 +257,7 @@ Code comments and CLI messages are in Polish; keep that convention.
 pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
 python cem10.py
+python wycena.py [--max-tickers N]
 python quality.py
 python flip.py
 python -m pytest -q && ruff check .

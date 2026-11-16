@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+<title>Wycena PEG i DCF</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* uklad: ustawienia filtra -> lista tanich spolek (top N na zielono) -> wzory i wyniki badania */
+:root{
+  --bg:#f4f6f8;--surface:#ffffff;--fg:#17202b;--mut:#5b6675;--line:#d9dfe6;--accent:#0f5f74;--accent-soft:#e2eff2;
+  --good:#17784a;--good-soft:#e3f3ea;--bad:#b23a2e;--bad-soft:#f8e6e3;--warn:#8a5c00;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141a;--surface:#161d25;--fg:#e3e8ee;--mut:#97a3b2;--line:#28323e;--accent:#5fb4c9;--accent-soft:#16313a;--good:#5ccf93;--good-soft:#15301f;--bad:#ff8b7e;--bad-soft:#3a1d1a;--warn:#e2b24f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141a;--surface:#161d25;--fg:#e3e8ee;--mut:#97a3b2;--line:#28323e;--accent:#5fb4c9;--accent-soft:#16313a;--good:#5ccf93;--good-soft:#15301f;--bad:#ff8b7e;--bad-soft:#3a1d1a;--warn:#e2b24f;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:30px}
+h1{font:600 28px/1.2 var(--sans);margin:0;text-wrap:balance}
+h2{font:600 20px/1.3 var(--sans);margin:0;text-wrap:balance}
+h3{font:600 12px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0}
+p{margin:0;max-width:72ch}.mut{color:var(--mut)}
+.top{display:grid;gap:8px}
+.market{display:grid;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 20px}
+.mhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 11px;font:500 13px/1.4 var(--sans);background:var(--accent-soft);color:var(--fg)}
+.chip b{font-weight:600}.chip.ok{background:var(--good-soft)}.chip.no{background:var(--bad-soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}.ok .dot{background:var(--good)}.no .dot{background:var(--bad)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:14px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font:600 12px/1.3 var(--sans);color:var(--mut);background:var(--bg);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.t{font-family:var(--mono);font-weight:500}
+td.nm{white-space:normal;min-width:150px;color:var(--mut)}
+tr.buy td{background:var(--good-soft)}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.st{font:600 12px/1 var(--sans);padding:3px 8px;border-radius:4px;display:inline-block}
+.st.h{background:var(--good-soft);color:var(--good)}.st.s{background:var(--bad-soft);color:var(--bad)}
+.rank{font-family:var(--mono);color:var(--mut)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;color:var(--accent)}
+summary:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+input[type=search],input[type=text]{font:15px var(--mono);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);min-width:0;width:min(100%,420px)}
+.check{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.rules{display:grid;gap:6px;font-size:14px;color:var(--mut)}
+.rules li{max-width:80ch}
+ul{margin:0;padding-left:20px}
+button,.btn{font:600 14px/1 var(--sans);padding:9px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);cursor:pointer}
+button.sec,.btn.sec{background:transparent;color:var(--accent)}
+.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}.back{text-decoration:none;letter-spacing:0;text-transform:none}
+.err{background:var(--bad-soft);color:var(--bad);padding:12px 14px;border-radius:8px}
+code{font-family:var(--mono);font-size:.92em}
+.empty{padding:12px;color:var(--mut)}
+button.sort{all:unset;cursor:pointer;font:inherit;color:inherit}
+button.sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+th.n button.sort{display:block;text-align:right;width:100%}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end}
+.ctl label{display:grid;gap:4px;font-size:13px;color:var(--mut)}
+.ctl input[type=text]{font:15px var(--mono);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);width:90px}
+.ctl select{font:15px var(--sans);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.warn{color:var(--warn);font-family:var(--sans);cursor:help}
+.ctl input[type=search]{width:min(100%,220px)}
+.ctl .chk{display:flex;align-items:center;gap:6px;color:var(--fg);font-size:14px;padding-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--accent);border-radius:8px;overflow:hidden;width:max-content;max-width:100%}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--accent);padding:9px 14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.only-peg[hidden],.only-dcf[hidden]{display:none}
+.note{background:var(--accent-soft);border-radius:8px;padding:12px 14px;font-size:14px;display:grid;gap:6px}
+</style>
+</head>
+<body>
+<main>
+<p id="err" class="err" hidden></p>
+<div class="top">
+  <h3><a href="index.html" class="back">← Momentum</a> · Wycena · dane z <span id="asof"></span></h3>
+  <h1>Niedowartościowane spółki: PEG, wartość wewnętrzna i DCF</h1>
+  <p class="mut">Spółki z S&amp;P 500 i Nasdaq‑100, których cena jest niższa od wartości wyliczonej z bieżącego zysku i prognozy wzrostu zysku analityków (tryb PEG) albo z zdyskontowanych wolnych przepływów pieniężnych (tryb DCF). Sortowanie po potencjale; pierwsze miejsca na zielono. Lista odświeża się sama 1. dnia miesiąca. To sito do dalszej analizy, nie rekomendacja inwestycyjna.</p>
+</div>
+
+<section class="market">
+  <div class="seg" id="mode" role="group" aria-label="Metoda wyceny"><button type="button" data-m="peg" aria-pressed="true">PEG i wartość z arkusza</button><button type="button" data-m="dcf" aria-pressed="false">DCF</button></div>
+  <div class="ctl only-dcf" hidden>
+    <label for="r">Stopa dyskontowa %<input type="text" id="r" inputmode="decimal" autocomplete="off"></label>
+    <label for="tg">Wzrost końcowy %<input type="text" id="tg" inputmode="decimal" autocomplete="off"></label>
+    <label for="years">Lata wzrostu<input type="text" id="years" inputmode="numeric" autocomplete="off"></label>
+    <label for="gmax">Maks. wzrost %<input type="text" id="gmax" inputmode="decimal" autocomplete="off"></label>
+  </div>
+  <div class="ctl">
+    <label for="pegMax" class="only-peg">PEG maks.<input type="text" id="pegMax" inputmode="decimal" autocomplete="off"></label>
+    <label for="minAn">Min. analityków<input type="text" id="minAn" inputmode="numeric" autocomplete="off"></label>
+    <label for="idx">Indeks<select id="idx"><option value="all">S&amp;P 500 i NDX</option><option value="sp">S&amp;P 500</option><option value="nq">Nasdaq‑100</option></select></label>
+    <label for="top">Na zielono<select id="top"><option value="10">top 10</option><option value="20">top 20</option><option value="0">bez</option></select></label>
+    <label class="chk"><input type="checkbox" id="onlyUnder"> tylko wartość &gt; cena</label>
+    <label for="q">Szukaj<input type="search" id="q" placeholder="ticker lub nazwa"></label>
+    <button type="button" id="reset" class="sec">Domyślne</button>
+  </div>
+  <p class="mut" id="count" role="status"></p>
+  <div class="scroll" style="max-height:640px"><table><thead><tr id="head"></tr></thead><tbody id="body"></tbody></table></div>
+</section>
+
+<section class="rules">
+  <h3>Jak to jest liczone</h3>
+  <ul>
+    <li><b>P/E</b> = cena / EPS z ostatnich 12 miesięcy. <b>Wzrost EPS</b> = prognoza analityków na następny rok obrotowy (Yahoo Finance, „Growth Estimates → Next Year”).</li>
+    <li><b>PEG</b> = P/E / wzrost w %. <b>Forward PEG</b> = cena / (EPS × (1 + wzrost)) / wzrost w %.</li>
+    <li><b>Wartość (fair value)</b> = EPS × wzrost w % (Peter Lynch: uczciwe P/E równa się tempu wzrostu). <b>Potencjał</b> = wartość / cena − 1, czyli 1 / PEG − 1: PEG &lt; 1 oznacza wartość wyższą od ceny.</li>
+    <li><b>⚠</b> przy tickerze: prognozowany wzrost powyżej +100 % albo P/E powyżej 60. Zwykle to odbicie po roku z jednorazowo zaniżonym zyskiem (odpisy, strata), więc wartość jest zawyżona; badanie pokazało, że takie skoki rzadko się powtarzają.</li>
+    <li>Spółki bez dodatniego EPS albo z prognozą spadku zysku nie mają PEG ani wartości. Mała liczba analityków to mniej pewna prognoza (domyślnie co najmniej 3).</li>
+    <li><b>DCF</b> (model dwuetapowy): wolne przepływy pieniężne z ostatnich 12 miesięcy (FCF) rosną przez „lata wzrostu” w tempie prognozy wzrostu EPS obciętej do 0 … „maks. wzrost”, potem przez 5 lat tempo spada liniowo do „wzrostu końcowego”; wartość końcowa = FCF × (1 + wzrost końcowy) / (stopa − wzrost końcowy). Wszystko dyskontowane „stopą dyskontową”; wartość akcji = (suma + gotówka − dług) / liczba akcji. Domyślnie 9 %, 2,5 %, 5 lat, 25 %. Spółki bez dodatniego FCF (np. banki) i spółki raportujące w innej walucie niż notowania (ADR, np. PDD, ASML) nie mają wartości DCF; ⚠ w trybie DCF = FCF powyżej 15 % kapitalizacji (zwykle jednorazowe wpływy albo przepływy finansowe, np. GM Financial) — sprawdź raport. <b>FCF yield</b> = FCF / kapitalizacja.</li>
+    <li>Dane: skład indeksów z Finviz, ceny, EPS i prognozy z Yahoo Finance (yfinance), odświeżane 1. dnia miesiąca przez workflow „Wycena Monthly”.</li>
+  </ul>
+  <div class="note">
+    <b>Co pokazało badanie (S&amp;P 500, 2011–2026, research/wyniki/r42–r50)</b>
+    <span>Wartość liczona z przeszłego wzrostu EPS nie przewidywała ceny za rok i portfele z niej dawały ok. 10–12 % rocznie, tyle co rynek. Z trafną prognozą wzrostu (symulacja z wiedzą o przyszłości) portfel top 10–20 sprawdzany co miesiąc lub kwartał dawał ok. 25–27 % rocznie. Prognozy analityków są publiczne i już zawarte w cenie, więc realny wynik jest gdzieś pomiędzy. Wartość to orientacyjny ranking, nie cena za rok: typowy błąd ±70 pp. Sprawdzanie co miesiąc lub co kwartał działało lepiej niż raz w roku; przycinanie pozycji do 7–10 % obniżało wynik. DCF nie był testowany historycznie (dane badania nie mają historii wolnych przepływów); wynik silnie zależy od stopy dyskontowej i wzrostu — zmiana stopy o 1 pp zmienia wartość o kilkanaście procent.</span>
+  </div>
+</section>
+</main>
+
+<script src="js/wycena.js"></script>
+</body>
+</html>

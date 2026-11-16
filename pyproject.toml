@@ -8,6 +8,8 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+# research/ = skrypty badawcze (exec wspólnych części, zwarty styl) — poza lintem aplikacji
+extend-exclude = ["research"]
 
 [tool.ruff.lint]
 # Zestaw bazowy (pyflakes + pycodestyle) — repo nie ma dotychczas zadnej

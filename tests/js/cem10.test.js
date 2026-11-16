@@ -35,3 +35,4 @@ test("lista trzymanych: tekst, JSON, duplikaty; decyzja wg SMA 10", () => {
     assert.strictEqual(decide({ dist: -0.02 }), "sprzedaj");
     assert.strictEqual(decide(undefined), "sprawdź");
 });
+
