@@ -442,3 +442,4 @@ Wariant kontrolny bez filtra PEG (ranking R). Okres 2015-03 ... 2026-09, koszty,
 Technicznie: macierze wskaźników zapisywane do /home/user/ndx/wskazniki_cache.npz (kolejne etapy bez ponownego liczenia).
 Uzupełnienie etapu 38 (2026-11-17, PRZED wynikami): użytkownik dodał filtr kapitalizacji > 10 mld USD (large cap; kapitalizacja point-in-time
 /home/user/ndx/pit_cap2.npy na koniec marca). Warianty etapu 38 liczone dodatkowo z tym filtrem (skrypt r59b z cache wskaźników); wyniki obu wersji raportowane.
+Wynik etapu 38/38b (2026-11-17): filtr > 10 mld podnosi wynik (kontrola bez PEG: 16,1 -> 20,9 %); PEG < 2 z realną estymatą obniża (> 10 mld: 15,2-16,8 %); tylko PEG z wiedzą o przyszłości (C) daje istotną przewagę (18,1-20,1 %).
