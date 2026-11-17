@@ -421,3 +421,4 @@ Wejście (sprawdzane co miesiąc dla spółek z listy, których nie mamy, przy w
 PEG = P/E TTM / (100 x CAGR EPS 5 lat) (EPS > 0, CAGR > 0); niespełnione = gotówka (0 %) czeka. N = 10 i 20; kwota = kapitał / N. Koszt 0,1 %/stronę.
 Okres 2015-03 ... 2026-09 (dane 5-letnie od 2015). Odniesienia od 2015-03: równe wagi uniwersum, SPY, CEM10 na tym samym uniwersum.
 "Lepszy": wyższy CAGR w obu połowach (2015-03 ... 2020-12, 2021-01 ... 2026-09) i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze (24 warianty).
+Wynik etapu 36 (2026-11-17): ranking po przychodach 5 lat + dług < 1, kupno od razu, N = 20: 18,9 % rocznie (równe wagi 11,4 %, SPY 13,9 %, CEM10 25,9 %), lepszy w obu połowach, przedział różnicy obejmuje 0; PEG jako moment wejścia obniża wynik; EPS 5 lat zamiast przychodów ~ rynek.
