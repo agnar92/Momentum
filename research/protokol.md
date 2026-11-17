@@ -431,3 +431,12 @@ F1 ranking po CAGR przychodów, kupno od razu; F2 jak F1, wejście przy PEG <= 1
 kupno od razu; F5 jak F1 bez filtra długu; F6 CAGR przychodów > 50 % rocznie (dosłowne odczytanie), FCF > 0, dług < 1, od razu.
 Okres, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (12 wariantów).
 Wynik etapu 37 (2026-11-17): F1 (przychody 5 l. > +50 %, FCF > 0, dług < 1, ranking po przychodach, od razu) N = 20: 19,1 % rocznie, N = 10: 16,8 %; filtr FCF ~ bez zmian vs etap 36; PEG jako wejście i jako ranking obniża wynik; >50 % rocznie - za mało spółek.
+
+## Etap 38: Lynch PEG = P/E / PRZYSZŁY wzrost EPS, PEG < 2, ROE > 15 %, dług < 1, przychody 5 lat > +50 %, 10 spółek co rok (zapisane 2026-11-17 PRZED uruchomieniem)
+Uwaga użytkownika: PEG Lyncha używa przyszłego wzrostu EPS (w etapach 36-37 g = przeszły CAGR EPS 5 lat). Historii prognoz brak, więc g (przyszły wzrost EPS)
+w trzech wersjach: (A) estymata użytkownika - ważona średnia kwartalnych zmian przychodów r/r; (B) przeszły CAGR EPS 5 lat (projekcja); (C) faktyczny wzrost
+EPS TTM za 4 kwartały + błąd N(+5 pp, 10 pp) (jak analityk, nierealne). PEG = P/E TTM / (100 g), tylko EPS > 0 i g > 0.
+Na koniec marca: filtry łączny wzrost przychodów 5 lat > +50 %, ROE > 15 %, dług / kapitał < 1, PEG < 2; z przechodzących 10 spółek wg rankingu
+(R) CAGR przychodów 5 lat malejąco albo (P) PEG rosnąco; portfel = dokładnie ta dziesiątka do następnego marca (wymiana spółek spoza nowej dziesiątki).
+Wariant kontrolny bez filtra PEG (ranking R). Okres 2015-03 ... 2026-09, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (7 wariantów).
+Technicznie: macierze wskaźników zapisywane do /home/user/ndx/wskazniki_cache.npz (kolejne etapy bez ponownego liczenia).
