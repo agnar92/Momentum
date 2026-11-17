@@ -58,7 +58,7 @@ for fn in sorted(os.listdir(SECQ)):
         j = [x for x in range(i) if 340 <= (QR.end[i] - QR.end[x]).days <= 390]
         if j and QR.rev[j[-1]] > 0: yy.append(QR.rev[i] / QR.rev[j[-1]] - 1); zz.append(max(QR.filed[i], QR.filed[j[-1]]))
         else: yy.append(np.nan); zz.append(QR.filed[i])
-    QR['yy'] = yy; QR['zn'] = zz
+    QR['yy'] = yy; QR['zn'] = pd.to_datetime(pd.Series(zz, dtype='object')) if len(zz) else pd.Series([], dtype='datetime64[ns]')
     for m in KOH:
         s = best_map.get((m, k))
         if s is None or s not in cols or s not in SP.get(m, set()): continue
@@ -78,7 +78,7 @@ for fn in sorted(os.listdir(SECQ)):
         r['rev_cagr2'], r['rev_cagr3'], r['rev_cagr5'] = cagr(rv[0], rv[2], 2), cagr(rv[0], rv[3], 3), cagr(rv[0], rv[5], 5)
         rprev = rv[1] / rv[2] - 1 if np.isfinite(rv[2]) and rv[2] > 0 else np.nan
         r['rev_przysp'] = r['rev_g1'] - rprev
-        Z = QR[QR.zn <= t].tail(4)
+        Z = QR[QR.zn <= t].tail(4) if len(QR) else QR
         if len(Z) == 4 and np.isfinite(Z.yy).all():
             r['rev_q_rr'] = Z.yy.iloc[-1]; r['rev_wazona'] = float(np.dot([0.1, 0.2, 0.3, 0.4], Z.yy.values))
         op = [at(To, t, l) for l in (0, 1, 3)]
