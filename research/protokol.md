@@ -440,3 +440,5 @@ Na koniec marca: filtry łączny wzrost przychodów 5 lat > +50 %, ROE > 15 %, d
 (R) CAGR przychodów 5 lat malejąco albo (P) PEG rosnąco; portfel = dokładnie ta dziesiątka do następnego marca (wymiana spółek spoza nowej dziesiątki).
 Wariant kontrolny bez filtra PEG (ranking R). Okres 2015-03 ... 2026-09, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (7 wariantów).
 Technicznie: macierze wskaźników zapisywane do /home/user/ndx/wskazniki_cache.npz (kolejne etapy bez ponownego liczenia).
+Uzupełnienie etapu 38 (2026-11-17, PRZED wynikami): użytkownik dodał filtr kapitalizacji > 10 mld USD (large cap; kapitalizacja point-in-time
+/home/user/ndx/pit_cap2.npy na koniec marca). Warianty etapu 38 liczone dodatkowo z tym filtrem (skrypt r59b z cache wskaźników); wyniki obu wersji raportowane.
