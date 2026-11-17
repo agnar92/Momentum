@@ -412,3 +412,4 @@ Miary: korelacja rang (Spearman) cechy z maks. zwrotem w każdej kohorcie, śred
 zgodność znaku w kohortach 2011-2015 i 2016-2021; odsetek wielkich wygranych w kwintylach cechy; mediany cech wielkich wygranych vs reszty.
 Wielokrotne testy: ~30 cech -> próg Bonferroniego |t| > 3,3 (5 % / 30). Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność),
 kohorty nakładają się w czasie (okna 5-letnie).
+Wynik etapu 35 (2026-11-17): próg Bonferroniego przechodzą tylko CAGR przychodów 5 lat i liczba lat wzrostu EPS (oba tylko 7 kohort 2015-2021); żadna miara wyceny nie wskazywała przyszłych wielkich wygranych; korelacje <= 0,10.
