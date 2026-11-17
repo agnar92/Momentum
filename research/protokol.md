@@ -422,3 +422,11 @@ PEG = P/E TTM / (100 x CAGR EPS 5 lat) (EPS > 0, CAGR > 0); niespełnione = got�
 Okres 2015-03 ... 2026-09 (dane 5-letnie od 2015). Odniesienia od 2015-03: równe wagi uniwersum, SPY, CEM10 na tym samym uniwersum.
 "Lepszy": wyższy CAGR w obu połowach (2015-03 ... 2020-12, 2021-01 ... 2026-09) i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze (24 warianty).
 Wynik etapu 36 (2026-11-17): ranking po przychodach 5 lat + dług < 1, kupno od razu, N = 20: 18,9 % rocznie (równe wagi 11,4 %, SPY 13,9 %, CEM10 25,9 %), lepszy w obu połowach, przedział różnicy obejmuje 0; PEG jako moment wejścia obniża wynik; EPS 5 lat zamiast przychodów ~ rynek.
+
+## Etap 37: przychody 5 lat > +50 %, FCF > 0, PEG z wykładniczej projekcji EPS (zapisane 2026-11-17 PRZED uruchomieniem)
+Doprecyzowanie użytkownika po etapie 36. Filtry na koniec marca: łączny wzrost przychodów TTM w 5 lat > +50 % (CAGR > 8,45 %); FCF z ostatniego
+rocznego raportu (przepływy operacyjne - capex, SEC, znane na datę) > 0; dług / kapitał < 1 (jak etap 36). PEG = P/E TTM / (100 g), g = CAGR EPS z 5 lat
+(projekcja wykładnicza EPS x (1 + g)^n na kolejne 5 lat ma to samo roczne tempo). Warianty (N = 10 i 20, lista co marzec, sprzedaż po wypadnięciu z top 2N):
+F1 ranking po CAGR przychodów, kupno od razu; F2 jak F1, wejście przy PEG <= 1; F3 jak F1, wejście przy PEG <= 1,5; F4 ranking rosnąco po PEG (PEG jako wybór),
+kupno od razu; F5 jak F1 bez filtra długu; F6 CAGR przychodów > 50 % rocznie (dosłowne odczytanie), FCF > 0, dług < 1, od razu.
+Okres, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (12 wariantów).
