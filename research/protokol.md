@@ -443,3 +443,10 @@ Technicznie: macierze wskaźników zapisywane do /home/user/ndx/wskazniki_cache.
 Uzupełnienie etapu 38 (2026-11-17, PRZED wynikami): użytkownik dodał filtr kapitalizacji > 10 mld USD (large cap; kapitalizacja point-in-time
 /home/user/ndx/pit_cap2.npy na koniec marca). Warianty etapu 38 liczone dodatkowo z tym filtrem (skrypt r59b z cache wskaźników); wyniki obu wersji raportowane.
 Wynik etapu 38/38b (2026-11-17): filtr > 10 mld podnosi wynik (kontrola bez PEG: 16,1 -> 20,9 %); PEG < 2 z realną estymatą obniża (> 10 mld: 15,2-16,8 %); tylko PEG z wiedzą o przyszłości (C) daje istotną przewagę (18,1-20,1 %).
+
+## Etap 39: przychody rosną co roku o >= 10 % przez 5 lat ("słupki rosną") + ROE, dług, > 10 mld, PEG < 2; miary ryzyka (zapisane 2026-11-17 PRZED uruchomieniem)
+Doprecyzowanie użytkownika: zamiast łącznego wzrostu przychodów 5 lat > +50 % - każda z 5 zmian rocznych przychodów TTM (t vs t-1 rok, ..., t-4 vs t-5)
+>= +10 % (łącznie wtedy >= +61 %). Reszta jak etap 38b z filtrem > 10 mld: ROE > 15 %, dług / kapitał < 1; warianty: bez PEG (ranking po CAGR przychodów 5 lat),
+PEG Lyncha < 2 z estymatą użytkownika (ranking po przychodach / po najniższym PEG), PEG < 2 z przeszłym CAGR EPS 5 lat (ranking po przychodach);
+dla porównania te same warianty z warunkiem łącznym (etap 38b). Dodatkowe miary: maks. spadek, Sharpe (miesięczny, bez stopy wolnej), Calmar = CAGR / |maxDD|,
+średni udział w akcjach. 10 spółek co marzec, 2015-03 ... 2026-09. Rozpoznawcze.
