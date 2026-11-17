@@ -454,3 +454,9 @@ Wynik etapu 39 (2026-11-17): warunek "co roku >= +10 %" przy > 10 mld daje 0-13 
 Etap 39b (zapisane PO wyniku 39, PRZED uruchomieniem, odstępstwo 11): łagodniejsze wersje "słupków": (S2) >= +10 % w co najmniej 4 z 5 lat i łącznie > +50 %;
 (S3) przychody nie spadają w żadnym roku (każda zmiana roczna > 0 %) i łącznie > +50 %. Reszta jak etap 39.
 Wynik etapu 39b (2026-11-17): ostrzejsze warunki stabilności przychodów zmniejszają liczbę spółek i wynik (S1 4,5-6,8 %, S2 11-16 %, S3 8,8-12,4 % vs łącznie > +50 %: 15,2-20,9 %); PEG < 2 obniża maks. spadek o 7-20 pp kosztem 4-5 pp CAGR, Calmar podobny lub nieco lepszy.
+
+## Etap 40: po prostu top 10 po CAGR przychodów 5 lat (zapisane 2026-11-17 PRZED uruchomieniem)
+Ranking malejąco po CAGR przychodów TTM z 5 lat wśród członków S&P 500 z danymi SEC; 10 równych pozycji; dokładnie top 10 (wymiana spoza dziesiątki).
+Warianty filtrów: (a) bez filtrów, (b) kapitalizacja > 10 mld, (c) > 10 mld + dług / kapitał < 1, (d) > 10 mld + dług < 1 + ROE > 15 % (= kontrola etapu 38b).
+Przebudowa: raz w roku (marzec) i co miesiąc. Okres 2015-03 ... 2026-09; miary: CAGR, połowy, maxDD, Sharpe, Calmar, różnica vs równe wagi spółek > 10 mld. 8 wariantów.
+Wynik etapu 40 (2026-11-17): sam ranking po przychodach 5 lat bez filtrów 3,4-8,2 % (poniżej rynku); każdy filtr jakości dodaje (> 10 mld, dług < 1, ROE > 15 %) - pełny zestaw roczny 20,9 %.
