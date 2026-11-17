@@ -430,3 +430,4 @@ rocznego raportu (przepływy operacyjne - capex, SEC, znane na datę) > 0; dług
 F1 ranking po CAGR przychodów, kupno od razu; F2 jak F1, wejście przy PEG <= 1; F3 jak F1, wejście przy PEG <= 1,5; F4 ranking rosnąco po PEG (PEG jako wybór),
 kupno od razu; F5 jak F1 bez filtra długu; F6 CAGR przychodów > 50 % rocznie (dosłowne odczytanie), FCF > 0, dług < 1, od razu.
 Okres, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (12 wariantów).
+Wynik etapu 37 (2026-11-17): F1 (przychody 5 l. > +50 %, FCF > 0, dług < 1, ranking po przychodach, od razu) N = 20: 19,1 % rocznie, N = 10: 16,8 %; filtr FCF ~ bez zmian vs etap 36; PEG jako wejście i jako ranking obniża wynik; >50 % rocznie - za mało spółek.
