@@ -44,7 +44,7 @@ def ttm_serie(g):
     return pd.DataFrame(out, columns=['end', 'ttm', 'zn'])
 
 
-SECQ = '/home/user/ndx/sec_q'; SLUPKI = np.zeros((NT, NS), bool)
+SECQ = '/home/user/ndx/sec_q'; SLUPKI = np.zeros((NT, NS), bool); S2 = np.zeros((NT, NS), bool); S3 = np.zeros((NT, NS), bool)
 MARZ = [m for m in ms if m.month == 3 and pd.Period('2015-03', 'M') <= m <= pd.Period('2026-09', 'M')]
 for fn in os.listdir(SECQ):
     d = json.load(open(os.path.join(SECQ, fn)))
@@ -65,7 +65,11 @@ for fn in os.listdir(SECQ):
             c = z[(z.index <= e0 - pd.Timedelta(days=round(365.25 * r) - 45)) & (z.index >= e0 - pd.Timedelta(days=round(365.25 * r) + 45))]
             L.append(c.ttm.iloc[-1] if len(c) else np.nan)
         L = np.array(L)
-        if np.isfinite(L).all() and (L > 0).all() and (L[:-1] / L[1:] >= 1.10).all(): SLUPKI[im_[m], cols[s_]] = True
+        if np.isfinite(L).all() and (L > 0).all():
+            zm = L[:-1] / L[1:]
+            SLUPKI[im_[m], cols[s_]] = (zm >= 1.10).all()
+            S2[im_[m], cols[s_]] = (zm >= 1.10).sum() >= 4 and L[0] / L[5] > 1.5
+            S3[im_[m], cols[s_]] = (zm > 1.0).all() and L[0] / L[5] > 1.5
 print('spółek ze słupkami w marcu (suma po latach)', SLUPKI.sum(), flush=True)
 KOSZT = 0.001; OD = pd.Period('2015-03', 'M'); DO = pd.Period('2026-09', 'M'); POL2 = pd.Period('2020-12', 'M')
 mies2 = [m for m in ms if OD <= m <= DO]
@@ -118,7 +122,7 @@ ew = rowne(); ewL = rowne(LARGE)
 sp_ = etf['SPY'][(etf['SPY'].index >= OD) & (etf['SPY'].index <= DO)]; spy = (sp_ / sp_.iloc[0])[1:]
 rows = []
 LACZNIE = REV5 > 1.5 ** 0.2 - 1
-for warunek, WR in (('co roku >= +10 % (słupki)', SLUPKI), ('łącznie > +50 % (etap 38b)', LACZNIE)):
+for warunek, WR in (('co roku >= +10 % (słupki)', SLUPKI), ('>= +10 % w 4 z 5 lat i łącznie > +50 %', S2), ('bez spadku w żadnym roku i łącznie > +50 %', S3), ('łącznie > +50 % (etap 38b)', LACZNIE)):
     BAZA = WR & (np.nan_to_num(ROE, nan=-9) > 0.15) & (np.nan_to_num(DE, nan=9) < 1) & LARGE
     PA, PB = peg(GRW), peg(G5)
     WAR = {'bez PEG, ranking po przychodach 5 l.': (BAZA, REV5, False),
@@ -136,11 +140,11 @@ T = pd.DataFrame(rows)
 ref = pd.DataFrame([dict(odniesienie=n, CAGR=cg2(x), CAGR_2015_20=cg2(x, None, POL2), CAGR_2021_26=cg2(x, POL2), maxDD=(x / x.cummax() - 1).min(), Sharpe=x.pct_change().mean() / x.pct_change().std() * np.sqrt(12), Calmar=cg2(x) / abs((x / x.cummax() - 1).min())) for n, x in
                     (('równe wagi uniwersum', ew), ('równe wagi spółek > 10 mld', ewL), ('SPY', spy))])
 i = im_[pd.Period('2026-03', 'M')]; P = peg(GRW)
-OK = SLUPKI & (np.nan_to_num(ROE, nan=-9) > 0.15) & (np.nan_to_num(DE, nan=9) < 1) & LARGE
+OK = S3 & (np.nan_to_num(ROE, nan=-9) > 0.15) & (np.nan_to_num(DE, nan=9) < 1) & LARGE
 ok = np.flatnonzero(U[i] & OK[i] & np.isfinite(REV5[i])); ok = ok[np.argsort(-REV5[i, ok])][:15]
 ost = pd.DataFrame({'seria': [ser[j] for j in ok], 'kap_mld': CAP[i, ok] / 1e9, 'przychody_5l_%': 100 * ((1 + REV5[i, ok]) ** 5 - 1), 'ROE_%': 100 * ROE[i, ok],
                     'dlug_kapital': DE[i, ok], 'P/E': PE_[i, ok], 'g_estymata_%': 100 * GRW[i, ok], 'PEG_Lynch': P[i, ok]})
 out = ['# Etap 39: przychody rosną co roku >= 10 % przez 5 lat, ROE > 15 %, dług < 1, > 10 mld, PEG < 2 jako opcja; 10 spółek co rok (2015-03 ... 2026-09)', '',
        '## Odniesienia', '', ref.round(3).to_markdown(index=False), '', '## Warianty', '', T.round(3).to_markdown(index=False), '',
-       '## Lista (słupki rosną, > 10 mld, bez filtra PEG; PEG dla informacji) na koniec marca 2026', '', ost.round(2).to_markdown(index=False), '']
+       '## Lista (bez spadku w żadnym roku i łącznie > +50 %, > 10 mld, bez filtra PEG; PEG dla informacji) na koniec marca 2026', '', ost.round(2).to_markdown(index=False), '']
 open(os.path.join(HERE, 'wyniki', 'r60_slupki.md'), 'w').write('\n'.join(out)); print('\n'.join(out))

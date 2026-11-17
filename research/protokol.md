@@ -450,3 +450,7 @@ Doprecyzowanie użytkownika: zamiast łącznego wzrostu przychodów 5 lat > +50 
 PEG Lyncha < 2 z estymatą użytkownika (ranking po przychodach / po najniższym PEG), PEG < 2 z przeszłym CAGR EPS 5 lat (ranking po przychodach);
 dla porównania te same warianty z warunkiem łącznym (etap 38b). Dodatkowe miary: maks. spadek, Sharpe (miesięczny, bez stopy wolnej), Calmar = CAGR / |maxDD|,
 średni udział w akcjach. 10 spółek co marzec, 2015-03 ... 2026-09. Rozpoznawcze.
+Wynik etapu 39 (2026-11-17): warunek "co roku >= +10 %" przy > 10 mld daje 0-13 kandydatów w marcu (portfel 27-60 % w akcjach), CAGR 4,5-6,8 % - test nieinformacyjny.
+Etap 39b (zapisane PO wyniku 39, PRZED uruchomieniem, odstępstwo 11): łagodniejsze wersje "słupków": (S2) >= +10 % w co najmniej 4 z 5 lat i łącznie > +50 %;
+(S3) przychody nie spadają w żadnym roku (każda zmiana roczna > 0 %) i łącznie > +50 %. Reszta jak etap 39.
+Wynik etapu 39b (2026-11-17): ostrzejsze warunki stabilności przychodów zmniejszają liczbę spółek i wynik (S1 4,5-6,8 %, S2 11-16 %, S3 8,8-12,4 % vs łącznie > +50 %: 15,2-20,9 %); PEG < 2 obniża maks. spadek o 7-20 pp kosztem 4-5 pp CAGR, Calmar podobny lub nieco lepszy.
