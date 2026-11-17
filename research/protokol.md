@@ -399,3 +399,16 @@ Co miesiąc ranking malejąco po potencjale, portfel = top 10 (równe kwoty dla 
 z rankingu). Warianty: Z1 pełny screener; Z2 bez progu potencjału 50 % (sam ranking); Z3 jak Z1, decyzje co kwartał; Z4 jak Z1 z g jak analityk
 (faktyczny wzrost EPS + błąd 10 pp, nierealne). Uniwersum S&P 500 PIT z danymi SEC, 2011-2026 i od 2015-03; koszty, odniesienia, kryterium jak etap 33.
 Wynik etapu 34 (2026-11-16): z estymatą użytkownika (przychody ważone) 6,7-12,8 % (równe wagi 12,8 %, od 2015 9,7-12,9 % vs 11,4 %); z prognozą jak analityk (nierealne) 25,2 % (od 2015 30,3 %, CEM10 25,9 %). Ograniczenia: cena docelowa = formuła użytkownika, nie analityków; brak tagów długu w SEC = D/E 0.
+
+## Etap 35: co w fundamentach 5 lat wcześniej wskazywało największych wygranych (zapisane 2026-11-17 PRZED uruchomieniem, opisowe)
+Kohorty: koniec marca 2011 ... 2021 (11 lat); spółki = członkowie S&P 500 point-in-time z danymi SEC. Wynik: maksymalny zwrot w 5 lat =
+max(zamknięcie miesiąca w t+1 ... t+60) / zamknięcie w t - 1 (ceny skorygowane), dodatkowo zwrot po 5 latach. "Wielki wygrany" = górne 10 % maks. zwrotu w kohorcie.
+Cechy (znane na t, wg dat złożenia raportów): EPS TTM (baza ceny skorygowanej): wzrost r/r 1 rok, CAGR 2 / 3 / 5 lat, przyspieszenie (wzrost 1 r. teraz - rok
+wcześniej), liczba lat wzrostu z 5; przychody TTM: wzrost 1 rok, CAGR 2 / 3 / 5 lat, ostatni kwartał r/r, ważona średnia kwartałów (estymata użytkownika),
+przyspieszenie; marża operacyjna TTM, zmiana 1 i 3 lata; wycena: E/P (zysk netto TTM / kapitalizacja), P/E (dodatnie), S/P (przychody / kapitalizacja),
+PEG (P/E / CAGR EPS 3 lata), forward P/E i potencjał ceny docelowej użytkownika (mediana P/E 36 mies. x EPS x (1 + estymata)); jakość: ROE, dług / kapitał;
+wielkość: log kapitalizacji; kontrole cenowe: zwrot 6 i 12 mies.
+Miary: korelacja rang (Spearman) cechy z maks. zwrotem w każdej kohorcie, średnia i t (kohorty jako niezależne obserwacje, n = 11, dla cech 5-letnich mniej);
+zgodność znaku w kohortach 2011-2015 i 2016-2021; odsetek wielkich wygranych w kwintylach cechy; mediany cech wielkich wygranych vs reszty.
+Wielokrotne testy: ~30 cech -> próg Bonferroniego |t| > 3,3 (5 % / 30). Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność),
+kohorty nakładają się w czasie (okna 5-letnie).
