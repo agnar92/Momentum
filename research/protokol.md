@@ -413,3 +413,11 @@ zgodność znaku w kohortach 2011-2015 i 2016-2021; odsetek wielkich wygranych w
 Wielokrotne testy: ~30 cech -> próg Bonferroniego |t| > 3,3 (5 % / 30). Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność),
 kohorty nakładają się w czasie (okna 5-letnie).
 Wynik etapu 35 (2026-11-17): próg Bonferroniego przechodzą tylko CAGR przychodów 5 lat i liczba lat wzrostu EPS (oba tylko 7 kohort 2015-2021); żadna miara wyceny nie wskazywała przyszłych wielkich wygranych; korelacje <= 0,10.
+
+## Etap 36: wybór po wzroście przychodów 5 lat (vs EPS 5 lat), dług / kapitał < 1, PEG tylko jako moment wejścia (zapisane 2026-11-17 PRZED uruchomieniem)
+Pomysł użytkownika po etapie 35. Co roku na koniec marca lista docelowa = top N członków S&P 500 (z danymi SEC) po rankingu: (R) CAGR przychodów TTM z 5 lat
+albo (E) CAGR EPS TTM z 5 lat; filtr dług / kapitał < 1 (wariant z filtrem i bez). Sprzedaż w marcu, gdy spółka wypadła z top 2N listy.
+Wejście (sprawdzane co miesiąc dla spółek z listy, których nie mamy, przy wolnym miejscu): (W0) od razu; (W1) PEG <= 1; (W2) PEG <= 1,5;
+PEG = P/E TTM / (100 x CAGR EPS 5 lat) (EPS > 0, CAGR > 0); niespełnione = gotówka (0 %) czeka. N = 10 i 20; kwota = kapitał / N. Koszt 0,1 %/stronę.
+Okres 2015-03 ... 2026-09 (dane 5-letnie od 2015). Odniesienia od 2015-03: równe wagi uniwersum, SPY, CEM10 na tym samym uniwersum.
+"Lepszy": wyższy CAGR w obu połowach (2015-03 ... 2020-12, 2021-01 ... 2026-09) i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze (24 warianty).
