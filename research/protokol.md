@@ -607,3 +607,15 @@ Plan: bez zmian reguł ponownie r72 (etap 50), r73 (51), r74 (52); poprzednie wy
 Hipoteza: wyniki spadną (usunięte spółki to częściej przegrane); jeśli przewaga nad SPY zniknie, poprzednie wnioski były skutkiem błędu przeżywalności.
 
 Wynik etapu 53 (2026-11-18): z usuniętymi spółkami średnia spółka wypada gorzej (pobija SPY w 5 lat w 19 % zamiast 31 % okresów), przewaga rdzenia (przychody + dług + FCF) maleje (41 % zamiast 54 %). Wariant PEG z przychodów < 1 + przebudowa w styczniu się utrzymał (16,4 %/rok vs SPY 14,1 %, DD −16 %, 94 % okien 5-letnich), bo nowe spółki w wyborze to głównie przejęte z premią (ABMD, ALXN, AGN). Warianty PEG < 2 i trzymanie 5 lat spadły o 1–2 pp i są poniżej SPY. Hipoteza częściowo potwierdzona.
+
+## Etap 54: nowa strategia użytkownika — przychody 5 lat > +50 %, dług/kapitał < 1, ROE > 15 %, FCF > 0, wagi wg PEG (max 10 %), przebudowa co rok / kwartał / miesiąc (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „weź przychody z 5 lat powyżej 50 %, debt/equity < 1, ROE > 15 %, FCF > 0 i rebalansuj raz w roku lub sprawdzaj co miesiąc czy fundamenty się
+zgadzają, pewnie najlepiej kwartalnie, ale dobieraj wagi do PEG — im mniejszy PEG, tym większy udział, ale nie przekraczaj 10 % konta”.
+Warunki (dane znane na koniec miesiąca, panel z etapu 53, ze spółkami usuniętymi): przychody TTM / przychody TTM 5 lat wcześniej > 1,5 (CAGR > 8,45 %/rok),
+0 ≤ dług/kapitał < 1, ROE > 15 %, FCF TTM > 0 (FCF yield > 0); PEG = P/E ÷ (100 × CAGR przychodów 5 lat), wymagany P/E > 0.
+Wagi: w ∝ 1/PEG, limit 10 % (nadwyżka rozdzielana na resztę proporcjonalnie do 1/PEG, iteracyjnie); gdy spółek < 10, reszta w SPY. Porównanie: równe wagi (limit 10 %).
+Przebudowa do wag docelowych: co 12 mies. (styczeń), co 3 mies. (sty/kwi/lip/paź), co miesiąc; między przebudowami opcjonalnie miesięczna kontrola:
+spółka, która nie spełnia już czterech warunków, sprzedana, pieniądze w SPY do następnej przebudowy. Koszt 0,1 % od obrotu. 2015-01..2026-09.
+Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średnia liczba spółek, średni udział w spółkach, obrót roczny; skład na 2026-09.
+Hipoteza: wagi wg PEG ≈ równe wagi (różnica < 2 pp = szum); częstsza przebudowa nie poprawia wyniku (koszty, powrót do średniej), a kontrola miesięczna zmniejsza DD.
