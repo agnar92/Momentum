@@ -592,3 +592,5 @@ Wyjścia: W5 przebudowa w styczniu, W3 PEG > 3, W0 trzymaj 5 lat, W1 załamanie.
 Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średni udział w spółkach, średnia liczba spółek, mediana trzymania.
 Hipoteza: więcej miejsc nie zmieni wyniku istotnie, bo kandydatów jest mało (mediana 4 przy PEG < 1); różnice CAGR < 2 pp = szum.
 Dodatkowo: lista spółek kupionych w wariancie PEG < 1 + W5, s = 10 %, z wynikiem każdej pozycji.
+
+Wynik etapu 52 (2026-11-18): limit 30 spółek się nie zapełnia — przy PEG < 1 portfel ma średnio 5–11 spółek (max 17), bo co miesiąc warunki spełnia mediana 4 spółek. Wyniki w granicach szumu względem etapu 51 (14–16 %/rok vs SPY 14,1 %). Mniejsza pozycja (5 %) zostawia więcej w SPY i daje podobny CAGR. Hipoteza potwierdzona.
