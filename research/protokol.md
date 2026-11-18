@@ -642,3 +642,10 @@ lub równe, limit 10 %. Przebudowa (styczeń / co kwartał): spółki spełniaj�
 Hipoteza: łagodniejsza sprzedaż = mniej transakcji, wynik w granicach ±1 pp.
 
 Wynik etapu 56 (2026-11-18): sprzedaż przy 2 z 5 kryteriów jest gorsza o 1–2 pp/rok od sprzedaży przy jednym (wagi PEG, styczeń: 12,2–12,4 % vs 14,1 %; SPY 14,1 %), DD mniejszy o ok. 1 pp, portfel puchnie do 51–60 spółek. K5 z PEG > 3 czy samo P/E > 50 — prawie bez różnicy (P/E > 50 ma 16 % spełniających warunki, ale K5 rzadko pada razem z innym kryterium). Hipoteza (±1 pp) odrzucona: łagodniejsza sprzedaż szkodzi.
+
+## Etap 57: etapy 54–56 tylko dla spółek > 10 mld USD (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „ogranicz kapitalizację do 10b” (jak wcześniej: tylko spółki powyżej 10 mld). Warunek wejścia (i wyboru przy przebudowie oraz przy zastępowaniu):
+kapitalizacja na koniec miesiąca > 10 mld USD, plus 4 warunki z etapu 54. Spadek kapitalizacji poniżej 10 mld NIE jest kryterium sprzedaży.
+Warianty jak w etapie 56 (sprzedaż 1 z 4 / 2 z 5, SPY / najniższy PEG, styczeń / kwartał, wagi PEG / równe). Hipoteza: mniej spółek, wynik w granicach ±2 pp
+(w etapie 46 filtr > 10 mld pomagał: +0,4 / +6,0 pp w dwóch okresach).
