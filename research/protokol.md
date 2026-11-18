@@ -683,3 +683,14 @@ Poprawka etapu 59 przed odczytem wniosków (2026-11-18): w 1. przebiegu kandydat
 
 Wynik etapu 59 (2026-11-18, po poprawce wejścia): świetne spółki kupowane bez progu PEG (kolejność od najniższego PEG, transze 2,5 %, wyjście S1) 19,4 %/rok vs SPY 14,1 %, DD −27 %, 100 % okien 5-letnich lepszych od SPY; kolejność losowa 20,0 % (12 losowań 18,6–21,1 %), DD −33 %. Próg kupna PEG < 2 obniża wynik do 13,4 % (kapitał czeka w SPY), PEG < 1 15,5 % z DD −18 %. Wyjścia: S2 (seria wzrostu przerwana) ≥ S1 > S4 > S3. Hipoteza: bije SPY — tak (o 5 pp bez progu PEG); PEG jako kolejność ≈ bez PEG dla zwrotu — tak, ale niższy DD. Uwaga: wiele wariantów na jednym okresie, ranking wariantów niepewny.
 Kontrola etapu 59 (2026-11-18): wynik 19,4 % zależy od NVDA (na koniec ok. 4,1 z kapitału startowego 1 w jednej spółce, bo limit 10 % dotyczy tylko kupna). Bez NVDA 12,4 % (< SPY 14,1 %), bez 5 największych pozycji 11,1 %. Wniosek z etapu 59 („bije SPY o 5 pp”) jest kruchy: to głównie jedna trafiona spółka.
+
+## Etap 60: kategorie Lyncha — stalwarts (przychody +8…+15 % r/r) i fast growers (≥ +20 % r/r), ROE stabilnie > 15 %, dług < 1, FCF > 0 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „daj ROE zamiast ROIC; stalwart: sprzedaż +8…+15 % r/r, stabilne spółki wzrostowe; fast growers: +20 % r/r; na tych dwóch grupach chcemy się skupić;
+dług/kapitał < 1, ROE > 15 % stabilnie rok do roku, FCF > 0”.
+Definicje (5 punktów rocznych TTM r/r: teraz, −12, −24, −36, −48 mies.): STALWART = przychody r/r w [8 %, 15 %] w ≥ 4 z 5 lat i wszystkie 5 > 0;
+FAST = przychody r/r ≥ 20 % w ≥ 3 z 5 lat i CAGR 5 lat ≥ 20 %; wspólne: 0 ≤ dług/kapitał < 1, ROE > 15 % we wszystkich 5 punktach, FCF yield > 0.
+Kupno jak w etapie 59 (kolejność od najniższego PEG, bez progu; wariant PEG < 2; transze 2,5 %, max 4 / mies., max 10 % przy kupnie, rezerwa w SPY).
+Sprzedaż: WA = przychody r/r < 8 % dwa lata z rzędu; WB = spółka nie należy już do żadnej grupy ani nie spełnia warunków wspólnych; WC = nigdy.
+Dodatkowo: przycinanie raz w roku (styczeń) pozycji > 15 % konta do 15 %; kontrola bez najlepszej spółki (wyłączona z wyboru).
+Grupy osobno i razem. Miary jak w etapie 59. Hipoteza: fast growers > SPY głównie dzięki pojedynczym spółkom (bez najlepszej przewaga znika); stalwarts ≈ SPY z mniejszym DD.
