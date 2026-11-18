@@ -704,3 +704,12 @@ wspólne: dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat (wariant 5 z
 Liczebność (mediana w miesiącu, przed uruchomieniem strategii): STALWART2 + warunki 5 (ROE 4/5) / 3 (ROE 5/5), FAST2 2 / 1.
 
 Wynik etapu 61 (2026-11-18): z łagodniejszymi definicjami (ROE 4 z 5): obie grupy, wyjście WA 14,0 %/rok = SPY 14,1 %, ale max DD −17 % vs −24 % i 84 % okien 5-letnich lepszych od SPY; stalwarts 14,1 % (DD −20 %), fast growers 15,1 % (DD −22 %, bez ANET 13,9 %). Próg PEG < 2 i wyjście WB / WC gorsze. ROE 5 z 5: 12,7–15,2 %. NVDA nie spełnia „każdy rok > 0” (spadek przychodów 2023), więc wynik nie zależy od NVDA. Wniosek: grupy Lyncha dają zwrot jak rynek przy mniejszym obsunięciu; przewagi zwrotu nie wykazano.
+
+## Etap 62: przychody 5 lat > +50 % i maks. obsunięcie przychodów w 5 lat ≥ −20 % (stabilny wzrost) + warunki z etapu 61 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „weź tylko ten pierwszy warunek: sprzedaż powyżej 50 % z 5 lat i maksymalne obsunięcie w ciągu 5 lat max −20 % z tych sprzedaży — będzie wiadomo,
+że rosły stabilnie; reszta bez zmian”. Wybór: przychody TTM / przychody TTM 5 lat wcześniej > 1,5 i największy spadek przychodów TTM od szczytu w ostatnich 60 mies.
+≥ −20 % (przychody TTM = kapitalizacja / P/S z panelu, wymagane ≥ 48 z 60 mies.); dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat; kupno co miesiąc
+od najniższego PEG (bez progu; wariant PEG < 2), transze 2,5 %, max 4 / mies., max 10 % przy kupnie, rezerwa w SPY; sprzedaż WA (przychody r/r < 8 % dwa lata),
+warianty WB (wypada z warunków), WC (nigdy). Dodatkowo (gdyby „obsunięcie” dotyczyło ceny): maks. obsunięcie ceny w 5 lat ≥ −20 % / ≥ −30 % zamiast przychodów.
+Kontrola: bez najlepszej spółki i bez NVDA. Miary jak w etapie 61. Hipoteza: więcej spółek niż w etapie 61, zwrot ≈ SPY ± 2 pp.
