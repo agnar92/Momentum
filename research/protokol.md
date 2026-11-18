@@ -738,3 +738,13 @@ co kwartał. Miary: CAGR, DD, okna 12 / 60 mies. vs SPY i vs równe wagi S&P 500
 z rynkiem przez złe spółki, tylko przez to, że SPY (ważony kapitalizacją) w tym okresie wygrywał dzięki największym spółkom.
 
 Wynik etapu 64 (2026-11-18): równe wagi S&P 500 11,1 %/rok vs SPY 14,1 % — w tym okresie największe spółki dały rynkowi 3 pp/rok przewagi, więc każdy portfel równych wag startuje z handicapem. Spółki z etapu 63 w równych wagach (100 % w spółkach) 15,9 %, ale bez NVDA 12,0 %. Proste rankingi: najniższy PEG z przychodów 11–12 % (≈ równe wagi), PEG z EPS 8–10 %, najniższy dług 9–12 %, najniższy dług przy ROE > 15 % 13,7–15,2 % (odporny na NVDA). Hipoteza potwierdzona (rankingi ≈ równe wagi, poniżej SPY), z wyjątkiem R3b (≈ SPY+1 pp; wiele wariantów — możliwy przypadek).
+
+## Etap 65: dług/kapitał < 1 vs ≥ 1 oraz portfel spółek o stabilnym lub parabolicznym wzroście z wagami 1/PEG (max 10 %) (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „według badań biorąc tylko spółki z debt/equity < 1 zwiększamy znacznie przychody z S&P 500 na rzecz tych odwrotnych; PEG to ranking, ale też dobór wag —
+im niższy PEG, tym większa pozycja, max 10 % konta; fundamenty muszą być spełnione: stabilny wzrost lub paraboliczny”.
+(A) Równe wagi co miesiąc: członkowie S&P 500 z dług/kapitał w [0, 1) vs ≥ 1 (lub ujemny kapitał) vs wszyscy; także kwintyle dług/kapitał (nadwyżka 60 mies., etap 58 dane).
+(B) Wszechświat: (STALWART2: CAGR przychodów 5 lat 8–15 %, każdy rok > 0) LUB (FAST2: CAGR ≥ 20 %, każdy rok > 0) LUB (przychody 5 lat > +50 % i obsunięcie
+przychodów ≥ −20 %); oraz dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat. Wagi ∝ 1/PEG (PEG z przychodów), limit 10 % (nadwyżka rozdzielana iteracyjnie),
+brakujące do 100 % w SPY (gdy < 10 spółek). Przebudowa co miesiąc / kwartał / rok (styczeń); porównanie: równe wagi; kontrola bez NVDA.
+Hipoteza: (A) dług < 1 > dług ≥ 1 o 1–3 pp/rok; (B) wagi 1/PEG ≈ równe wagi, wynik ≈ SPY ± 2 pp.
