@@ -519,3 +519,11 @@ Etap 45c (2026-11-18, PRZED uruchomieniem, prośba użytkownika): jak 45b (maks.
 (najniższy PEG wśród przechodzących screener) nie jest w portfelu, a portfel jest pełny, sprzedaj JEDNĄ posiadaną spółkę, która nie jest w top 5 bieżącego rankingu
 (najgorszą: nieprzechodzącą screenera albo z najwyższym PEG) i kup nr 1; jeśli wszystkie posiadane są w top 5 - bez zmian. Reguły sprzedaży: S2 (2 z 3), S1 (którykolwiek), S0 (nigdy).
 Wynik etapu 45c: wymiana pojedyncza na nr 1 - z regułą 2 z 3: 9,4 % (bez wymiany 12,6 %); z którymkolwiek z 3: 14,9 % (bez 15,9 %); bez reguły sprzedaży: 10,7 % (bez wymiany 5,6 %); maks. spadek głębszy o 5-6 pp.
+
+## Etap 46: usprawnienie screenera low risk / high reward - przegląd czynnikowy z próbą wyboru i sprawdzianem (zapisane 2026-11-18 PRZED uruchomieniem)
+Baza: etap 45b (screener, wykluczenie sektorów, sprzedaż przy którymkolwiek z 3: PEG > 3 / przychody 5 l. < 50 % / dług > 1, kontrola co miesiąc).
+Czynniki (pełna siatka 2 x 3 x 2 x 2 x 2 x 2 = 96 wariantów): ranking {najniższy PEG, najwyższy CAGR przychodów 5 l.}; próg PEG przy zakupie {< 1, < 1,5, < 2};
+trend przy zakupie {brak, zamknięcie nad SMA 10}; kapitalizacja {brak, > 10 mld}; filtr rynku {brak, bez zakupów przy SPY < SMA 12}; N {5, 10}.
+Procedura: symulacje osobno od zera w okresie wyboru 2015-03 ... 2020-12 i w sprawdzianie 2021-01 ... 2026-09; wybór 5 najlepszych wariantów wg Calmar
+(CAGR / |maxDD|) w okresie wyboru; raport ich wyniku w sprawdzianie, korelacja rang Calmar między okresami, średni efekt każdego czynnika (różnica średnich CAGR
+po wariantach z / bez) w obu okresach osobno. Wnioski tylko z czynników o zgodnym kierunku w obu okresach. Rozpoznawcze; dane od 2015 (krótka historia).
