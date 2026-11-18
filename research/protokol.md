@@ -471,3 +471,10 @@ niższa niż 3 mies. wcześniej; EPS TTM r/r < 0; spadek wzrostu EPS r/r o >= 10
 Miary: średnia nadwyżka przy sygnale vs bez, różnica z 95 % bootstrapem blokowym po miesiącach; korelacja rang wielkości ciągłych (zmiany) z nadwyżką 12 mies.
 (średnia po miesiącach, t Newey-West, lag 12); macierz korelacji rang sygnałów ciągłych między sobą. Wielokrotne testy: ~13 sygnałów x 2 grupy -> |t| > 3.
 Wynik etapu 41 (2026-11-18): pogorszenie fundamentów nie przewiduje słabszego zwrotu (cena już to wyceniła); hamowanie przychodów, FCF < 0 i cena pod SMA 10 ok. podwajają ryzyko spadku >= 25 % w 6 mies.; najlepszy moment wyjścia nadal cenowy.
+
+## Etap 42: ROE jako warunek trzymania / sygnał sprzedaży (zapisane 2026-11-18 PRZED uruchomieniem)
+Pomysł użytkownika: trzymaj, dopóki ROE >= 10 % i nie spada r/r. Sygnały (ROE = zysk netto TTM / kapitał, znane na t): R1 ROE < 10 %; R2 przejście poniżej 10 %
+(rok wcześniej >= 10 %); R3 ROE niższe niż rok wcześniej (o > 1 pp); R4 = R1 lub R3 (warunek trzymania niespełniony); R5 ROE niższe r/r o > 1 pp i < 15 %.
+(a) Opis jak etap 41 (nadwyżka 12 mies., P(spadek >= 25 % w 6 mies.), wszyscy i liderzy). (b) Reguła wyjścia w strategii etapu 38b (d): co marzec 10 spółek > 10 mld,
+dług < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; wyjście co miesiąc: brak (trzymaj do marca) / sygnał R1..R5 / zamknięcie pod SMA 10 / R4 lub SMA 10;
+sprzedane miejsce czeka w gotówce do marca. 2015-03 ... 2026-09; CAGR, maxDD, Sharpe, Calmar. Rozpoznawcze.
