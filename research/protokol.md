@@ -766,3 +766,5 @@ Wynik etapu 66 (2026-11-18, po poprawce): bez przebudowy 11,1–14,4 %/rok (SPY 
 Użytkownik: „jak NVDA mogła wejść z 3,3 — to za drogo, poniżej 2 to cena godziwa”. W etapie 66 nowe spółki nie miały progu PEG (wniosek z etapów 59–63).
 Teraz: kupno tylko przy PEG < 2 (warianty < 1,5 i < 1); reszta bez zmian (wielkość 5 %/PEG, bez przebudowy, wyjścia X0–X4, kontrola bez NVDA).
 Hipoteza: niższy wynik niż bez progu (więcej kapitału w SPY), mniejszy DD.
+
+Wynik etapu 66b (2026-11-18): z progiem PEG przy kupnie i wyjściem X4 (P/E > 50 i PEG > 3 lub przychody < 8 % dwa lata): PEG < 2 14,5 %, PEG < 1,5 15,1 %, PEG < 1 15,1 % (SPY 14,1 %); bez NVDA praktycznie bez zmian (14,2 / 15,0 / 14,9 %) — po raz pierwszy wynik nie zależy od NVDA. Większość kapitału w SPY (58–70 %). Bez sprzedaży lub sprzedaż tylko po wycenie gorsze (10,8–13,3 %). Hipoteza (niższy wynik niż bez progu) odrzucona: próg przy braku przebudowy pomaga.
