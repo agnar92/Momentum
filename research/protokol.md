@@ -736,3 +736,5 @@ Rankingi (co miesiąc, równe wagi, 10 spółek, koszt 0,1 % od obrotu): R1 najn
 R2 najniższy PEG z EPS 5 lat (jak Finviz „PEG” historyczny), R3 najniższy dług/kapitał (≥ 0), R3b najniższy dług przy ROE > 15 %; dodatkowo top 20 i przebudowa
 co kwartał. Miary: CAGR, DD, okna 12 / 60 mies. vs SPY i vs równe wagi S&P 500. Hipoteza: R1–R3 ≈ równe wagi S&P 500 (~11 %), poniżej SPY; „jakość” nie przegrywa
 z rynkiem przez złe spółki, tylko przez to, że SPY (ważony kapitalizacją) w tym okresie wygrywał dzięki największym spółkom.
+
+Wynik etapu 64 (2026-11-18): równe wagi S&P 500 11,1 %/rok vs SPY 14,1 % — w tym okresie największe spółki dały rynkowi 3 pp/rok przewagi, więc każdy portfel równych wag startuje z handicapem. Spółki z etapu 63 w równych wagach (100 % w spółkach) 15,9 %, ale bez NVDA 12,0 %. Proste rankingi: najniższy PEG z przychodów 11–12 % (≈ równe wagi), PEG z EPS 8–10 %, najniższy dług 9–12 %, najniższy dług przy ROE > 15 % 13,7–15,2 % (odporny na NVDA). Hipoteza potwierdzona (rankingi ≈ równe wagi, poniżej SPY), z wyjątkiem R3b (≈ SPY+1 pp; wiele wariantów — możliwy przypadek).
