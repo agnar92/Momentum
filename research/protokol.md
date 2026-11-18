@@ -725,3 +725,14 @@ do 10 % konta; przycinanie do 10 %: (a) w styczniu, (b) gdy PEG > 3 (sprawdzane 
 bez NVDA. Hipoteza: z przycinaniem wynik bliżej SPY niż 20 % z etapu 62, ok. 15–17 %; bez NVDA < SPY.
 
 Wynik etapu 63 (2026-11-18): przycinanie do 10 % (styczeń / PEG > 3) + dokup 2 % przy PEG < 2: 15,2 %/rok vs SPY 14,1 %, DD −23 %, wszystkie okna 5-letnie lepsze od SPY, ale średnio tylko 41 % kapitału w spółkach (6 spółek). Bez NVDA 13,2 %. Rodzaj przycinania prawie bez znaczenia (15,2–15,6 %). Hipoteza potwierdzona (15–17 %; bez NVDA < SPY).
+
+## Etap 64: dlaczego „jakościowe” spółki dają mało + proste rankingi: top 10 po najniższym PEG / najniższym długu, przebudowa co miesiąc (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „czemu tak słabo? wybieramy jakościowe spółki z S&P 500 … nie dajemy im rosnąć? Sprawdź coś prostszego: ranking po PEG co miesiąc, kup top 10;
+potem to samo dla najmniejszego długu/kapitału, przebudowa co miesiąc”.
+Diagnoza (2015-01..2026-09): (a) SPY vs równe wagi wszystkich członków S&P 500 (miesięcznie, PIT); (b) równe wagi wszystkich spółek spełniających warunki etapu 63
+(przebudowa co miesiąc, 100 % w spółkach) — czy same spółki są lepsze od rynku; (c) udział SPY w etapie 63 i zwrot części „spółkowej”.
+Rankingi (co miesiąc, równe wagi, 10 spółek, koszt 0,1 % od obrotu): R1 najniższy PEG z przychodów (P/E ÷ 100 × CAGR przychodów 5 lat, tylko PEG > 0),
+R2 najniższy PEG z EPS 5 lat (jak Finviz „PEG” historyczny), R3 najniższy dług/kapitał (≥ 0), R3b najniższy dług przy ROE > 15 %; dodatkowo top 20 i przebudowa
+co kwartał. Miary: CAGR, DD, okna 12 / 60 mies. vs SPY i vs równe wagi S&P 500. Hipoteza: R1–R3 ≈ równe wagi S&P 500 (~11 %), poniżej SPY; „jakość” nie przegrywa
+z rynkiem przez złe spółki, tylko przez to, że SPY (ważony kapitalizacją) w tym okresie wygrywał dzięki największym spółkom.
