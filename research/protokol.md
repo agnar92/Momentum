@@ -527,3 +527,4 @@ trend przy zakupie {brak, zamknięcie nad SMA 10}; kapitalizacja {brak, > 10 mld
 Procedura: symulacje osobno od zera w okresie wyboru 2015-03 ... 2020-12 i w sprawdzianie 2021-01 ... 2026-09; wybór 5 najlepszych wariantów wg Calmar
 (CAGR / |maxDD|) w okresie wyboru; raport ich wyniku w sprawdzianie, korelacja rang Calmar między okresami, średni efekt każdego czynnika (różnica średnich CAGR
 po wariantach z / bez) w obu okresach osobno. Wnioski tylko z czynników o zgodnym kierunku w obu okresach. Rozpoznawcze; dane od 2015 (krótka historia).
+Wynik etapu 46 (2026-11-18): ranking wariantów niestabilny między okresami (rho ~0), ale wszystkie 5 wybranych w 2015-2020 bije SPY w 2021-2026 (19,7-22,9 % vs 15,2 %); zgodne usprawnienia: kapitalizacja > 10 mld, PEG < 2 zamiast < 1, 10 spółek zamiast 5.
