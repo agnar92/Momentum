@@ -555,3 +555,4 @@ Dla każdej pary (45) i trójki (120) oraz czwórek budowanych z 10 najlepszych 
 t Newey-West (lag 60), średnia liczba spółek w miesiącu; osobno w dwóch połowach startów (2012-01 ... 2016-09 i 2016-10 ... 2021-09). Kombinacja "stabilna", jeśli
 nadwyżka > 0 w obu połowach i średnio >= 10 spółek. Próg Bonferroniego dla ~175 kombinacji: |t| > 3,6. Dodatkowo interakcja pary = nadwyżka pary - max(nadwyżki składników).
 Ograniczenia jak etap 47; wybór najlepszych kombinacji po fakcie zawyża ich wynik (stąd raport obu połów).
+Wynik etapu 48 (2026-11-18): najlepsze stabilne kombinacje łączą quick ratio > 1,5 z PEG < 2 / EPS 5 l. > 10 % / dług < 0,5 (+53..+69 pp nadwyżki w 5 lat, 14-28 spółek, zgodnie w obu połowach); przychody 5 l. > +50 % + dług < 0,5: +31 pp (35 spółek).
