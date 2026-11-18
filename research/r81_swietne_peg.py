@@ -56,7 +56,8 @@ def sim(nrev=3, roic=True, quick=False, wyj='S1', transza=0.025, max_tr=4, peg_m
                     for j in nowe: od.setdefault(j, m)
                     poz = nowe; sp = e - sum(nowe.values()) - zm * KOSZT
         else:
-            kand = np.flatnonzero(S & handel & (np.nan_to_num(PEG[i], nan=99) < peg_max))
+            nie_sprzedaj = ~((nz(R0[i]) < 0.10) & (nz(R1[i]) < 0.10)) if wyj == 'S1' else (nz(R0[i]) >= 0) if wyj == 'S3' else np.ones(NS, bool)
+            kand = np.flatnonzero(S & handel & nie_sprzedaj & (np.nan_to_num(PEG[i], nan=99) < peg_max))
             if kolejnosc == 'PEG': kand = kand[np.argsort(PEG[i, kand])]
             else: kand = kand[np.random.default_rng(a).permutation(len(kand))]
             n = 0
@@ -87,6 +88,9 @@ run('bez warunku ROIC, wyjście S1', roic=False); run('+ quick ratio > 1, wyjśc
 run('transza 5 %, wyjście S1', transza=0.05); run('bez limitu transz w miesiącu, wyjście S1', max_tr=0)
 run('kolejność losowa zamiast PEG (PEG < 2), S1', kolejnosc='los')
 run('bez progu PEG (kupno zawsze), kolejność PEG, S1', peg_max=1e9)
+run('bez progu PEG, kolejność losowa, S1', peg_max=1e9, kolejnosc='los')
+run('bez warunku ROIC, bez progu PEG, kolejność PEG, S1', roic=False, peg_max=1e9)
+run('bez warunku ROIC, bez progu PEG, kolejność losowa, S1', roic=False, peg_max=1e9, kolejnosc='los')
 run('PEG < 1, S1', peg_max=1.0)
 run('porównanie: równe wagi, przebudowa w styczniu, bez PEG, S1', rownewagi=True)
 run('porównanie: równe wagi, przebudowa w styczniu, bez PEG, S4', rownewagi=True, wyj='S4')
