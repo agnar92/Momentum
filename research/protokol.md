@@ -580,3 +580,15 @@ Kupno: spółka spełnia rdzeń (przychody TTM +8 % w każdym z 5 lat, dług / k
 kolejność po najniższym PEG_przych. Wyjścia: W0 trzymaj 60 mies.; W1 załamanie: przychody TTM r/r < 0 albo dług / kapitał > 1 albo FCF < 0; W2 przewartościowanie PEG_przych > 2;
 W3 PEG_przych > 3; W4 W1 lub W3; W5 coroczna przebudowa (styczeń: sprzedaj spółki niespełniające warunków kupna); W6 W1 lub W2; W7 nigdy (do zniknięcia z danych).
 Okres 2015-01 ... 2026-09 (warunek 5-letni). Miary: CAGR, maks. spadek, odsetek kroczących okien 12 i 60 mies. z wynikiem lepszym od SPY, średni udział spółek, mediana czasu trzymania.
+
+Wynik etapu 51 (2026-11-18): najlepsze wyjście = coroczna przebudowa w styczniu (sprzedaj, jeśli spółka nie spełnia już warunków wejścia): PEG < 1 15,9 %/rok vs SPY 14,1 %, DD −18,7 %, 86 % okien 5-letnich lepszych od SPY, ale średnio tylko 49 % kapitału w spółkach (mediana 4 kandydatów). Trzymanie 5 lat 11,0 %, bez sprzedaży 8,1 %.
+
+## Etap 52: portfel narastający do 30 spółek, pozycja max 10 % / 5 % / 1/30 konta (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „sprawdzaj co miesiąc i kupuj kolejne, nie przekraczaj max 30 spółek, zawsze inwestuję max 10 % konta na spółkę”.
+Co miesiąc dokupujemy nowe spółki spełniające rdzeń (przychody +8 % co rok 5 lat, dług/kapitał 0–1, FCF > 0) i PEG z przychodów < 1 (oraz < 2),
+od najniższego PEG, dopóki portfel ma < 30 spółek; kwota = min(s × wartość konta, wolna gotówka), s ∈ {10 %, 5 %, 1/30}; wolna gotówka w SPY.
+Wyjścia: W5 przebudowa w styczniu, W3 PEG > 3, W0 trzymaj 5 lat, W1 załamanie. Koszt 0,1 %/stronę, 2015-01..2026-09.
+Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średni udział w spółkach, średnia liczba spółek, mediana trzymania.
+Hipoteza: więcej miejsc nie zmieni wyniku istotnie, bo kandydatów jest mało (mediana 4 przy PEG < 1); różnice CAGR < 2 pp = szum.
+Dodatkowo: lista spółek kupionych w wariancie PEG < 1 + W5, s = 10 %, z wynikiem każdej pozycji.
