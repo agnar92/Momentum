@@ -513,3 +513,9 @@ Sprzedaż (użytkownik): gdy co najmniej 2 z 3: PEG > 3 (lub CAGR EPS 5 lat <= 0
 (Sb) PEG > 3 i przychody 5 lat < 50 % (oba najważniejsze); (S1) którykolwiek z 3; (S0) nigdy. Kontrola: bez wykluczenia sektorów.
 Okres 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni udział w akcjach, mediana czasu trzymania, liczba kandydatów. Rozpoznawcze.
 Wynik etapu 45 (2026-11-18): screener przepuszcza zwykle 6 spółek; reguła 2 z 3 daje 9-15 %, sprzedaż przy którymkolwiek z 3 13,8-15,7 % (najlepszy Calmar 0,69 bez wykluczania sektorów); trzymanie bez sprzedaży 6-12 %.
+Etap 45b (2026-11-18, po wynikach 45, prośba użytkownika): ten sam screener i reguły sprzedaży z maks. 5 pozycjami (kontrola co miesiąc), z i bez wykluczenia sektorów.
+Wynik etapu 45b: maks. 5 spółek - sprzedaż 2 z 3: 12,6 % (co miesiąc, DD -29 %), którykolwiek z 3: 15,9 % (DD -28 %, Calmar 0,57), nigdy 5,6 %.
+Etap 45c (2026-11-18, PRZED uruchomieniem, prośba użytkownika): jak 45b (maks. 5, kontrola co miesiąc, wykluczenie sektorów) + wymiana pojedyncza: jeśli spółka nr 1 rankingu
+(najniższy PEG wśród przechodzących screener) nie jest w portfelu, a portfel jest pełny, sprzedaj JEDNĄ posiadaną spółkę, która nie jest w top 5 bieżącego rankingu
+(najgorszą: nieprzechodzącą screenera albo z najwyższym PEG) i kup nr 1; jeśli wszystkie posiadane są w top 5 - bez zmian. Reguły sprzedaży: S2 (2 z 3), S1 (którykolwiek), S0 (nigdy).
+Wynik etapu 45c: wymiana pojedyncza na nr 1 - z regułą 2 z 3: 9,4 % (bez wymiany 12,6 %); z którymkolwiek z 3: 14,9 % (bez 15,9 %); bez reguły sprzedaży: 10,7 % (bez wymiany 5,6 %); maks. spadek głębszy o 5-6 pp.
