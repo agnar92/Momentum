@@ -1,0 +1,269 @@
+<title>Parametry a zwroty 5-letnie</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* układ: raport badawczy w jednej kolumnie; najpierw wnioski, potem dowody od najprostszych (parametr osobno) do modelu */
+:root{
+  --bg:#f7f8fa;--surface:#ffffff;--fg:#14181f;--fg2:#4a5260;--muted:#7b8494;--line:#dfe3ea;--grid:#eceff4;
+  --accent:#1c5cab;--pos:#2a78d6;--neg:#d03b3b;--mid:#f0efec;--sig:#14181f;--warn:#9a6a00;--warn-bg:#fdf3dc;
+  --display:"Space Grotesk",system-ui,sans-serif;--body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121418;--surface:#1a1d23;--fg:#eceef2;--fg2:#b6bdc8;--muted:#8a93a2;--line:#2d323b;--grid:#252a32;
+  --accent:#6da7ec;--pos:#3987e5;--neg:#e66767;--mid:#383835;--sig:#eceef2;--warn:#e2b24f;--warn-bg:#3a2f14;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121418;--surface:#1a1d23;--fg:#eceef2;--fg2:#b6bdc8;--muted:#8a93a2;--line:#2d323b;--grid:#252a32;
+  --accent:#6da7ec;--pos:#3987e5;--neg:#e66767;--mid:#383835;--sig:#eceef2;--warn:#e2b24f;--warn-bg:#3a2f14;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1040px;margin:0 auto;display:grid;gap:40px}
+h1{font:600 clamp(26px,4vw,36px)/1.15 var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:600 22px/1.25 var(--display);margin:0;text-wrap:balance}
+h3{font:600 12px/1.3 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+p{margin:0;max-width:72ch}.mut{color:var(--fg2)}.small{font-size:13px}
+section{display:grid;gap:14px;min-width:0}
+.lead{display:grid;gap:12px}
+.kpis{display:flex;flex-wrap:wrap;gap:28px;margin-top:6px}
+.kpi b{display:block;font:600 24px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.kpi span{font-size:13px;color:var(--fg2)}
+.wnioski{display:grid;gap:10px;padding:0;margin:0;list-style:none}
+.wnioski li{display:grid;grid-template-columns:14px 1fr;gap:10px;max-width:80ch}
+.wnioski li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:8px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex-wrap:wrap}
+.seg button{font:500 13px var(--body);border:0;background:transparent;color:var(--fg2);padding:7px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.seg button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select{font:14px var(--body);padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);max-width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--fg2)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.scroll{overflow-x:auto}
+svg{display:block;max-width:100%}
+svg text{fill:var(--fg2);font:12px var(--body)}
+svg .lab{fill:var(--fg)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font:600 12px var(--body);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.cell{text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--fg)}
+.tag{display:inline-block;font:600 11px var(--body);padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--fg2)}
+.tag.s{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.uw{color:var(--warn);cursor:help}
+.note{background:var(--warn-bg);border-radius:8px;padding:10px 12px;font-size:13.5px;color:var(--fg)}
+.tip{position:fixed;pointer-events:none;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);z-index:20;max-width:260px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.metoda li{max-width:80ch;margin-bottom:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<main>
+<header class="lead">
+  <h3>Momentum · badanie etap 47 · S&amp;P 500 z danymi SEC · starty 2012–2025</h3>
+  <h1>Co w parametrach Finviz naprawdę zapowiada zwroty w 5 lat</h1>
+  <p class="mut">Każdy parametr sprawdzony osobno na wszystkich spółkach (nie tylko top 10), na horyzontach od 1 miesiąca do 5 lat. Wynik to nadwyżka nad średnią wszystkich spółek w tym samym okresie. Dane znane w dniu decyzji: raporty SEC według dat złożenia, ceny skorygowane, kapitalizacja z tamtego dnia.</p>
+  <div class="kpis">
+    <div class="kpi"><b>70 655</b><span>obserwacji spółka × miesiąc</span></div>
+    <div class="kpi"><b>37</b><span>parametrów</span></div>
+    <div class="kpi"><b>3 z 37</b><span>istotnych dla 5 lat</span></div>
+    <div class="kpi"><b>0 z 37</b><span>istotnych dla 12 mies.</span></div>
+  </div>
+</header>
+
+<section>
+  <h2>Wnioski</h2>
+  <ul class="wnioski">
+    <li><span><b>Wycena nie przewiduje zwrotów.</b> P/E, E/P, PEG (oba warianty), forward P/E, P/S, EV/Sales, P/FCF i FCF yield mają korelację bliską zera na każdym horyzoncie. Spółki z P/E poniżej 15 dały w 5 lat o 12,5 pp mniej niż reszta.</span></li>
+    <li><span><b>Liczy się długi wzrost i bezpieczny bilans.</b> Istotne w 5 lat: wysoki quick ratio, wzrost EPS z 5 lat, a z progów Finviz: przychody 5 lat powyżej 10–20 % rocznie, EPS 5 lat powyżej 10 %, dług / kapitał poniżej 0,5 i marża operacyjna powyżej 25 %.</span></li>
+    <li><span><b>PEG działa tylko pośrednio.</b> „PEG &lt; 2” daje +19,5 pp w 5 lat, bo wymaga dodatniego wzrostu EPS z 5 lat. Sama wartość PEG nie ma znaczenia: PEG &lt; 1 nie jest lepszy od reszty.</span></li>
+    <li><span><b>Fundamenty działają powoli.</b> Na 12 miesięcy żaden parametr nie jest istotny; korelacje rosną wraz z horyzontem. Przebudowa raz na 1–2 lata wystarcza; częstsza nie pomaga.</span></li>
+    <li><span><b>Model ze wszystkich parametrów jest słaby.</b> Poza próbą (2016–2025) korelacja 0,05 z nadwyżką 12 mies.; górny kwintyl wyprzedza dolny o ok. 1,7 pp rocznie.</span></li>
+    <li><span><b>Twoja strategia ma jeden zbyt ostry składnik.</b> „Sprzedaż 5 lat powyżej 30 % rocznie” przepuszcza średnio 6 spółek i wypada słabo; próg 10–20 % jest lepszy. Wszystkie 4 warunki naraz prawie nigdy nie są spełnione.</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>Każdy parametr osobno</h2>
+  <p class="mut">Korelacja rang parametru z przyszłą nadwyżką, średnio po miesiącach startu. Pełny kolor = istotne przy 37 testach (|t| &gt; 3,2), jasny = |t| 2–3,2, szary = brak dowodu. Najedź na słupek po szczegóły.</p>
+  <div class="panel">
+    <div class="tools"><span class="small mut">Horyzont</span><div class="seg" id="hor" role="group" aria-label="Horyzont"></div>
+      <span class="small mut">Grupa</span><select id="kat" aria-label="Grupa parametrów"><option value="">wszystkie</option></select></div>
+    <div class="legend"><span><i style="background:var(--pos)"></i>wyższa wartość → wyższy zwrot</span><span><i style="background:var(--neg)"></i>wyższa wartość → niższy zwrot</span><span><i style="background:var(--muted);opacity:.45"></i>brak dowodu</span><span class="uw">⚠ dane niepełne</span></div>
+    <div class="scroll"><svg id="ic" role="img" aria-label="Korelacja parametrów z nadwyżką"></svg></div>
+  </div>
+</section>
+
+<section>
+  <h2>Jak efekt zmienia się z horyzontem</h2>
+  <p class="mut">Ta sama korelacja dla wybranego parametru na 7 horyzontach; pas = przedział ±2 błędy standardowe. Rosnąca linia oznacza efekt, który potrzebuje lat, żeby się ujawnić.</p>
+  <div class="panel">
+    <div class="tools"><label class="small mut" for="par">Parametr</label><select id="par"></select></div>
+    <svg id="dek" role="img" aria-label="Korelacja według horyzontu"></svg>
+  </div>
+</section>
+
+<section>
+  <h2>Kwintyle: nadwyżka w 5 lat</h2>
+  <p class="mut">Spółki podzielone co miesiąc na 5 grup według parametru (K1 = najniższe wartości). Liczby to średnia nadwyżka po 5 latach w punktach procentowych. Kliknij nagłówek, by sortować.</p>
+  <div class="panel scroll"><table id="kw"></table></div>
+</section>
+
+<section>
+  <h2>Progi Finviz</h2>
+  <p class="mut">Spółki spełniające próg kontra reszta: różnica średniej nadwyżki po 5 latach. „Spółek” = ile średnio spełniało próg w miesiącu.</p>
+  <div class="panel scroll"><table id="progi"></table></div>
+</section>
+
+<section>
+  <h2>Składniki Twojej strategii i ich pary</h2>
+  <p class="mut">PEG &lt; 2, sprzedaż 5 lat &gt; 30 % rocznie, ROE &gt; 15 %, dług / kapitał &lt; 0,5. Na przekątnej składnik sam; poza nią para. Wartość = różnica nadwyżki 5-letniej (pp) spełniających i reszty.</p>
+  <div class="two">
+    <div class="panel scroll"><table id="pary"></table></div>
+    <div class="panel"><h3>Interpretacja</h3><div id="parytxt" class="small"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Model ze wszystkich parametrów</h2>
+  <p class="mut">LightGBM uczony krocząco: model na rok Y widzi tylko dane, których wynik był znany przed początkiem roku Y. Ocena wyłącznie poza próbą, 2016–2025, cel: nadwyżka 12 mies.</p>
+  <div class="two">
+    <div class="panel"><h3>Nadwyżka 12 mies. w kwintylach prognozy</h3><svg id="lq" role="img" aria-label="Nadwyżka w kwintylach prognozy modelu"></svg><p class="small mut" id="lqtxt"></p></div>
+    <div class="panel"><h3>Udział parametrów w prognozie (SHAP), top 15</h3><svg id="shap" role="img" aria-label="Ważność parametrów"></svg></div>
+  </div>
+</section>
+
+<section>
+  <h2>Jak często przebudowywać</h2>
+  <p class="mut">Portfel równych wag: górny kwintyl modelu (2016–2026) i spółki spełniające 4 warunki strategii (2015–2026), przebudowa co N miesięcy, koszt 0,1 % od obrotu.</p>
+  <div class="panel scroll"><table id="reb"></table></div>
+</section>
+
+<section class="metoda">
+  <h2>Metoda i ograniczenia</h2>
+  <ul class="small mut">
+    <li>Uniwersum: członkowie S&amp;P 500 z danego miesiąca, dla których są raporty SEC (ok. 480 spółek miesięcznie). Lista spółek SEC to głównie obecni członkowie indeksów, więc bankruci są niedoreprezentowani.</li>
+    <li>Nadwyżka = zwrot spółki minus średni zwrot wszystkich spółek w tym samym okresie. Błędy standardowe Newey-West z opóźnieniem równym horyzontowi, bo okna 5-letnie mocno się nakładają: starty 2012–2021 to w praktyce ok. dwa niezależne okresy.</li>
+    <li>Niedostępne historycznie i pominięte: prognozy analityków (forward P/E z konsensusu, EPS next Y / 5Y), niespodzianki wyników, własność insiderów i instytucji. Forward P/E i PEG „estymata” używają ważonej średniej wzrostu przychodów.</li>
+    <li>Dane o dywidendach i amortyzacji z SEC są niepełne (przepływy kwartalne są narastające), więc parametry dywidendowe i EV/EBITDA oznaczono ⚠. Marża brutto ma dane dla 43 % obserwacji.</li>
+    <li>Skrypty i tabele: research/r68_panel_finviz.py, research/r69_finviz_analiza.py, wyniki w research/wyniki/r69_finviz.md (repozytorium Momentum).</li>
+  </ul>
+</section>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const D = {"P":[{"p":"P/E","k":"Wycena","cov":0.863,"ic":{"1":-0.0088,"3":-0.0027,"6":-0.0031,"12":-0.0089,"24":-0.0099,"36":0.0044,"60":0.0031},"t":{"1":-0.7,"3":-0.14,"6":-0.12,"12":-0.25,"24":-0.22,"36":0.1,"60":0.06},"q60":[-0.1067,0.0214,0.0092,0.0928,-0.0188],"q12":[-0.0076,0.0036,0.0027,-0.0058,-0.0115],"s60":0.0879,"mono":0.3,"uwaga":null},{"p":"E/P","k":"Wycena","cov":0.722,"ic":{"1":0.0045,"3":-0.0052,"6":-0.0078,"12":-0.0054,"24":-0.0029,"36":-0.0098,"60":-0.007},"t":{"1":0.44,"3":-0.34,"6":-0.35,"12":-0.16,"24":-0.09,"36":-0.34,"60":-0.19},"q60":[0.052,0.1174,0.063,0.0676,-0.0872],"q12":[0.02,0.0062,0.0064,0.0036,0.0024],"s60":-0.1392,"mono":-0.3,"uwaga":null},{"p":"forward P/E (estymata)","k":"Wycena","cov":0.752,"ic":{"1":-0.0066,"3":-0.0021,"6":0.0015,"12":-0.0006,"24":-0.011,"36":0.0012,"60":0.0104},"t":{"1":-0.55,"3":-0.12,"6":0.07,"12":-0.02,"24":-0.25,"36":0.03,"60":0.2},"q60":[-0.0749,0.023,0.0458,0.0944,0.0056],"q12":[-0.0036,-0.0039,0.0033,-0.0088,-0.0115],"s60":0.0805,"mono":0.4,"uwaga":null},{"p":"PEG (EPS 5 lat)","k":"Wycena","cov":0.529,"ic":{"1":-0.0054,"3":0.0057,"6":0.0137,"12":0.0285,"24":0.0137,"36":-0.001,"60":-0.0161},"t":{"1":-0.49,"3":0.39,"6":0.75,"12":0.94,"24":0.32,"36":-0.02,"60":-0.28},"q60":[0.0454,0.0681,0.1375,-0.0007,-0.1148],"q12":[-0.0101,0.0123,0.0051,-0.0082,0.01],"s60":-0.1602,"mono":-0.6,"uwaga":null},{"p":"PEG (estymata)","k":"Wycena","cov":0.573,"ic":{"1":-0.0006,"3":0.0026,"6":0.0111,"12":0.0208,"24":0.012,"36":0.0107,"60":-0.0113},"t":{"1":-0.08,"3":0.22,"6":0.68,"12":0.82,"24":0.41,"36":0.27,"60":-0.2},"q60":[0.0696,0.0945,0.1199,0.0364,-0.0262],"q12":[-0.0019,-0.0032,0.0004,-0.0096,-0.0082],"s60":-0.0958,"mono":-0.6,"uwaga":null},{"p":"P/S","k":"Wycena","cov":0.731,"ic":{"1":-0.0082,"3":-0.0108,"6":-0.0086,"12":-0.0072,"24":0.0074,"36":0.0323,"60":0.0346},"t":{"1":-0.65,"3":-0.53,"6":-0.3,"12":-0.19,"24":0.16,"36":0.69,"60":0.73},"q60":[0.015,-0.0129,0.0011,0.1216,0.1586],"q12":[0.0194,0.0032,0.0078,-0.0002,-0.0021],"s60":0.1436,"mono":0.7,"uwaga":null},{"p":"P/B","k":"Wycena","cov":0.756,"ic":{"1":0.007,"3":0.0169,"6":0.0231,"12":0.0355,"24":0.0663,"36":0.0904,"60":0.0987},"t":{"1":0.52,"3":0.8,"6":0.75,"12":0.82,"24":1.26,"36":1.64,"60":1.99},"q60":[-0.0742,-0.0562,-0.0416,0.0703,0.3024],"q12":[0.0196,-0.021,-0.0039,0.0038,0.0332],"s60":0.3765,"mono":1.0,"uwaga":null},{"p":"cena / gotówka","k":"Wycena","cov":0.768,"ic":{"1":-0.0125,"3":-0.0191,"6":-0.021,"12":-0.0204,"24":-0.0121,"36":-0.0033,"60":-0.0225},"t":{"1":-0.94,"3":-0.87,"6":-0.66,"12":-0.47,"24":-0.3,"36":-0.15,"60":-0.87},"q60":[0.0582,0.1251,0.1251,0.0487,-0.0628],"q12":[0.0373,0.0212,0.0117,-0.0088,-0.0099],"s60":-0.121,"mono":-0.6,"uwaga":null},{"p":"P/FCF","k":"Wycena","cov":0.601,"ic":{"1":0.0006,"3":0.012,"6":0.0178,"12":0.0228,"24":0.0119,"36":0.0242,"60":0.0234},"t":{"1":0.04,"3":0.54,"6":0.61,"12":0.59,"24":0.25,"36":0.47,"60":0.37},"q60":[-0.0626,0.0174,0.0444,0.1104,0.0626],"q12":[0.0034,-0.0004,-0.0017,0.0094,0.0319],"s60":0.1252,"mono":0.9,"uwaga":null},{"p":"FCF yield","k":"Wycena","cov":0.66,"ic":{"1":0.0041,"3":0.0011,"6":0.0002,"12":-0.0033,"24":0.0083,"36":0.0135,"60":0.0204},"t":{"1":0.34,"3":0.06,"6":0.01,"12":-0.11,"24":0.23,"36":0.39,"60":0.5},"q60":[-0.0903,0.1445,0.0435,0.0218,-0.0517],"q12":[0.0175,0.0232,-0.0,-0.0021,0.0036],"s60":0.0386,"mono":0.0,"uwaga":null},{"p":"EV/Sales","k":"Wycena","cov":0.731,"ic":{"1":-0.0072,"3":-0.0114,"6":-0.0094,"12":-0.007,"24":0.0063,"36":0.0257,"60":0.0254},"t":{"1":-0.6,"3":-0.58,"6":-0.34,"12":-0.19,"24":0.15,"36":0.59,"60":0.57},"q60":[0.0306,-0.0305,0.0606,0.1068,0.1159],"q12":[0.0212,-0.0032,0.0113,0.0042,-0.0053],"s60":0.0853,"mono":0.9,"uwaga":null},{"p":"EV/EBITDA","k":"Wycena","cov":0.594,"ic":{"1":0.0052,"3":0.0101,"6":0.0173,"12":0.0159,"24":0.0199,"36":0.0389,"60":0.0559},"t":{"1":0.44,"3":0.57,"6":0.73,"12":0.44,"24":0.44,"36":0.84,"60":1.29},"q60":[-0.1281,0.0746,0.0758,0.0867,0.2386],"q12":[0.0019,0.0047,0.0106,0.0022,0.0192],"s60":0.3667,"mono":1.0,"uwaga":"amortyzacja rzadko dostępna, w praktyce EV/EBIT"},{"p":"stopa dywidendy","k":"Dywidendy","cov":0.998,"ic":{"1":0.0045,"3":0.0066,"6":0.0111,"12":0.0172,"24":0.0342,"36":0.0489,"60":0.068},"t":{"1":1.08,"3":0.94,"6":1.16,"12":1.52,"24":2.74,"36":2.56,"60":2.28},"q60":[0.0932,-0.0986,-0.0505,0.0305,0.0246],"q12":[0.0053,-0.0107,0.0002,-0.0018,0.0071],"s60":-0.0685,"mono":-0.1,"uwaga":"brak dywidendy w danych liczony jako 0"},{"p":"EPS TTM r/r","k":"Wzrost","cov":0.822,"ic":{"1":-0.008,"3":-0.0234,"6":-0.0301,"12":-0.0259,"24":0.0052,"36":0.0064,"60":0.003},"t":{"1":-1.15,"3":-1.82,"6":-1.64,"12":-1.3,"24":0.38,"36":0.37,"60":0.12},"q60":[0.0056,-0.0064,0.0241,0.0181,-0.0261],"q12":[0.0057,0.0013,-0.0132,-0.0061,-0.0119],"s60":-0.0317,"mono":-0.2,"uwaga":null},{"p":"EPS 3 lata (CAGR)","k":"Wzrost","cov":0.667,"ic":{"1":0.0076,"3":0.0037,"6":0.0066,"12":0.0159,"24":0.0375,"36":0.0493,"60":0.0644},"t":{"1":0.82,"3":0.24,"6":0.31,"12":0.71,"24":1.4,"36":1.39,"60":1.81},"q60":[-0.1215,-0.0966,0.0259,0.0486,0.095],"q12":[-0.0104,-0.0061,-0.0067,-0.002,-0.0017],"s60":0.2165,"mono":1.0,"uwaga":null},{"p":"EPS 5 lat (CAGR)","k":"Wzrost","cov":0.633,"ic":{"1":0.0101,"3":0.0074,"6":0.0047,"12":0.0042,"24":0.0301,"36":0.0613,"60":0.0524},"t":{"1":1.19,"3":0.5,"6":0.24,"12":0.17,"24":1.53,"36":8.19,"60":3.78},"q60":[-0.055,-0.1106,0.0017,0.0951,0.1529],"q12":[-0.0182,0.0042,-0.0017,0.0012,0.0011],"s60":0.2079,"mono":0.9,"uwaga":null},{"p":"przychody kwartał r/r","k":"Wzrost","cov":0.839,"ic":{"1":0.0052,"3":-0.0008,"6":-0.0063,"12":-0.0168,"24":0.0153,"36":0.0319,"60":0.0628},"t":{"1":0.52,"3":-0.05,"6":-0.28,"12":-0.69,"24":0.82,"36":0.9,"60":1.33},"q60":[-0.0402,-0.1123,-0.0046,0.102,0.1346],"q12":[0.0101,-0.0123,-0.0041,-0.0099,0.0057],"s60":0.1748,"mono":0.9,"uwaga":null},{"p":"przychody TTM r/r","k":"Wzrost","cov":0.851,"ic":{"1":-0.0054,"3":-0.014,"6":-0.021,"12":-0.0148,"24":0.0149,"36":0.0239,"60":0.0483},"t":{"1":-0.52,"3":-0.79,"6":-0.91,"12":-0.59,"24":0.69,"36":0.59,"60":0.88},"q60":[-0.0398,-0.1327,-0.015,0.1737,0.0925],"q12":[0.0063,-0.0116,0.0008,-0.0021,-0.0039],"s60":0.1323,"mono":0.8,"uwaga":null},{"p":"przychody 3 lata (CAGR)","k":"Wzrost","cov":0.771,"ic":{"1":0.0036,"3":0.0078,"6":0.0093,"12":0.0124,"24":0.0185,"36":0.024,"60":0.0561},"t":{"1":0.34,"3":0.45,"6":0.46,"12":0.48,"24":0.41,"36":0.4,"60":1.77},"q60":[-0.1042,-0.1173,0.0307,0.1129,0.1667],"q12":[0.003,-0.0176,0.0007,0.006,-0.0026],"s60":0.271,"mono":0.9,"uwaga":null},{"p":"przychody 5 lat (CAGR)","k":"Wzrost","cov":0.653,"ic":{"1":0.001,"3":-0.0006,"6":-0.0043,"12":-0.0055,"24":0.0179,"36":0.0366,"60":0.0422},"t":{"1":0.09,"3":-0.04,"6":-0.18,"12":-0.17,"24":0.44,"36":0.82,"60":1.01},"q60":[-0.0576,-0.0913,-0.0094,0.0908,0.1858],"q12":[-0.0022,-0.0026,0.0008,0.0108,-0.008],"s60":0.2434,"mono":0.9,"uwaga":null},{"p":"przychody (estymata ważona)","k":"Wzrost","cov":0.839,"ic":{"1":-0.0017,"3":-0.0104,"6":-0.0206,"12":-0.0202,"24":0.0115,"36":0.0245,"60":0.0575},"t":{"1":-0.17,"3":-0.6,"6":-0.86,"12":-0.79,"24":0.6,"36":0.63,"60":1.05},"q60":[-0.0513,-0.1414,0.0118,0.1694,0.0914],"q12":[0.0093,-0.0098,-0.0016,-0.0075,-0.0009],"s60":0.1427,"mono":0.8,"uwaga":null},{"p":"ROA","k":"Rentowność","cov":0.843,"ic":{"1":0.0015,"3":-0.0023,"6":-0.0049,"12":0.0013,"24":0.0224,"36":0.0489,"60":0.0751},"t":{"1":0.13,"3":-0.13,"6":-0.2,"12":0.04,"24":0.55,"36":1.0,"60":1.63},"q60":[-0.0805,-0.0953,-0.0688,0.1035,0.1458],"q12":[0.0127,-0.0032,-0.0153,-0.0044,0.0037],"s60":0.2263,"mono":0.9,"uwaga":null},{"p":"ROE","k":"Rentowność","cov":0.769,"ic":{"1":0.0093,"3":0.0098,"6":0.0116,"12":0.0235,"24":0.0478,"36":0.0609,"60":0.0671},"t":{"1":1.0,"3":0.67,"6":0.64,"12":1.05,"24":1.69,"36":1.64,"60":1.66},"q60":[-0.0643,-0.0587,0.0138,0.0046,0.1064],"q12":[0.0056,-0.0071,-0.015,-0.0058,0.0092],"s60":0.1707,"mono":0.9,"uwaga":null},{"p":"ROIC (przybliżenie)","k":"Rentowność","cov":0.625,"ic":{"1":0.0023,"3":0.0012,"6":-0.0005,"12":0.0045,"24":0.0221,"36":0.0277,"60":0.0328},"t":{"1":0.24,"3":0.08,"6":-0.03,"12":0.2,"24":0.69,"36":0.65,"60":0.66},"q60":[-0.0515,0.0325,0.03,-0.0549,0.0602],"q12":[-0.0007,-0.0072,-0.0111,-0.006,0.0017],"s60":0.1117,"mono":0.3,"uwaga":null},{"p":"marża brutto","k":"Rentowność","cov":0.427,"ic":{"1":0.0114,"3":0.0177,"6":0.0216,"12":0.045,"24":0.0797,"36":0.1042,"60":0.1224},"t":{"1":1.0,"3":0.92,"6":0.83,"12":1.21,"24":1.56,"36":1.85,"60":2.49},"q60":[0.0025,0.0309,0.0321,0.4622,0.2857],"q12":[0.0173,-0.001,-0.0011,0.0081,0.0243],"s60":0.2832,"mono":0.9,"uwaga":"dane tylko dla 43 % obserwacji"},{"p":"marża operacyjna","k":"Rentowność","cov":0.652,"ic":{"1":-0.0015,"3":-0.0042,"6":-0.0008,"12":0.0059,"24":0.0292,"36":0.0468,"60":0.0549},"t":{"1":-0.16,"3":-0.26,"6":-0.03,"12":0.22,"24":1.23,"36":1.67,"60":2.84},"q60":[0.0949,-0.1143,0.0666,0.0181,0.094],"q12":[0.025,-0.0143,-0.0187,0.0059,-0.0037],"s60":-0.0009,"mono":-0.1,"uwaga":null},{"p":"marża netto","k":"Rentowność","cov":0.748,"ic":{"1":-0.0018,"3":-0.0093,"6":-0.011,"12":-0.0083,"24":0.0114,"36":0.0382,"60":0.0409},"t":{"1":-0.22,"3":-0.65,"6":-0.6,"12":-0.41,"24":0.57,"36":1.4,"60":2.12},"q60":[-0.0051,-0.0369,-0.0658,0.0874,0.1155],"q12":[0.0245,-0.0101,-0.0183,0.002,-0.0073],"s60":0.1206,"mono":0.6,"uwaga":null},{"p":"wypłata dywidendy / zysk","k":"Dywidendy","cov":0.792,"ic":{"1":0.0027,"3":0.0049,"6":0.0105,"12":0.0183,"24":0.034,"36":0.0526,"60":0.0807},"t":{"1":0.6,"3":0.69,"6":1.09,"12":1.71,"24":2.72,"36":2.79,"60":2.64},"q60":[0.0253,-0.1292,-0.0388,0.0913,0.0684],"q12":[-0.0076,-0.0135,-0.003,0.0006,0.0044],"s60":0.0431,"mono":0.6,"uwaga":"niepełne dane o dywidendach"},{"p":"current ratio","k":"Kondycja","cov":0.817,"ic":{"1":-0.002,"3":-0.0044,"6":-0.0058,"12":-0.0083,"24":-0.0109,"36":0.0041,"60":0.0468},"t":{"1":-0.18,"3":-0.27,"6":-0.25,"12":-0.27,"24":-0.36,"36":0.13,"60":2.24},"q60":[-0.1552,0.0191,0.0089,0.0011,0.2874],"q12":[-0.0138,0.0069,0.0037,-0.0083,0.0181],"s60":0.4426,"mono":0.6,"uwaga":null},{"p":"quick ratio","k":"Kondycja","cov":0.817,"ic":{"1":0.0024,"3":0.0041,"6":0.005,"12":0.0082,"24":0.0174,"36":0.0393,"60":0.0879},"t":{"1":0.25,"3":0.3,"6":0.24,"12":0.28,"24":0.64,"36":1.33,"60":5.23},"q60":[-0.1717,-0.037,0.0078,-0.0227,0.3846],"q12":[-0.0191,0.0094,-0.0032,-0.0087,0.0282],"s60":0.5563,"mono":0.9,"uwaga":null},{"p":"dług / kapitał","k":"Kondycja","cov":0.889,"ic":{"1":0.0026,"3":-0.0002,"6":0.0,"12":0.0025,"24":-0.0031,"36":-0.0181,"60":-0.0219},"t":{"1":0.47,"3":-0.03,"6":0.0,"12":0.17,"24":-0.21,"36":-1.9,"60":-2.32},"q60":[0.0755,0.0106,-0.021,-0.0401,-0.052],"q12":[0.0099,-0.0043,-0.0116,-0.0094,0.0037],"s60":-0.1275,"mono":-1.0,"uwaga":null},{"p":"dług długoterminowy / kapitał","k":"Kondycja","cov":0.546,"ic":{"1":0.0084,"3":0.0177,"6":0.0211,"12":0.0326,"24":0.0458,"36":0.0421,"60":0.0247},"t":{"1":1.03,"3":1.51,"6":1.28,"12":1.71,"24":4.51,"36":2.94,"60":0.84},"q60":[-0.1007,-0.0466,-0.043,-0.123,0.0487],"q12":[-0.0233,0.0046,-0.0128,-0.0121,0.009],"s60":0.1494,"mono":0.4,"uwaga":null},{"p":"zwrot 3 mies.","k":"Cena i wielkość","cov":0.999,"ic":{"1":-0.0093,"3":-0.0088,"6":0.0064,"12":0.0088,"24":0.0018,"36":0.024,"60":0.0463},"t":{"1":-0.75,"3":-0.62,"6":0.44,"12":0.52,"24":0.09,"36":1.59,"60":3.36},"q60":[-0.0439,-0.0294,-0.0258,0.0145,0.0846],"q12":[-0.0006,0.0002,-0.0093,-0.0012,0.0105],"s60":0.1285,"mono":1.0,"uwaga":null},{"p":"zwrot 6 mies.","k":"Cena i wielkość","cov":0.998,"ic":{"1":0.0004,"3":0.0025,"6":0.0204,"12":0.0052,"24":-0.0049,"36":0.0292,"60":0.0535},"t":{"1":0.03,"3":0.17,"6":1.09,"12":0.2,"24":-0.18,"36":1.45,"60":2.66},"q60":[-0.0586,-0.0315,0.0048,0.0075,0.0784],"q12":[0.0031,0.0008,-0.0048,-0.01,0.0102],"s60":0.137,"mono":1.0,"uwaga":null},{"p":"zwrot 12 mies.","k":"Cena i wielkość","cov":0.995,"ic":{"1":0.0028,"3":0.0025,"6":0.0058,"12":-0.0053,"24":-0.0123,"36":0.0401,"60":0.0568},"t":{"1":0.19,"3":0.12,"6":0.21,"12":-0.16,"24":-0.38,"36":1.49,"60":1.89},"q60":[-0.0474,-0.0429,0.0015,0.0146,0.075],"q12":[0.0152,-0.0009,-0.0049,-0.014,0.0028],"s60":0.1223,"mono":1.0,"uwaga":null},{"p":"odległość od maks. 12 mies.","k":"Cena i wielkość","cov":0.995,"ic":{"1":-0.0021,"3":0.0016,"6":0.0088,"12":0.0021,"24":0.0055,"36":0.0464,"60":0.0625},"t":{"1":-0.15,"3":0.08,"6":0.36,"12":0.07,"24":0.18,"36":1.71,"60":1.89},"q60":[-0.0306,0.0053,0.006,-0.0104,0.0308],"q12":[0.013,0.0035,-0.0013,-0.0098,-0.007],"s60":0.0614,"mono":0.7,"uwaga":null},{"p":"odległość od SMA 10 mies.","k":"Cena i wielkość","cov":0.996,"ic":{"1":-0.0025,"3":0.0023,"6":0.015,"12":0.0043,"24":-0.0055,"36":0.0308,"60":0.0572},"t":{"1":-0.19,"3":0.14,"6":0.73,"12":0.16,"24":-0.19,"36":1.45,"60":2.58},"q60":[-0.0547,-0.0305,-0.0027,0.0041,0.0848],"q12":[0.0043,0.0003,-0.0055,-0.0069,0.0069],"s60":0.1395,"mono":1.0,"uwaga":null},{"p":"zmienność 12 mies.","k":"Cena i wielkość","cov":0.996,"ic":{"1":0.0052,"3":0.006,"6":0.0079,"12":0.0077,"24":-0.0208,"36":-0.0568,"60":-0.0427},"t":{"1":0.33,"3":0.26,"6":0.26,"12":0.19,"24":-0.6,"36":-1.55,"60":-1.01},"q60":[-0.0886,-0.031,0.0015,-0.0072,0.126],"q12":[-0.0265,-0.0111,-0.0056,0.006,0.036],"s60":0.2146,"mono":0.9,"uwaga":null},{"p":"log kapitalizacji","k":"Cena i wielkość","cov":0.853,"ic":{"1":-0.0034,"3":-0.0013,"6":0.0011,"12":0.0003,"24":0.0216,"36":0.0427,"60":0.0474},"t":{"1":-0.33,"3":-0.08,"6":0.05,"12":0.01,"24":0.8,"36":1.65,"60":2.05},"q60":[0.0623,0.047,0.0275,-0.0139,0.0841],"q12":[0.0235,0.0067,0.0044,0.0012,0.0055],"s60":0.0218,"mono":0.0,"uwaga":null}],"H":[1,3,6,12,24,36,60],"progi":[{"parametr":"PEG (EPS 5 lat)","prog":"< 1","roznica":0.02884571780105152,"t":0.27706607309470377,"nadwyzka_przechodzacych":0.013294490077942056,"sr_spolek":67.63218390804597},{"parametr":"PEG (EPS 5 lat)","prog":"< 2","roznica":0.19521997131450963,"t":3.5867564622077364,"nadwyzka_przechodzacych":0.1470687947519497,"sr_spolek":124.56521739130434},{"parametr":"PEG (EPS 5 lat)","prog":"< 3","roznica":0.1565148017561829,"t":4.6488960647620585,"nadwyzka_przechodzacych":0.10347644024567387,"sr_spolek":157.1086956521739},{"parametr":"PEG (estymata)","prog":"< 1","roznica":0.0017544415632622685,"t":0.013296470489052923,"nadwyzka_przechodzacych":-0.0002751065135304115,"sr_spolek":23.299145299145298},{"parametr":"PEG (estymata)","prog":"< 2","roznica":0.07469071932405653,"t":1.2862224074672817,"nadwyzka_przechodzacych":0.06418189665766785,"sr_spolek":57.00854700854701},{"parametr":"przychody 5 lat (CAGR)","prog":"> 10 %","roznica":0.20803471029326365,"t":7.0338305321231855,"nadwyzka_przechodzacych":0.17762962606410515,"sr_spolek":54.98863636363637},{"parametr":"przychody 5 lat (CAGR)","prog":"> 20 %","roznica":0.32683389777846816,"t":5.892698314930747,"nadwyzka_przechodzacych":0.31406069408630005,"sr_spolek":17.59036144578313},{"parametr":"przychody 5 lat (CAGR)","prog":"> 30 %","roznica":-0.3515718474780414,"t":-3.707325047930546,"nadwyzka_przechodzacych":-0.3456795377216381,"sr_spolek":6.4},{"parametr":"ROE","prog":"> 10 %","roznica":0.06722162518130931,"t":1.6198741468035986,"nadwyzka_przechodzacych":0.030194831053776287,"sr_spolek":193.23076923076923},{"parametr":"ROE","prog":"> 15 %","roznica":0.07631858576323859,"t":0.9061767744379942,"nadwyzka_przechodzacych":0.04587161761806452,"sr_spolek":137.05128205128204},{"parametr":"ROE","prog":"> 20 %","roznica":0.10529749534126057,"t":1.197176754981663,"nadwyzka_przechodzacych":0.07402361396428854,"sr_spolek":98.07692307692308},{"parametr":"dług / kapitał","prog":"< 0,5","roznica":0.08967569821275392,"t":4.263142064909303,"nadwyzka_przechodzacych":0.03757621336130725,"sr_spolek":216.07692307692307},{"parametr":"dług / kapitał","prog":"< 1","roznica":0.008261091638957038,"t":0.6348189583281607,"nadwyzka_przechodzacych":0.001738000914426419,"sr_spolek":270.20512820512823},{"parametr":"P/E","prog":"< 15","roznica":-0.12489703462114592,"t":-2.0805114102744096,"nadwyzka_przechodzacych":-0.10364190707467226,"sr_spolek":75.99145299145299},{"parametr":"P/E","prog":"< 25","roznica":-0.05919692642143613,"t":-1.6393685431961011,"nadwyzka_przechodzacych":-0.026993971952002628,"sr_spolek":196.27350427350427},{"parametr":"marża operacyjna","prog":"> 15 %","roznica":0.07250753625850716,"t":1.763770492195576,"nadwyzka_przechodzacych":0.04971051437426925,"sr_spolek":116.43589743589743},{"parametr":"marża operacyjna","prog":"> 25 %","roznica":0.11383517678845217,"t":4.641339655567789,"nadwyzka_przechodzacych":0.100925924389236,"sr_spolek":44.794871794871796},{"parametr":"EPS 5 lat (CAGR)","prog":"> 10 %","roznica":0.18522199613325868,"t":8.07545696719058,"nadwyzka_przechodzacych":0.12362540590222162,"sr_spolek":145.92222222222222},{"parametr":"EPS 5 lat (CAGR)","prog":"> 20 %","roznica":0.18591016649276842,"t":1.6889215538980915,"nadwyzka_przechodzacych":0.14719999342664336,"sr_spolek":65.63953488372093}],"sk":{"pojedyncze":{"PEG < 2":{"roznica":0.19521997131450963,"t":3.5867564622077364,"nadwyzka_przechodzacych":0.1470687947519497,"sr_spolek":124.56521739130434},"przychody 5 lat > 30 %":{"roznica":-0.3515718474780414,"t":-3.707325047930546,"nadwyzka_przechodzacych":-0.3456795377216381,"sr_spolek":6.4},"ROE > 15 %":{"roznica":0.07631858576323859,"t":0.9061767744379942,"nadwyzka_przechodzacych":0.04587161761806452,"sr_spolek":137.05128205128204},"dług / kapitał < 0,5":{"roznica":0.08967569821275392,"t":4.263142064909303,"nadwyzka_przechodzacych":0.03757621336130725,"sr_spolek":216.07692307692307}},"pary":[{"para":"PEG < 2 + przychody 5 lat > 30 %","roznica":-0.22509152158466125,"t":-2.9360609055364795,"nadwyzka_przechodzacych":-0.22337263915187955,"sr_spolek":3.2962962962962963,"interakcja":-0.06873964542112951},{"para":"PEG < 2 + ROE > 15 %","roznica":0.2132162197311202,"t":4.230805261710449,"nadwyzka_przechodzacych":0.17061919111604928,"sr_spolek":72.6896551724138,"interakcja":-0.058322337346628006},{"para":"PEG < 2 + dług / kapitał < 0,5","roznica":0.18916340987238298,"t":4.834594317023779,"nadwyzka_przechodzacych":0.14967383290682237,"sr_spolek":80.32954545454545,"interakcja":-0.09573225965488055},{"para":"przychody 5 lat > 30 % + ROE > 15 %","roznica":-0.43850865860036947,"t":-6.328452414985588,"nadwyzka_przechodzacych":-0.43508635202805584,"sr_spolek":3.347826086956522,"interakcja":-0.16325539688556667},{"para":"przychody 5 lat > 30 % + dług / kapitał < 0,5","roznica":-0.07681856994250735,"t":-0.6584426796323708,"nadwyzka_przechodzacych":-0.0759733597533575,"sr_spolek":4.318840579710145,"interakcja":0.18507757932278013},{"para":"ROE > 15 % + dług / kapitał < 0,5","roznica":0.09495784672607224,"t":1.3771683975393016,"nadwyzka_przechodzacych":0.07115445193725556,"sr_spolek":93.58974358974359,"interakcja":-0.07103643724992029}],"wszystkie":null,"bez_jednego":{"PEG < 2":null,"przychody 5 lat > 30 %":{"roznica":0.23559459903873248,"t":7.341807915923946,"nadwyzka_przechodzacych":0.20255266278419884,"sr_spolek":50.3448275862069},"ROE > 15 %":{"roznica":0.15594418342916117,"t":2.461575476985554,"nadwyzka_przechodzacych":0.15480746381717195,"sr_spolek":3.3076923076923075},"dług / kapitał < 0,5":null}},"lgbm":{"IC":0.04884316523342707,"t":2.3106447017489464,"kwintyle_nadwyzka12":[-0.007115463121560131,-0.011609428698205424,0.0014050626106070147,0.006995256559238513,0.010331011453952077],"waznosc":[{"parametr":"log kapitalizacji","shap":0.05502896029296519},{"parametr":"EPS TTM r/r","shap":0.04661244449929493},{"parametr":"przychody 3 lata (CAGR)","shap":0.04447380269148701},{"parametr":"P/B","shap":0.043526381418805896},{"parametr":"zwrot 12 mies.","shap":0.04332282657409816},{"parametr":"quick ratio","shap":0.04185761448280466},{"parametr":"current ratio","shap":0.041732406138669714},{"parametr":"dług długoterminowy / kapitał","shap":0.041084341324359806},{"parametr":"ROIC (przybliżenie)","shap":0.03872655235134579},{"parametr":"P/E","shap":0.035660206820854926},{"parametr":"marża operacyjna","shap":0.03551848609065637},{"parametr":"przychody TTM r/r","shap":0.030935068444937867},{"parametr":"EV/Sales","shap":0.030434538347007805},{"parametr":"stopa dywidendy","shap":0.030323013133684306},{"parametr":"EV/EBITDA","shap":0.029116420919838862},{"parametr":"FCF yield","shap":0.028267563556868703},{"parametr":"zmienność 12 mies.","shap":0.027273814969181874},{"parametr":"cena / gotówka","shap":0.027130616192247495},{"parametr":"P/FCF","shap":0.02707757100164722},{"parametr":"dług / kapitał","shap":0.026874383983550715},{"parametr":"przychody (estymata ważona)","shap":0.022036786611023672},{"parametr":"EPS 5 lat (CAGR)","shap":0.01992838946925654},{"parametr":"ROA","shap":0.01908362252424515},{"parametr":"PEG (EPS 5 lat)","shap":0.018881034233416954},{"parametr":"EPS 3 lata (CAGR)","shap":0.018821569061864895},{"parametr":"odległość od maks. 12 mies.","shap":0.018302520020607397},{"parametr":"ROE","shap":0.01780320164318367},{"parametr":"przychody 5 lat (CAGR)","shap":0.016839343308182868},{"parametr":"P/S","shap":0.01658425289864878},{"parametr":"zwrot 6 mies.","shap":0.014187382322844437},{"parametr":"marża netto","shap":0.014057069704614957},{"parametr":"wypłata dywidendy / zysk","shap":0.01379884488991197},{"parametr":"forward P/E (estymata)","shap":0.013348800227743518},{"parametr":"przychody kwartał r/r","shap":0.012881901682864811},{"parametr":"odległość od SMA 10 mies.","shap":0.012559720731471078},{"parametr":"E/P","shap":0.012327554199160923},{"parametr":"PEG (estymata)","shap":0.007744248671848818},{"parametr":"zwrot 3 mies.","shap":0.005836744564802297}]},"fm":[{"parametr":"P/B","wsp":0.4875399738406849,"t":5.744962939181267},{"parametr":"odległość od SMA 10 mies.","wsp":-0.25584253929501755,"t":-5.068677713398613},{"parametr":"ROA","wsp":0.42089888733152414,"t":4.702091302700371},{"parametr":"zwrot 6 mies.","wsp":0.144643892100733,"t":4.638257207853617},{"parametr":"EV/EBITDA","wsp":0.435988647985649,"t":4.146145370667041},{"parametr":"odległość od maks. 12 mies.","wsp":0.14973377618641326,"t":3.9352507701714274},{"parametr":"wypłata dywidendy / zysk","wsp":1.8861780983222718,"t":3.932506854788304},{"parametr":"quick ratio","wsp":0.5579935947600262,"t":3.1976961261674046},{"parametr":"FCF yield","wsp":0.16298668625212706,"t":2.8847685668150578},{"parametr":"dług długoterminowy / kapitał","wsp":0.34913070965248577,"t":2.819080583247906},{"parametr":"EPS TTM r/r","wsp":-0.2418944234053877,"t":-2.3814583295706133},{"parametr":"zwrot 3 mies.","wsp":0.09954716849030398,"t":2.378204037552331},{"parametr":"P/S","wsp":-0.2499806396237786,"t":-2.3160725768630583},{"parametr":"ROE","wsp":-0.2986706436905152,"t":-2.2721777221854103},{"parametr":"dług / kapitał","wsp":-0.2129718467612837,"t":-2.144757641647335}],"reb":[{"co_ile_mies":1,"model_gorny_kwintyl":{"CAGR":0.14508806389726603,"maxDD":-0.25192780900053,"obrot_sr":0.35173691915235283},"strategia_4_skladniki":{"CAGR":0.047448796528176906,"maxDD":-0.6273470494641405,"obrot_sr":0.1872759856630824},"rowne_wagi_wszystkie":{"CAGR":0.1320130766329295,"maxDD":-0.2684980380747697,"obrot_sr":0.01317367196102951}},{"co_ile_mies":3,"model_gorny_kwintyl":{"CAGR":0.1366486678730776,"maxDD":-0.2605413991662586,"obrot_sr":0.535127567181308},"strategia_4_skladniki":{"CAGR":0.037042744278702244,"maxDD":-0.6307470080568278,"obrot_sr":0.5268817204301075},"rowne_wagi_wszystkie":{"CAGR":0.13138750326786286,"maxDD":-0.2688376631846784,"obrot_sr":0.03905064454728542}},{"co_ile_mies":6,"model_gorny_kwintyl":{"CAGR":0.13647367115853104,"maxDD":-0.24840563618943734,"obrot_sr":0.6512833226904488},"strategia_4_skladniki":{"CAGR":0.09709354322054264,"maxDD":-0.4889449514463504,"obrot_sr":0.6666666666666666},"rowne_wagi_wszystkie":{"CAGR":0.13104585417531633,"maxDD":-0.26859045451122,"obrot_sr":0.0758639512950643}},{"co_ile_mies":12,"model_gorny_kwintyl":{"CAGR":0.14447900919874068,"maxDD":-0.2464036188657326,"obrot_sr":0.7630169945064267},"strategia_4_skladniki":{"CAGR":0.06207327123528028,"maxDD":-0.6217191488937296,"obrot_sr":0.9},"rowne_wagi_wszystkie":{"CAGR":0.13091686207281983,"maxDD":-0.268174895038516,"obrot_sr":0.14764796324945786}},{"co_ile_mies":24,"model_gorny_kwintyl":{"CAGR":0.15309747386326866,"maxDD":-0.23447344428224437,"obrot_sr":0.8803137131836613},"strategia_4_skladniki":{"CAGR":0.13859871998343665,"maxDD":-0.33292088689346766,"obrot_sr":1.0},"rowne_wagi_wszystkie":{"CAGR":0.13049504056559114,"maxDD":-0.2687503817464567,"obrot_sr":0.2663184899410414}},{"co_ile_mies":60,"model_gorny_kwintyl":{"CAGR":0.11691158832703064,"maxDD":-0.2704131341149586,"obrot_sr":0.951048951048951},"strategia_4_skladniki":{"CAGR":0.21617658958334585,"maxDD":-0.3608941853185972,"obrot_sr":1.0},"rowne_wagi_wszystkie":{"CAGR":0.12903434596824614,"maxDD":-0.2545894917022624,"obrot_sr":0.5067591527490681}}]};
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const pp = (x, d = 1) => x == null || isNaN(x) ? "–" : (x > 0 ? "+" : "") + (x * 100).toFixed(d).replace(".", ",");
+const fx = (x, d = 3) => x == null || isNaN(x) ? "–" : x.toFixed(d).replace(".", ",");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8); tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.hidden = true; }
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, at, parent) { const n = document.createElementNS(SVGNS, tag); for (const k in at) n.setAttribute(k, at[k]); if (parent) parent.appendChild(n); return n; }
+
+// 1. słupki korelacji
+let H = 60, KAT = "";
+const kats = [...new Set(D.P.map((p) => p.k))];
+kats.forEach((k) => { const o = document.createElement("option"); o.value = k; o.textContent = k; $("kat").appendChild(o); });
+D.H.forEach((h) => { const b = document.createElement("button"); b.type = "button"; b.textContent = h < 12 ? h + " mies." : (h / 12) + (h === 12 ? " rok" : h < 60 ? " lata" : " lat"); b.dataset.h = h; b.setAttribute("aria-pressed", h === H); b.onclick = () => { H = h; [...$("hor").children].forEach((x) => x.setAttribute("aria-pressed", +x.dataset.h === H)); rysujIC(); }; $("hor").appendChild(b); });
+$("kat").onchange = (e) => { KAT = e.target.value; rysujIC(); };
+function rysujIC() {
+  const svg = $("ic"); svg.innerHTML = "";
+  const rows = D.P.filter((p) => (!KAT || p.k === KAT) && p.ic[H] != null && !isNaN(p.ic[H])).sort((a, b) => b.ic[H] - a.ic[H]);
+  const W = Math.max(560, Math.min(980, svg.parentNode.clientWidth || 900)), lw = 220, rh = 22, top = 24, h = top + rows.length * rh + 10;
+  svg.setAttribute("viewBox", `0 0 ${W} ${h}`); svg.setAttribute("width", W); svg.setAttribute("height", h);
+  const m = Math.max(0.06, ...rows.map((r) => Math.abs(r.ic[H]))) * 1.1, cx = lw + (W - lw - 20) / 2, sx = (W - lw - 20) / 2 / m;
+  for (const t of [-0.1, -0.05, 0, 0.05, 0.1]) { if (Math.abs(t) > m) continue; const x = cx + t * sx; el("line", { x1: x, x2: x, y1: top - 6, y2: h - 6, stroke: t === 0 ? css("--muted") : css("--grid"), "stroke-width": 1 }, svg); el("text", { x, y: 12, "text-anchor": "middle" }, svg).textContent = fx(t, 2); }
+  rows.forEach((r, i) => {
+    const y = top + i * rh, v = r.ic[H], t = r.t[H], s = Math.abs(t) > 3.2 ? 1 : Math.abs(t) > 2 ? 0.5 : 0;
+    const lab = el("text", { x: lw - 10, y: y + 15, "text-anchor": "end", class: "lab" }, svg); lab.textContent = r.p + (r.uwaga ? " ⚠" : "");
+    const x0 = v >= 0 ? cx : cx + v * sx, wbar = Math.max(1.5, Math.abs(v) * sx);
+    const col = s === 0 ? css("--muted") : v >= 0 ? css("--pos") : css("--neg");
+    const bar = el("rect", { x: x0, y: y + 5, width: wbar, height: rh - 10, rx: 3, fill: col, "fill-opacity": s === 1 ? 1 : s === 0.5 ? 0.55 : 0.35 }, svg);
+    const hit = el("rect", { x: lw, y, width: W - lw, height: rh, fill: "transparent" }, svg);
+    hit.addEventListener("mousemove", (e) => showTip(e, `<b>${esc(r.p)}</b><br>korelacja ${fx(v)} · t ${fx(t, 1)}<br>${s === 1 ? "istotne (|t| &gt; 3,2)" : s ? "słaby dowód" : "brak dowodu"}${r.uwaga ? "<br>⚠ " + esc(r.uwaga) : ""}<br>dane dla ${Math.round(r.cov * 100)} % obserwacji`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+}
+
+// 2. horyzonty
+D.P.slice().sort((a, b) => a.p.localeCompare(b.p, "pl")).forEach((p) => { const o = document.createElement("option"); o.value = p.p; o.textContent = p.p; $("par").appendChild(o); });
+$("par").value = "przychody 5 lat (CAGR)"; $("par").onchange = rysujDek;
+function rysujDek() {
+  const p = D.P.find((x) => x.p === $("par").value), svg = $("dek"); svg.innerHTML = "";
+  const W = Math.min(980, svg.parentNode.clientWidth || 700), h = 260, l = 52, r = 20, t = 16, b = 34;
+  svg.setAttribute("viewBox", `0 0 ${W} ${h}`); svg.setAttribute("width", W); svg.setAttribute("height", h);
+  const hs = D.H.filter((x) => p.ic[x] != null), pts = hs.map((x) => ({ h: x, v: p.ic[x], se: Math.abs(p.ic[x] / (p.t[x] || 1e9)) }));
+  const ymax = Math.max(0.08, ...pts.map((q) => Math.abs(q.v) + 2 * q.se)) * 1.05;
+  const X = (i) => l + i * (W - l - r) / (hs.length - 1), Y = (v) => t + (h - t - b) * (1 - (v + ymax) / (2 * ymax));
+  for (const g of [-ymax, -ymax / 2, 0, ymax / 2, ymax]) { el("line", { x1: l, x2: W - r, y1: Y(g), y2: Y(g), stroke: g === 0 ? css("--muted") : css("--grid") }, svg); el("text", { x: l - 8, y: Y(g) + 4, "text-anchor": "end" }, svg).textContent = fx(g, 2); }
+  hs.forEach((x, i) => { el("text", { x: X(i), y: h - 12, "text-anchor": "middle" }, svg).textContent = x < 12 ? x + " mies." : x / 12 + " " + (x === 12 ? "rok" : x < 60 ? "lata" : "lat"); });
+  const band = pts.map((q, i) => `${X(i)},${Y(q.v + 2 * q.se)}`).concat(pts.slice().reverse().map((q, k) => `${X(pts.length - 1 - k)},${Y(q.v - 2 * q.se)}`)).join(" ");
+  el("polygon", { points: band, fill: css("--pos"), "fill-opacity": 0.14 }, svg);
+  el("polyline", { points: pts.map((q, i) => `${X(i)},${Y(q.v)}`).join(" "), fill: "none", stroke: css("--pos"), "stroke-width": 2 }, svg);
+  pts.forEach((q, i) => { const c = el("circle", { cx: X(i), cy: Y(q.v), r: 5, fill: css("--pos"), stroke: css("--surface"), "stroke-width": 2 }, svg);
+    const hit = el("circle", { cx: X(i), cy: Y(q.v), r: 14, fill: "transparent" }, svg); hit.addEventListener("mousemove", (e) => showTip(e, `${q.h} mies.: korelacja ${fx(q.v)} · t ${fx(p.t[q.h], 1)}`)); hit.addEventListener("mouseleave", hideTip); });
+}
+
+// 3. kwintyle (tabela z kolorem rozbieżnym)
+let SORT = "s60", DIR = -1;
+function kolor(v, m) { const a = Math.min(1, Math.abs(v) / m); const c = v >= 0 ? css("--pos") : css("--neg"); return `color-mix(in srgb, ${c} ${Math.round(a * 55)}%, var(--surface))`; }
+function rysujKw() {
+  const rows = D.P.filter((p) => p.q60.length === 5).slice().sort((a, b) => DIR * ((SORT === "p" ? a.p.localeCompare(b.p, "pl") : (a[SORT] - b[SORT]))));
+  const m = Math.max(...rows.flatMap((r) => r.q60.map(Math.abs)));
+  const th = (k, t, cls = "") => `<th class="${cls}"><button type="button" class="srt" data-k="${k}" style="all:unset;cursor:pointer">${t}${SORT === k ? (DIR < 0 ? " ↓" : " ↑") : ""}</button></th>`;
+  $("kw").innerHTML = `<thead><tr>${th("p", "Parametr")}<th>Grupa</th>${[1, 2, 3, 4, 5].map((i) => `<th class="n">K${i}</th>`).join("")}${th("s60", "K5 − K1", "n")}${th("mono", "Monotonia", "n")}</tr></thead><tbody>` +
+    rows.map((r) => `<tr><td>${esc(r.p)}${r.uwaga ? ` <span class="uw" title="${esc(r.uwaga)}">⚠</span>` : ""}</td><td class="mut">${r.k}</td>${r.q60.map((v) => `<td class="cell" style="background:${kolor(v, m)}">${pp(v, 0)}</td>`).join("")}<td class="n">${pp(r.s60, 0)}</td><td class="n">${fx(r.mono, 1)}</td></tr>`).join("") + "</tbody>";
+  document.querySelectorAll(".srt").forEach((b) => b.onclick = () => { const k = b.dataset.k; DIR = SORT === k ? -DIR : (k === "p" ? 1 : -1); SORT = k; rysujKw(); });
+}
+
+// 4. progi
+function rysujProgi() {
+  const m = Math.max(...D.progi.map((x) => Math.abs(x.roznica)));
+  $("progi").innerHTML = `<thead><tr><th>Parametr</th><th>Próg</th><th class="n">Różnica 5 lat</th><th></th><th class="n">t</th><th class="n">Spółek</th></tr></thead><tbody>` +
+    D.progi.map((x) => { const w = Math.round(Math.abs(x.roznica) / m * 120), s = Math.abs(x.t) > 3.2;
+      return `<tr><td>${esc(x.parametr)}</td><td>${esc(x.prog)}</td><td class="n">${pp(x.roznica)} pp</td><td><svg width="130" height="12" aria-hidden="true"><rect x="${x.roznica >= 0 ? 5 : 5}" y="2" width="${Math.max(2, w)}" height="8" rx="3" fill="${x.roznica >= 0 ? css("--pos") : css("--neg")}" fill-opacity="${s ? 1 : .4}"></rect></svg></td><td class="n">${fx(x.t, 1)}${s ? ' <span class="tag s">istotne</span>' : ""}</td><td class="n">${Math.round(x.sr_spolek)}</td></tr>`; }).join("") + "</tbody>";
+}
+
+// 5. pary
+function rysujPary() {
+  const S = D.sk, nm = Object.keys(S.pojedyncze), all = [...Object.values(S.pojedyncze).map((v) => v.roznica), ...S.pary.map((v) => v.roznica)], m = Math.max(...all.map(Math.abs));
+  const val = (a, b) => a === b ? S.pojedyncze[a] : S.pary.find((x) => x.para === `${a} + ${b}` || x.para === `${b} + ${a}`);
+  $("pary").innerHTML = `<thead><tr><th></th>${nm.map((n) => `<th class="n">${esc(n)}</th>`).join("")}</tr></thead><tbody>` +
+    nm.map((a) => `<tr><th>${esc(a)}</th>${nm.map((b) => { const v = val(a, b); return v ? `<td class="cell" style="background:${kolor(v.roznica, m)}" title="spółek: ${Math.round(v.sr_spolek)} · t ${fx(v.t, 1)}">${pp(v.roznica, 0)}<br><span class="small mut">${Math.round(v.sr_spolek)} sp.</span></td>` : "<td></td>"; }).join("")}</tr>`).join("") + "</tbody>";
+  const bez = S.bez_jednego;
+  $("parytxt").innerHTML = `<p>Wszystkie 4 warunki naraz: ${S.wszystkie ? pp(S.wszystkie.roznica) + " pp" : "prawie nigdy nie są spełnione (za mało spółek, by policzyć)"}.</p>
+    <p style="margin-top:8px">Bez „sprzedaży 5 lat &gt; 30 %”: ${pp(bez["przychody 5 lat > 30 %"].roznica)} pp w 5 lat (t ${fx(bez["przychody 5 lat > 30 %"].t, 1)}, średnio ${Math.round(bez["przychody 5 lat > 30 %"].sr_spolek)} spółek). To najlepsza trójka.</p>
+    <p style="margin-top:8px">Najlepsza para: PEG &lt; 2 + ROE &gt; 15 % (${pp(S.pary.find((x) => x.para === "PEG < 2 + ROE > 15 %").roznica)} pp, ok. ${Math.round(S.pary.find((x) => x.para === "PEG < 2 + ROE > 15 %").sr_spolek)} spółek). Pary nie wzmacniają się nawzajem: wspólny efekt jest mniejszy niż suma pojedynczych (ujemna interakcja), bo warunki częściowo wybierają te same spółki.</p>
+    <p style="margin-top:8px">Próg 30 % rocznie zostawia ok. 6 spółek, głównie po skokach przychodów; daje −35 pp. Progi 10–20 % rocznie działają dobrze (tabela progów).</p>`;
+}
+
+// 6. model
+function rysujModel() {
+  const q = D.lgbm.kwintyle_nadwyzka12, svg = $("lq"), W = 360, h = 200, l = 40, b = 26, t = 10;
+  svg.setAttribute("viewBox", `0 0 ${W} ${h}`); svg.setAttribute("width", "100%");
+  const m = Math.max(...q.map(Math.abs)) * 1.25, Y = (v) => t + (h - t - b) * (1 - (v + m) / (2 * m)), bw = (W - l - 10) / 5;
+  for (const g of [-m, 0, m]) { el("line", { x1: l, x2: W - 10, y1: Y(g), y2: Y(g), stroke: g === 0 ? css("--muted") : css("--grid") }, svg); el("text", { x: l - 6, y: Y(g) + 4, "text-anchor": "end" }, svg).textContent = pp(g, 1); }
+  q.forEach((v, i) => { const x = l + i * bw + bw * 0.2; el("rect", { x, y: Math.min(Y(v), Y(0)), width: bw * 0.6, height: Math.max(1.5, Math.abs(Y(v) - Y(0))), rx: 3, fill: v >= 0 ? css("--pos") : css("--neg") }, svg);
+    el("text", { x: x + bw * 0.3, y: h - 8, "text-anchor": "middle" }, svg).textContent = "K" + (i + 1); el("text", { x: x + bw * 0.3, y: v >= 0 ? Y(v) - 5 : Y(v) + 14, "text-anchor": "middle", class: "lab" }, svg).textContent = pp(v, 1); });
+  $("lqtxt").textContent = `Korelacja prognozy z nadwyżką poza próbą: ${fx(D.lgbm.IC)} (t ${fx(D.lgbm.t, 1)}). K5 − K1 ≈ ${pp(q[4] - q[0], 1)} pp rocznie.`;
+  const s = D.lgbm.waznosc.slice(0, 15), sv = $("shap"), W2 = 460, rh = 20, lw = 200, h2 = s.length * rh + 6, mx = s[0].shap;
+  sv.setAttribute("viewBox", `0 0 ${W2} ${h2}`); sv.setAttribute("width", "100%");
+  s.forEach((r, i) => { el("text", { x: lw - 8, y: i * rh + 14, "text-anchor": "end", class: "lab" }, sv).textContent = r.parametr; el("rect", { x: lw, y: i * rh + 4, width: Math.max(2, r.shap / mx * (W2 - lw - 50)), height: rh - 8, rx: 3, fill: css("--accent") }, sv);
+    el("text", { x: lw + r.shap / mx * (W2 - lw - 50) + 6, y: i * rh + 14 }, sv).textContent = Math.round(r.shap * 1000) / 10 + " %"; });
+}
+
+// 7. przebudowa
+function rysujReb() {
+  const R = D.reb, c = (x) => `${pp(x.CAGR)} %`;
+  $("reb").innerHTML = `<thead><tr><th class="n">Co ile mies.</th><th class="n">Model, górny kwintyl</th><th class="n">spadek</th><th class="n">4 warunki strategii</th><th class="n">spadek</th><th class="n">Równe wagi wszystkich</th></tr></thead><tbody>` +
+    R.map((r) => `<tr><td class="n">${r.co_ile_mies}</td><td class="n">${c(r.model_gorny_kwintyl)}</td><td class="n">${pp(r.model_gorny_kwintyl.maxDD, 0)} %</td><td class="n">${c(r.strategia_4_skladniki)}</td><td class="n">${pp(r.strategia_4_skladniki.maxDD, 0)} %</td><td class="n">${c(r.rowne_wagi_wszystkie)}</td></tr>`).join("") +
+    `</tbody><caption style="caption-side:bottom;text-align:left;padding-top:8px" class="small mut">Model: najlepiej przy przebudowie co 24 mies. (15,3 %), co miesiąc 14,5 %, co 5 lat 11,7 %. 4 warunki strategii: często 0–3 spółki, wynik losowy (4–22 %), spadki do −63 %.</caption>`;
+}
+
+function wszystko() { rysujIC(); rysujDek(); rysujKw(); rysujProgi(); rysujPary(); rysujModel(); rysujReb(); }
+wszystko();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { rysujIC(); rysujDek(); }, 150); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", wszystko);
+new MutationObserver(wszystko).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
