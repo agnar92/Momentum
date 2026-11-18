@@ -750,3 +750,11 @@ brakujące do 100 % w SPY (gdy < 10 spółek). Przebudowa co miesiąc / kwartał
 Hipoteza: (A) dług < 1 > dług ≥ 1 o 1–3 pp/rok; (B) wagi 1/PEG ≈ równe wagi, wynik ≈ SPY ± 2 pp.
 
 Wynik etapu 65 (2026-11-18): (A) w kwintylach 5-letnich niski dług wygrywa (K1 +9,0 %, K5 −7,7 % nadwyżki), ale w portfelach równych wag przebudowywanych co miesiąc 2015–2026 dług 0–1 (10,6 %) ≈ dług ≥ 1 (11,3 %) — różnica wynika z miary (średnia 5-letnich zwrotów pojedynczych spółek vs składany zwrot portfela) i z innego okresu; hipoteza (A) potwierdzona tylko dla kwintyli. (B) wagi 1/PEG co miesiąc 15,5 % vs równe 14,3 % vs SPY 14,1 %; bez NVDA 14,1 %; limit 20 % 17,5 %. Hipoteza (B) potwierdzona (≈ SPY ± 2 pp).
+
+## Etap 66: bez przebudowy — kupno raz z wielkością wg PEG, sprzedaż przy wysokim P/E i PEG (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „nie rebalansuj, bo to zabija zyski; jeżeli akcja ma wysokie P/E i PEG — sprzedaj”.
+Wszechświat jak w etapie 65 (B). Co miesiąc spółka z wszechświata, której nie mamy, jest kupowana (kolejność od najniższego PEG) za min(5 % / PEG, 10 %) konta
+(min 1 %), z rezerwy w SPY (brak rezerwy = brak kupna). Bez przycinania, bez przebudowy, bez dokupowania. Sprzedaż (warianty): X1 P/E > 50 i PEG > 3;
+X2 P/E > 40 i PEG > 3; X3 P/E > 30 i PEG > 2; X4 = X1 lub przychody r/r < 8 % dwa lata z rzędu; X0 nigdy. Pieniądze ze sprzedaży do SPY. Ponowny zakup dozwolony.
+Kontrola: bez NVDA; wielkość stała 5 % zamiast 5 %/PEG. Hipoteza: bez przebudowy wynik zależy od 1–2 spółek; sprzedaż przy wysokim P/E i PEG ≈ trzymanie (wycena IC ~0).
