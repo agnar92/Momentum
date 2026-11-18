@@ -9,7 +9,7 @@ rv = 'przychody TTM r/r'
 A = np.column_stack([D[rv] if k == 0 else sh(rv, 12 * k) for k in range(5)]); okA = np.isfinite(A).all(1)
 E = np.column_stack([D['ROE'] if k == 0 else sh('ROE', 12 * k) for k in range(5)])
 g5 = D['przychody 5 lat (CAGR)'].values
-STAL = okA & (((A >= 0.08) & (A <= 0.15)).sum(1) >= 4) & (np.where(okA, A, -1) > 0).all(1)
+STAL = okA & (((A >= 0.08) & (A <= 0.15)).sum(1) >= 4) & (np.where(okA[:, None], A, -1) > 0).all(1)
 FAST = okA & ((A >= 0.20).sum(1) >= 3) & (np.nan_to_num(g5, nan=-1) >= 0.20)
 WSP = np.isfinite(E).all(1) & (np.where(np.isfinite(E), E, 0) > 0.15).all(1) & (D['dług / kapitał'] >= 0).values & (D['dług / kapitał'] < 1).values & (D['FCF yield'] > 0).values
 PEGv = np.where((D['P/E'] > 0) & (g5 > 0), D['P/E'] / (100 * g5), np.nan)

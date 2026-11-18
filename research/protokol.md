@@ -694,3 +694,11 @@ Kupno jak w etapie 59 (kolejność od najniższego PEG, bez progu; wariant PEG <
 Sprzedaż: WA = przychody r/r < 8 % dwa lata z rzędu; WB = spółka nie należy już do żadnej grupy ani nie spełnia warunków wspólnych; WC = nigdy.
 Dodatkowo: przycinanie raz w roku (styczeń) pozycji > 15 % konta do 15 %; kontrola bez najlepszej spółki (wyłączona z wyboru).
 Grupy osobno i razem. Miary jak w etapie 59. Hipoteza: fast growers > SPY głównie dzięki pojedynczym spółkom (bez najlepszej przewaga znika); stalwarts ≈ SPY z mniejszym DD.
+
+Wynik etapu 60 (2026-11-18): definicje są bardzo rzadkie w S&P 500 — stalwarts mediana 0 spółek w miesiącu (0–6), fast growers 1 (0–4); portfel ma średnio 1–5 spółek, reszta w SPY. Fast growers (WA) 20,8 % (SPY 14,1 %), ale NVDA 43 % portfela na koniec; bez NVDA 15,5 %. Obie grupy 20,2 %, bez NVDA 13,9 %. Stalwarts 10,2–13,0 % (< SPY). Hipoteza potwierdzona: przewaga fast growers to głównie NVDA; stalwarts ≈/< SPY.
+
+## Etap 61: łagodniejsze definicje grup (średni wzrost 5 lat) (zapisane 2026-11-18 PRZED uruchomieniem)
+Powód: w etapie 60 za mało spółek (warunek „8–15 % w ≥ 4 z 5 lat” prawie nigdy nie jest spełniony: 2 spółki przed innymi filtrami).
+STALWART2 = CAGR przychodów 5 lat w [8 %, 15 %] i przychody r/r > 0 w każdym z 5 lat; FAST2 = CAGR 5 lat ≥ 20 % i r/r > 0 w każdym roku;
+wspólne: dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat (wariant 5 z 5). Reszta jak w etapie 60 (WA, WB, WC, PEG < 2, przycinanie, bez NVDA).
+Liczebność (mediana w miesiącu, przed uruchomieniem strategii): STALWART2 + warunki 5 (ROE 4/5) / 3 (ROE 5/5), FAST2 2 / 1.
