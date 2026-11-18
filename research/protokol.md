@@ -649,3 +649,5 @@ Użytkownik: „ogranicz kapitalizację do 10b” (jak wcześniej: tylko spółk
 kapitalizacja na koniec miesiąca > 10 mld USD, plus 4 warunki z etapu 54. Spadek kapitalizacji poniżej 10 mld NIE jest kryterium sprzedaży.
 Warianty jak w etapie 56 (sprzedaż 1 z 4 / 2 z 5, SPY / najniższy PEG, styczeń / kwartał, wagi PEG / równe). Hipoteza: mniej spółek, wynik w granicach ±2 pp
 (w etapie 46 filtr > 10 mld pomagał: +0,4 / +6,0 pp w dwóch okresach).
+
+Wynik etapu 57 (2026-11-18): w S&P 500 filtr > 10 mld prawie nic nie zmienia w składzie (mediana 38 zamiast 39 spółek), wynik niższy o ok. 1 pp (najlepszy wariant 13,2 % vs 14,1 % bez filtra, SPY 14,1 %). Hipoteza potwierdzona (w granicach ±2 pp).
