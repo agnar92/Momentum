@@ -4,21 +4,21 @@
 
 | odniesienie                       |   CAGR |   CAGR_2015_20 |   CAGR_2021_26 |   maxDD |
 |:----------------------------------|-------:|---------------:|---------------:|--------:|
-| równe wagi uniwersum              |  0.114 |          0.115 |          0.112 |  -0.268 |
+| równe wagi uniwersum              |  0.109 |          0.104 |          0.113 |  -0.279 |
 | SPY                               |  0.139 |          0.131 |          0.147 |  -0.239 |
-| CEM10 (to samo uniwersum, N = 10) |  0.259 |          0.131 |          0.403 |  -0.293 |
+| CEM10 (to samo uniwersum, N = 10) |  0.227 |          0.078 |          0.397 |  -0.34  |
 
 ## Warianty
 
 | wariant                                                                         | kandydatow_w_marcu   |   CAGR |   CAGR_2015_20 |   CAGR_2021_26 |   maxDD |   sr_zainwestowane |   z_10k | roznica_vs_rowne   | lepszy   |
 |:--------------------------------------------------------------------------------|:---------------------|-------:|---------------:|---------------:|--------:|-------------------:|--------:|:-------------------|:---------|
-| kontrola: bez filtra PEG, ranking po przychodach 5 l.                           | 13-78                |  0.161 |          0.106 |          0.219 |  -0.383 |              0.994 |   55714 | +0.46 (-0.28…1.44) | False    |
-| A estymata użytkownika (przychody ważone): PEG < 2, ranking po przychodach 5 l. | 3-46                 |  0.09  |          0.104 |          0.077 |  -0.27  |              0.914 |   27048 | -0.18 (-0.54…0.37) | False    |
-| A estymata użytkownika (przychody ważone): PEG < 2, ranking po najniższym PEG   | 3-46                 |  0.128 |          0.089 |          0.168 |  -0.286 |              0.911 |   39853 | +0.14 (-0.24…0.50) | False    |
-| B przeszły CAGR EPS 5 lat: PEG < 2, ranking po przychodach 5 l.                 | 10-50                |  0.131 |          0.145 |          0.117 |  -0.289 |              0.985 |   41016 | +0.21 (-0.49…0.99) | False    |
-| B przeszły CAGR EPS 5 lat: PEG < 2, ranking po najniższym PEG                   | 10-50                |  0.134 |          0.089 |          0.182 |  -0.268 |              0.991 |   42535 | +0.23 (-0.37…0.85) | False    |
-| C jak analityk (nierealne): PEG < 2, ranking po przychodach 5 l.                | 0-29                 |  0.157 |          0.157 |          0.157 |  -0.312 |              0.946 |   53628 | +0.38 (-0.11…1.08) | False    |
-| C jak analityk (nierealne): PEG < 2, ranking po najniższym PEG                  | 0-29                 |  0.201 |          0.187 |          0.214 |  -0.305 |              0.949 |   81787 | +0.70 (0.27…1.29)  | True     |
+| kontrola: bez filtra PEG, ranking po przychodach 5 l.                           | 15-78                |  0.143 |          0.087 |          0.203 |  -0.385 |              0.983 |   46704 | +0.34 (-0.39…1.29) | False    |
+| A estymata użytkownika (przychody ważone): PEG < 2, ranking po przychodach 5 l. | 3-49                 |  0.09  |          0.108 |          0.073 |  -0.272 |              0.918 |   26992 | -0.13 (-0.56…0.56) | False    |
+| A estymata użytkownika (przychody ważone): PEG < 2, ranking po najniższym PEG   | 3-49                 |  0.124 |          0.096 |          0.152 |  -0.288 |              0.916 |   38239 | +0.12 (-0.25…0.56) | False    |
+| B przeszły CAGR EPS 5 lat: PEG < 2, ranking po przychodach 5 l.                 | 10-52                |  0.106 |          0.107 |          0.104 |  -0.279 |              0.989 |   31779 | +0.03 (-0.59…0.72) | False    |
+| B przeszły CAGR EPS 5 lat: PEG < 2, ranking po najniższym PEG                   | 10-52                |  0.118 |          0.074 |          0.165 |  -0.26  |              0.991 |   36223 | +0.13 (-0.44…0.74) | False    |
+| C jak analityk (nierealne): PEG < 2, ranking po przychodach 5 l.                | 0-30                 |  0.167 |          0.174 |          0.16  |  -0.279 |              0.943 |   59097 | +0.48 (0.01…1.13)  | True     |
+| C jak analityk (nierealne): PEG < 2, ranking po najniższym PEG                  | 0-30                 |  0.2   |          0.191 |          0.209 |  -0.306 |              0.949 |   81174 | +0.72 (0.31…1.31)  | True     |
 
 ## Lista (estymata użytkownika, ranking po przychodach) na koniec marca 2026
 

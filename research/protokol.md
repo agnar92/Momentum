@@ -594,3 +594,14 @@ Hipoteza: więcej miejsc nie zmieni wyniku istotnie, bo kandydatów jest mało (
 Dodatkowo: lista spółek kupionych w wariancie PEG < 1 + W5, s = 10 %, z wynikiem każdej pozycji.
 
 Wynik etapu 52 (2026-11-18): limit 30 spółek się nie zapełnia — przy PEG < 1 portfel ma średnio 5–11 spółek (max 17), bo co miesiąc warunki spełnia mediana 4 spółek. Wyniki w granicach szumu względem etapu 51 (14–16 %/rok vs SPY 14,1 %). Mniejsza pozycja (5 %) zostawia więcej w SPY i daje podobny CAGR. Hipoteza potwierdzona.
+
+## Etap 53: powtórka etapów 50–52 na pełnym składzie S&P 500 (ze spółkami usuniętymi z indeksu) (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „dlaczego masz tylko akcje, które są w indeksie, przecież mieliśmy dane pełne”. Sprawdzenie: ceny były pełne (1084 spółki kiedykolwiek w S&P 500,
+w tym usunięte), ale dane SEC pobrano tylko dla tickerów z dzisiejszej listy SEC (company_tickers.json) — 271 z 865 spółek z indeksu od 2008 r. nie miało
+fundamentów, więc nigdy nie mogły zostać wybrane (błąd przeżywalności w etapach 31–52). Naprawa (/home/user/ndx/delisted): nazwy usuniętych spółek z listy
+EODHD (delisted), CIK z SEC cik-lookup-data.txt (dopasowanie nazwy + sprawdzenie, że raporty CIK pokrywają okres notowań; kilka CIK ręcznie), pobrane
+companyfacts dla 238 spółek (216 nowych, 22 dopisane do ponownie użytych tickerów tylko do daty końca starej spółki); kapitalizacja spółek bez dzisiejszej
+liczby akcji = P/E × zysk netto TTM. Pokrycie członków S&P 500 danymi SEC 2015: 95 %. Panel: 728 spółek, 82 712 obserwacji (było 567 / 70 655).
+Plan: bez zmian reguł ponownie r72 (etap 50), r73 (51), r74 (52); poprzednie wyniki zachowane jako *_bez_usunietych.md.
+Hipoteza: wyniki spadną (usunięte spółki to częściej przegrane); jeśli przewaga nad SPY zniknie, poprzednie wnioski były skutkiem błędu przeżywalności.

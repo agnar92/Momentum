@@ -103,6 +103,9 @@ def pelna(A):
 P = {k: pelna(v) for k, v in X.items()}
 lag = lambda A, k: np.vstack([np.full((k, NS), np.nan), A[:-k]])
 pos = lambda A: np.where(A > 0, A, np.nan)
+# spółki usunięte z indeksu nie mają dzisiejszej liczby akcji -> kapitalizacja = P/E x zysk netto TTM (te same dane SEC, skorygowane o splity)
+n0 = np.isfinite(CAP).sum(); CAP = np.where(np.isfinite(CAP), CAP, np.where((PE_ > 0) & (P['ni'] > 0), PE_ * P['ni'], np.nan))
+print('kapitalizacja uzupełniona z P/E x zysk:', np.isfinite(CAP).sum() - n0, flush=True)
 debt = np.where(np.isfinite(DE) & np.isfinite(P['eq']), DE * P['eq'], np.nan)
 ev = CAP + np.nan_to_num(debt) - np.nan_to_num(P['cash'])
 cagr = lambda a, b, n: np.where((a > 0) & (b > 0), (a / b) ** (1 / n) - 1, np.nan)
