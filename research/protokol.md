@@ -702,3 +702,5 @@ Powód: w etapie 60 za mało spółek (warunek „8–15 % w ≥ 4 z 5 lat” pr
 STALWART2 = CAGR przychodów 5 lat w [8 %, 15 %] i przychody r/r > 0 w każdym z 5 lat; FAST2 = CAGR 5 lat ≥ 20 % i r/r > 0 w każdym roku;
 wspólne: dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat (wariant 5 z 5). Reszta jak w etapie 60 (WA, WB, WC, PEG < 2, przycinanie, bez NVDA).
 Liczebność (mediana w miesiącu, przed uruchomieniem strategii): STALWART2 + warunki 5 (ROE 4/5) / 3 (ROE 5/5), FAST2 2 / 1.
+
+Wynik etapu 61 (2026-11-18): z łagodniejszymi definicjami (ROE 4 z 5): obie grupy, wyjście WA 14,0 %/rok = SPY 14,1 %, ale max DD −17 % vs −24 % i 84 % okien 5-letnich lepszych od SPY; stalwarts 14,1 % (DD −20 %), fast growers 15,1 % (DD −22 %, bez ANET 13,9 %). Próg PEG < 2 i wyjście WB / WC gorsze. ROE 5 z 5: 12,7–15,2 %. NVDA nie spełnia „każdy rok > 0” (spadek przychodów 2023), więc wynik nie zależy od NVDA. Wniosek: grupy Lyncha dają zwrot jak rynek przy mniejszym obsunięciu; przewagi zwrotu nie wykazano.
