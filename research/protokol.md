@@ -499,3 +499,4 @@ CEM10 (co miesiąc: zamknięcie > SMA 10 i zwrot 6M > +30 %, ranking po 6M, 10 p
 na członkach S&P 500 z danymi SEC (cache r59). Warianty: bez filtra; przy zakupie dług / kapitał < 1; < 0,5 (brak danych o długu = odrzucona);
 dodatkowo wariant "< 0,5 lub brak danych" (brak danych przepuszczony) i wyjście także przy dług / kapitał > 1. Okres 2011-01 ... 2026-09 i od 2015-03;
 CAGR, połowy (2011-2018 / 2019-2026), maxDD, Sharpe, Calmar, różnica vs CEM10 bez filtra (bootstrap blokowy). Rozpoznawcze.
+Wynik etapu 44 (2026-11-18): filtr długu w CEM10 obniża maks. spadek o 2-5 pp; CAGR 2011-26 lekko niższy (< 1: 20,5 vs 21,7 %), 2015-26 wyższy (25,7 vs 22,8 %); wariant przepuszczający brak danych najlepszy (24,1 / 29,4 %), ale to po części efekt doboru spółek bez danych SEC.
