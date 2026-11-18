@@ -556,3 +556,10 @@ t Newey-West (lag 60), średnia liczba spółek w miesiącu; osobno w dwóch po�
 nadwyżka > 0 w obu połowach i średnio >= 10 spółek. Próg Bonferroniego dla ~175 kombinacji: |t| > 3,6. Dodatkowo interakcja pary = nadwyżka pary - max(nadwyżki składników).
 Ograniczenia jak etap 47; wybór najlepszych kombinacji po fakcie zawyża ich wynik (stąd raport obu połów).
 Wynik etapu 48 (2026-11-18): najlepsze stabilne kombinacje łączą quick ratio > 1,5 z PEG < 2 / EPS 5 l. > 10 % / dług < 0,5 (+53..+69 pp nadwyżki w 5 lat, 14-28 spółek, zgodnie w obu połowach); przychody 5 l. > +50 % + dług < 0,5: +31 pp (35 spółek).
+
+## Etap 49: czy wzrost przychodów z 5 lat przewiduje wzrost EPS w kolejnych 5 latach (łańcuch przychody -> EPS -> cena) (zapisane 2026-11-18 PRZED uruchomieniem, opisowe)
+Pytanie użytkownika: sprzedaż z 5 lat napędza przyszły EPS. Panel etapu 47: dla startu t i spółki - przyszły CAGR EPS 5 lat = wartość "EPS 5 lat (CAGR)" w t + 60,
+przyszły CAGR przychodów 5 lat = "przychody 5 lat (CAGR)" w t + 60 (ta sama seria). Predyktory w t: CAGR przychodów 5 / 3 lata, CAGR EPS 5 / 3 lata, EPS TTM r/r,
+estymata ważona, marża operacyjna, ROE, quick ratio, dług / kapitał. Miary: korelacja rang w każdym miesiącu startu (2012-2021), średnia i t NW (lag 60);
+kwintyle predyktora -> mediana przyszłego CAGR EPS. Druga część: korelacja przyszłego CAGR EPS 5 lat z nadwyżką ceny w tych samych 5 latach (czy EPS napędza cenę)
+oraz korelacja z nadwyżką po kontroli P/E na starcie (czy wzrost był już w cenie).
