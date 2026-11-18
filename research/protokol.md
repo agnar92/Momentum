@@ -573,3 +573,10 @@ Wyniki dla każdego zestawu: (a) portfel równych wag spółek zestawu ze startu
 - odsetek startów, w których pobił, średnia przewaga; (b) pojedyncza spółka: odsetek spółek zestawu, które pobiły SPY po 60 mies.; (c) lata kalendarzowe 2012-2025:
 portfel ze stycznia trzymany rok - w ilu latach pobił SPY. Średnia liczba spółek w zestawie. Ograniczenia jak etap 47 (przeżywalność, nakładające się okna).
 Wynik etapu 50 (2026-11-18): przychody +8 % co rok + dług < 1 + FCF > 0 pobijają SPY w 54 % 5-letnich okresów (wszystkie spółki 31 %); warunki ROE nie pomagają; PEG z przychodów < 1 podnosi do 72 %, ale zestaw ma średnio 2 spółki; na rok częstość pobicia 35-59 %.
+
+## Etap 51: wejście PEG z przychodów < 1 (< 2) przy przychodach +8 % co rok, dług < 1, FCF > 0 - które WYJŚCIE i jaka przebudowa (zapisane 2026-11-18 PRZED uruchomieniem)
+Portfel maks. N = 10 równych miejsc (kwota = kapitał / N), wolna gotówka w SPY (wariant: gotówka 0 %), kontrola co miesiąc, koszt 0,1 %/stronę.
+Kupno: spółka spełnia rdzeń (przychody TTM +8 % w każdym z 5 lat, dług / kapitał 0-1, FCF > 0) i PEG_przych = P/E / (100 x CAGR przychodów 5 lat) < 1 (wariant < 2);
+kolejność po najniższym PEG_przych. Wyjścia: W0 trzymaj 60 mies.; W1 załamanie: przychody TTM r/r < 0 albo dług / kapitał > 1 albo FCF < 0; W2 przewartościowanie PEG_przych > 2;
+W3 PEG_przych > 3; W4 W1 lub W3; W5 coroczna przebudowa (styczeń: sprzedaj spółki niespełniające warunków kupna); W6 W1 lub W2; W7 nigdy (do zniknięcia z danych).
+Okres 2015-01 ... 2026-09 (warunek 5-letni). Miary: CAGR, maks. spadek, odsetek kroczących okien 12 i 60 mies. z wynikiem lepszym od SPY, średni udział spółek, mediana czasu trzymania.
