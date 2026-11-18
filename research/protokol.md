@@ -666,3 +666,16 @@ istotność po Bonferronim |t| > 3,2; kwintyle (K5 − K1). Wynik złożony: śr
 sprawdzony w 2. połowie (poza próbą). Hipoteza: konsekwencja wzrostu przychodów i ROIC przewiduje przyszły wzrost wyników; cena — słabiej, bo część jest w cenie.
 
 Wynik etapu 58 (2026-11-18): najmocniejsza i stabilna cecha = liczba lat (z 5) ze wzrostem przychodów > 10 % r/r: przewiduje nadwyżkę ceny 60 mies. (IC 0,12, t 7,5, obie połowy), przyszły wzrost przychodów (0,30) i jako jedyna z cech wzrostu także przyszły wzrost EPS (0,18, t 8,5). Dalej: lata z EPS r/r > 0, quick ratio, trwały ROIC > 15 %, niski dług. Chwilowa poprawa r/r (marże, ROIC, przyspieszenie) i wycena (P/E, PEG) ≈ 0. Wynik złożony poza próbą działa tylko w górnym kwintylu (+23 pp w 5 lat). Hipoteza potwierdzona dla przychodów; dla ROIC — cena tak, przyszły wzrost wyników nie.
+
+## Etap 59: portfel „świetnych spółek” — wybór po konsekwencji wzrostu, dokupowanie i kolejność kupna po PEG (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „przetestuj to, dokupowanie za pomocą PEG i hierarchia kupna też po PEG, bo to pokazuje fair value”.
+Spółka „świetna” (na koniec miesiąca, dane PIT): przychody TTM r/r > 10 % w ≥ 3 z ostatnich 5 lat (warianty ≥ 4, 5 z 5), 0 ≤ dług/kapitał < 1,
+ROIC > 15 % w ≥ 3 z 5 lat (wariant bez ROIC; wariant + quick ratio > 1). PEG = P/E ÷ (100 × CAGR przychodów 5 lat).
+Kupno co miesiąc: kandydaci = świetne z PEG < 2 (nowe i trzymane poniżej 10 % konta), kolejność od najniższego PEG; transza 2,5 % konta (wariant 5 %), najwyżej
+4 transze w miesiącu (wariant: bez limitu), pozycja max 10 % konta; pieniądze z rezerwy w SPY (start: 100 % w SPY), brak rezerwy = brak kupna.
+Sprzedaż (warianty): S1 przychody r/r < 10 % dwa lata z rzędu (TTM teraz i 12 mies. wcześniej), S2 spółka przestaje być świetna (< 3 lat z 5 z przychodami > 10 %),
+S3 przychody TTM r/r < 0, S4 nigdy. Pieniądze ze sprzedaży do SPY. Koszt 0,1 %. 2015-01..2026-09.
+Porównanie: te same świetne spółki, równe wagi, przebudowa w styczniu (bez PEG); SPY.
+Miary: CAGR, max DD, okna 12 / 60 mies. vs SPY, średnia liczba spółek, udział w spółkach, mediana trzymania.
+Hipoteza: wybór po konsekwencji wzrostu bije SPY o 1–3 pp; PEG jako kolejność/dokupowanie ≈ bez PEG (wycena miała IC ~0); S1 najlepsze z wyjść.
