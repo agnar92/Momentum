@@ -547,3 +547,11 @@ efektów pojedynczych; (4) częstotliwość przebudowy: portfel 20 % najlepszych
 przed startem testu, test w roku Y) na nadwyżce 12 mies.; ocena poza próbą: IC i nadwyżka górnego kwintyla; ważność SHAP. Strona-raport z wynikami.
 Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność); 5-letnie okna od startów 2012-2021 nakładają się (efektywnie ~2 niezależne okresy).
 Wynik etapu 47 (2026-11-18): patrz R071; dywidendy (stopa, wzrost) i EV/EBITDA niewiarygodne (kwartalne przepływy SEC są narastające - TTM rzadko z kompletu).
+
+## Etap 48: kombinacje parametrów (pary, trójki, czwórki) a nadwyżka 5 lat (zapisane 2026-11-18 PRZED uruchomieniem)
+Filtry z etapu 47, które pojedynczo działały lub są w strategii użytkownika: A przychody 5 l. łącznie > +50 % (CAGR > 8,45 %); B przychody 5 l. CAGR > 20 %;
+C EPS 5 l. CAGR > 10 %; D dług / kapitał 0-0,5; E marża operacyjna > 25 %; F quick ratio > 1,5; G ROE > 15 %; H PEG (EPS 5 l.) 0-2; I zwrot 3 mies. > 0; J current ratio > 1,5.
+Dla każdej pary (45) i trójki (120) oraz czwórek budowanych z 10 najlepszych trójek: średnia nadwyżka 5 lat spółek spełniających kombinację (vs średnia wszystkich spółek),
+t Newey-West (lag 60), średnia liczba spółek w miesiącu; osobno w dwóch połowach startów (2012-01 ... 2016-09 i 2016-10 ... 2021-09). Kombinacja "stabilna", jeśli
+nadwyżka > 0 w obu połowach i średnio >= 10 spółek. Próg Bonferroniego dla ~175 kombinacji: |t| > 3,6. Dodatkowo interakcja pary = nadwyżka pary - max(nadwyżki składników).
+Ograniczenia jak etap 47; wybór najlepszych kombinacji po fakcie zawyża ich wynik (stąd raport obu połów).
