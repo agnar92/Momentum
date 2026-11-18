@@ -493,3 +493,9 @@ coroczna wymiana (etap 38b), równe wagi spółek > 10 mld, SPY. 2015-03 ... 202
 Ograniczenie: 11,5 roku danych - kilka pełnych 5-letnich cykli trzymania. Rozpoznawcze.
 Etap 43 - dodatek rozpoznawczy PO wynikach (nie rejestrowany wcześniej): X5 lub X6 (EPS r/r < 0 lub dług / kapitał > 1) - kombinacja dwóch najlepszych pojedynczych reguł; wynik traktować jako dopasowany do danych.
 Wynik dodatku (po wynikach): X5 lub X6 -> 18,9 % rocznie, DD -29 %, Sharpe 0,99, Calmar 0,65, mediana trzymania 1 rok, 61 sprzedaży.
+
+## Etap 44: CEM10 z filtrem zadłużenia (zapisane 2026-11-18 PRZED uruchomieniem)
+CEM10 (co miesiąc: zamknięcie > SMA 10 i zwrot 6M > +30 %, ranking po 6M, 10 pozycji, wyjście < SMA 10, brak zakupów przy SPY < SMA 12, koszt 0,1 %)
+na członkach S&P 500 z danymi SEC (cache r59). Warianty: bez filtra; przy zakupie dług / kapitał < 1; < 0,5 (brak danych o długu = odrzucona);
+dodatkowo wariant "< 0,5 lub brak danych" (brak danych przepuszczony) i wyjście także przy dług / kapitał > 1. Okres 2011-01 ... 2026-09 i od 2015-03;
+CAGR, połowy (2011-2018 / 2019-2026), maxDD, Sharpe, Calmar, różnica vs CEM10 bez filtra (bootstrap blokowy). Rozpoznawcze.
