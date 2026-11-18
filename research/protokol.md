@@ -651,3 +651,16 @@ Warianty jak w etapie 56 (sprzedaż 1 z 4 / 2 z 5, SPY / najniższy PEG, stycze�
 (w etapie 46 filtr > 10 mld pomagał: +0,4 / +6,0 pp w dwóch okresach).
 
 Wynik etapu 57 (2026-11-18): w S&P 500 filtr > 10 mld prawie nic nie zmienia w składzie (mediana 38 zamiast 39 spółek), wynik niższy o ok. 1 pp (najlepszy wariant 13,2 % vs 14,1 % bez filtra, SPY 14,1 %). Hipoteza potwierdzona (w granicach ±2 pp).
+
+## Etap 58: które fundamenty wskazują spółki, które przez lata poprawiają wyniki i rosną (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „jakie fundamenty wskazują na przyszłe wzrosty … spółki świetne w wynikach, które poprawiają swoje wyniki rok do roku i dzięki temu cena rośnie;
+w długim terminie; dokupuję, gdy PEG < 2; sprzedaż dopiero, gdy fundamenty pogarszają się rok do roku”.
+Dane: panel z etapu 53 (S&P 500 PIT ze spółkami usuniętymi, 728 spółek), starty 2012-01..2021-09 dla 60 mies.
+Cechy (znane na t): (a) poziomy z panelu (wzrost, rentowność, wycena, dług, płynność); (b) poprawa r/r: Δ ROE, Δ ROIC, Δ marży oper. / brutto / netto,
+przyspieszenie przychodów TTM r/r i EPS TTM r/r (teraz minus rok wcześniej); (c) konsekwencja w 5 latach (punkty co 12 mies.): liczba lat z przychodami r/r > 0,
+> 10 %, z EPS r/r > 0, z rosnącą marżą oper., z ROE > 15 %, z ROIC > 15 %; zmienność wzrostu przychodów (odch. std 5 punktów).
+Cele: (1) nadwyżka ceny 36 i 60 mies. (względem średniej spółek); (2) PRZYSZŁY wzrost fundamentów: CAGR przychodów i EPS w kolejnych 5 latach (czy cecha
+przewiduje dalszą poprawę wyników). Miary: miesięczny IC Spearmana, t Neweya-Westa (lag = horyzont), znak w obu połowach startów (2012–16 / 2017–21),
+istotność po Bonferronim |t| > 3,2; kwintyle (K5 − K1). Wynik złożony: średnia rang cech wybranych w 1. połowie (|t| > 2, ten sam znak dla ceny 60 mies.),
+sprawdzony w 2. połowie (poza próbą). Hipoteza: konsekwencja wzrostu przychodów i ROIC przewiduje przyszły wzrost wyników; cena — słabiej, bo część jest w cenie.
