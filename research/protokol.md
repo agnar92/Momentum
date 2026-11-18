@@ -748,3 +748,5 @@ im niższy PEG, tym większa pozycja, max 10 % konta; fundamenty muszą być spe
 przychodów ≥ −20 %); oraz dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat. Wagi ∝ 1/PEG (PEG z przychodów), limit 10 % (nadwyżka rozdzielana iteracyjnie),
 brakujące do 100 % w SPY (gdy < 10 spółek). Przebudowa co miesiąc / kwartał / rok (styczeń); porównanie: równe wagi; kontrola bez NVDA.
 Hipoteza: (A) dług < 1 > dług ≥ 1 o 1–3 pp/rok; (B) wagi 1/PEG ≈ równe wagi, wynik ≈ SPY ± 2 pp.
+
+Wynik etapu 65 (2026-11-18): (A) w kwintylach 5-letnich niski dług wygrywa (K1 +9,0 %, K5 −7,7 % nadwyżki), ale w portfelach równych wag przebudowywanych co miesiąc 2015–2026 dług 0–1 (10,6 %) ≈ dług ≥ 1 (11,3 %) — różnica wynika z miary (średnia 5-letnich zwrotów pojedynczych spółek vs składany zwrot portfela) i z innego okresu; hipoteza (A) potwierdzona tylko dla kwintyli. (B) wagi 1/PEG co miesiąc 15,5 % vs równe 14,3 % vs SPY 14,1 %; bez NVDA 14,1 %; limit 20 % 17,5 %. Hipoteza (B) potwierdzona (≈ SPY ± 2 pp).
