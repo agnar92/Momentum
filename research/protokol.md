@@ -713,3 +713,5 @@ Użytkownik: „weź tylko ten pierwszy warunek: sprzedaż powyżej 50 % z 5 lat
 od najniższego PEG (bez progu; wariant PEG < 2), transze 2,5 %, max 4 / mies., max 10 % przy kupnie, rezerwa w SPY; sprzedaż WA (przychody r/r < 8 % dwa lata),
 warianty WB (wypada z warunków), WC (nigdy). Dodatkowo (gdyby „obsunięcie” dotyczyło ceny): maks. obsunięcie ceny w 5 lat ≥ −20 % / ≥ −30 % zamiast przychodów.
 Kontrola: bez najlepszej spółki i bez NVDA. Miary jak w etapie 61. Hipoteza: więcej spółek niż w etapie 61, zwrot ≈ SPY ± 2 pp.
+
+Wynik etapu 62 (2026-11-18): mediana 4 spółki; 20,0 %/rok (SPY 14,1 %), ale NVDA = 63 % portfela na koniec; bez NVDA 12,2 %; z przycinaniem pozycji do 15 % w styczniu 16,9 % (DD −27 %). Obsunięcie ceny zamiast przychodów 8,4–10,5 %. Hipoteza (≈ SPY ± 2 pp) — z NVDA odrzucona, bez NVDA potwierdzona (−1,9 pp).
