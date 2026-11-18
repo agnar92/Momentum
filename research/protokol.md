@@ -631,3 +631,12 @@ z najniższym PEG, której nie mamy; brak takiej = SPY. Porównanie z etapem 54 
 Hipoteza: różnica < 1 pp (sprzedaży między przebudowami jest mało, a spółka z najniższym PEG nie jest lepsza od SPY).
 
 Wynik etapu 55 (2026-11-18): zastępowanie sprzedanej spółki tą z najniższym PEG nie zmienia wyniku (wagi PEG, styczeń: 14,1 % → 14,1 %, DD −24,5 → −25,7 %; co kwartał +0,3 pp; równe wagi −1,0 pp), ok. 19 zamian rocznie. Hipoteza potwierdzona.
+
+## Etap 56: sprzedaż dopiero, gdy padną 2 kryteria; PEG liczy się tylko przy P/E > 50 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „do sprzedaży liczy się, jeżeli dwa kryteria upadają z fundamentów; PEG tylko z wysokim P/E powyżej 50”.
+Kryteria sprzedaży (miesięcznie): K1 przychody 5 lat ≤ +50 %, K2 dług/kapitał ≥ 1 lub < 0, K3 ROE ≤ 15 %, K4 FCF ≤ 0, K5 P/E > 50 i PEG > 3
+(wariant K5' = samo P/E > 50); brak danych = kryterium nie pada. Sprzedaż, gdy padną ≥ 2 z 5. Wejście jak w etapie 54 (wszystkie 4 warunki), wagi 1/PEG
+lub równe, limit 10 %. Przebudowa (styczeń / co kwartał): spółki spełniające 4 warunki + trzymane, którym padło < 2 kryteria; wagi 1/PEG (trzymana bez PEG
+= najmniejsza waga z listy). Po sprzedaży: SPY albo spółka z najniższym PEG (etap 55). Porównanie z etapami 54–55 (sprzedaż przy 1 kryterium).
+Hipoteza: łagodniejsza sprzedaż = mniej transakcji, wynik w granicach ±1 pp.
