@@ -605,3 +605,5 @@ companyfacts dla 238 spółek (216 nowych, 22 dopisane do ponownie użytych tick
 liczby akcji = P/E × zysk netto TTM. Pokrycie członków S&P 500 danymi SEC 2015: 95 %. Panel: 728 spółek, 82 712 obserwacji (było 567 / 70 655).
 Plan: bez zmian reguł ponownie r72 (etap 50), r73 (51), r74 (52); poprzednie wyniki zachowane jako *_bez_usunietych.md.
 Hipoteza: wyniki spadną (usunięte spółki to częściej przegrane); jeśli przewaga nad SPY zniknie, poprzednie wnioski były skutkiem błędu przeżywalności.
+
+Wynik etapu 53 (2026-11-18): z usuniętymi spółkami średnia spółka wypada gorzej (pobija SPY w 5 lat w 19 % zamiast 31 % okresów), przewaga rdzenia (przychody + dług + FCF) maleje (41 % zamiast 54 %). Wariant PEG z przychodów < 1 + przebudowa w styczniu się utrzymał (16,4 %/rok vs SPY 14,1 %, DD −16 %, 94 % okien 5-letnich), bo nowe spółki w wyborze to głównie przejęte z premią (ABMD, ALXN, AGN). Warianty PEG < 2 i trzymanie 5 lat spadły o 1–2 pp i są poniżej SPY. Hipoteza częściowo potwierdzona.
