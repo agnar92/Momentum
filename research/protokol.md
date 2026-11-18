@@ -491,3 +491,5 @@ X7 przychody (ostatni kwartał r/r) < 0 przy medianie 5 rocznych zmian > 0 (spad
 X10 X5 przez 2 kolejne kontrole (potwierdzony spadek EPS). Odniesienia: kupno bez sprzedaży (trzymaj zawsze, wolne miejsca tylko po zniknięciu spółki),
 coroczna wymiana (etap 38b), równe wagi spółek > 10 mld, SPY. 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni czas trzymania, liczba sprzedaży.
 Ograniczenie: 11,5 roku danych - kilka pełnych 5-letnich cykli trzymania. Rozpoznawcze.
+Etap 43 - dodatek rozpoznawczy PO wynikach (nie rejestrowany wcześniej): X5 lub X6 (EPS r/r < 0 lub dług / kapitał > 1) - kombinacja dwóch najlepszych pojedynczych reguł; wynik traktować jako dopasowany do danych.
+Wynik dodatku (po wynikach): X5 lub X6 -> 18,9 % rocznie, DD -29 %, Sharpe 0,99, Calmar 0,65, mediana trzymania 1 rok, 61 sprzedaży.
