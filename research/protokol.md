@@ -500,3 +500,5 @@ na członkach S&P 500 z danymi SEC (cache r59). Warianty: bez filtra; przy zakup
 dodatkowo wariant "< 0,5 lub brak danych" (brak danych przepuszczony) i wyjście także przy dług / kapitał > 1. Okres 2011-01 ... 2026-09 i od 2015-03;
 CAGR, połowy (2011-2018 / 2019-2026), maxDD, Sharpe, Calmar, różnica vs CEM10 bez filtra (bootstrap blokowy). Rozpoznawcze.
 Wynik etapu 44 (2026-11-18): filtr długu w CEM10 obniża maks. spadek o 2-5 pp; CAGR 2011-26 lekko niższy (< 1: 20,5 vs 21,7 %), 2015-26 wyższy (25,7 vs 22,8 %); wariant przepuszczający brak danych najlepszy (24,1 / 29,4 %), ale to po części efekt doboru spółek bez danych SEC.
+Etap 44b (2026-11-18, po wynikach 44, kontrola): CEM10 tylko na spółkach z danymi dług / kapitał, bez progu - rozdziela efekt dostępności danych od progu.
+Wynik etapu 44b: CEM10 tylko na spółkach z danymi o długu, bez progu: 2011-26 21,2 % / DD -30 %, 2015-26 28,4 % / -30 %; próg < 1 przy tych samych spółkach obniża do 20,5 / 25,7 %, < 0,5 do 19,8 / 24,1 % - sam próg długu nie pomaga, poprawa w 44 wynikała z doboru spółek z danymi.
