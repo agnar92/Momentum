@@ -512,3 +512,4 @@ FCF (ostatni rok) > 0; PEG (5Y exp-base) = P/E / (100 x CAGR EPS 5 lat) w (0, 1)
 Sprzedaż (użytkownik): gdy co najmniej 2 z 3: PEG > 3 (lub CAGR EPS 5 lat <= 0), wzrost przychodów 5 lat < +50 %, dług / kapitał > 1. Warianty sprzedaży: (S2) 2 z 3;
 (Sb) PEG > 3 i przychody 5 lat < 50 % (oba najważniejsze); (S1) którykolwiek z 3; (S0) nigdy. Kontrola: bez wykluczenia sektorów.
 Okres 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni udział w akcjach, mediana czasu trzymania, liczba kandydatów. Rozpoznawcze.
+Wynik etapu 45 (2026-11-18): screener przepuszcza zwykle 6 spółek; reguła 2 z 3 daje 9-15 %, sprzedaż przy którymkolwiek z 3 13,8-15,7 % (najlepszy Calmar 0,69 bez wykluczania sektorów); trzymanie bez sprzedaży 6-12 %.
