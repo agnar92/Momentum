@@ -664,3 +664,5 @@ Cele: (1) nadwyżka ceny 36 i 60 mies. (względem średniej spółek); (2) PRZYS
 przewiduje dalszą poprawę wyników). Miary: miesięczny IC Spearmana, t Neweya-Westa (lag = horyzont), znak w obu połowach startów (2012–16 / 2017–21),
 istotność po Bonferronim |t| > 3,2; kwintyle (K5 − K1). Wynik złożony: średnia rang cech wybranych w 1. połowie (|t| > 2, ten sam znak dla ceny 60 mies.),
 sprawdzony w 2. połowie (poza próbą). Hipoteza: konsekwencja wzrostu przychodów i ROIC przewiduje przyszły wzrost wyników; cena — słabiej, bo część jest w cenie.
+
+Wynik etapu 58 (2026-11-18): najmocniejsza i stabilna cecha = liczba lat (z 5) ze wzrostem przychodów > 10 % r/r: przewiduje nadwyżkę ceny 60 mies. (IC 0,12, t 7,5, obie połowy), przyszły wzrost przychodów (0,30) i jako jedyna z cech wzrostu także przyszły wzrost EPS (0,18, t 8,5). Dalej: lata z EPS r/r > 0, quick ratio, trwały ROIC > 15 %, niski dług. Chwilowa poprawa r/r (marże, ROIC, przyspieszenie) i wycena (P/E, PEG) ≈ 0. Wynik złożony poza próbą działa tylko w górnym kwintylu (+23 pp w 5 lat). Hipoteza potwierdzona dla przychodów; dla ROIC — cena tak, przyszły wzrost wyników nie.
