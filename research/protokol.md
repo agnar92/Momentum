@@ -528,3 +528,21 @@ Procedura: symulacje osobno od zera w okresie wyboru 2015-03 ... 2020-12 i w spr
 (CAGR / |maxDD|) w okresie wyboru; raport ich wyniku w sprawdzianie, korelacja rang Calmar między okresami, średni efekt każdego czynnika (różnica średnich CAGR
 po wariantach z / bez) w obu okresach osobno. Wnioski tylko z czynników o zgodnym kierunku w obu okresach. Rozpoznawcze; dane od 2015 (krótka historia).
 Wynik etapu 46 (2026-11-18): ranking wariantów niestabilny między okresami (rho ~0), ale wszystkie 5 wybranych w 2015-2020 bije SPY w 2021-2026 (19,7-22,9 % vs 15,2 %); zgodne usprawnienia: kapitalizacja > 10 mld, PEG < 2 zamiast < 1, 10 spółek zamiast 5.
+
+## Etap 47: parametry Finviz a zwroty długoterminowe - pełne badanie (zapisane 2026-11-18 PRZED uruchomieniem)
+Panel: członkowie S&P 500 z danymi SEC, koniec każdego miesiąca 2012-01 ... 2026-09, parametry znane na datę (SEC wg dat złożenia, ceny skorygowane, kapitalizacja PIT).
+Parametry (odpowiedniki Finviz możliwe do odtworzenia): wycena - P/E, E/P, forward P/E (estymata użytkownika: EPS x (1 + ważony wzrost przychodów)), PEG (EPS 5 lat),
+PEG (estymata), P/S, P/B, cena / gotówka, P/FCF, FCF yield, EV/Sales, EV/EBITDA, stopa dywidendy; wzrost - EPS TTM r/r, EPS 3 i 5 lat (CAGR), przychody kwartał r/r, TTM r/r,
+3 i 5 lat (CAGR), estymata użytkownika, wzrost dywidendy r/r; rentowność - ROA, ROE, ROIC (przybliżenie: zysk oper. x 0,79 / (kapitał + dług - gotówka)), marża brutto,
+operacyjna, netto, wypłata dywidendy / zysk; kondycja - current ratio, quick ratio, dług / kapitał, dług długoterminowy / kapitał; cenowe - zwrot 3 / 6 / 12 mies.,
+odległość od maks. 12 mies., od SMA 10 mies., zmienność 12 mies., log kapitalizacji. Niedostępne historycznie (pominięte): prognozy analityków (forward P/E, EPS next Y / 5Y),
+niespodzianki wyników, własność insiderów i instytucji, transakcje.
+Wyniki: zwrot (skorygowany) po 1, 3, 6, 12, 24, 36, 60 mies. minus średnia uniwersum (nadwyżka); dodatkowo maks. zwrot w 60 mies.
+Analizy: (1) każdy parametr osobno na całym przekroju (nie tylko top N): korelacja rang z nadwyżką dla każdego horyzontu (średnia po miesiącach startu, t Newey-West
+z lagiem = horyzont), spread kwintyli Q5 - Q1 (roczny), monotoniczność; próg istotności Bonferroniego dla ~40 parametrów x horyzont 60 mies.: |t| > 3,2;
+(2) progi Finviz dla parametrów strategii (PEG < 1 / 2 / 3, sprzedaż 5 lat > 10 / 20 / 30 %, ROE > 10 / 15 / 20 %, dług / kapitał < 0,5 / 1) - średnia nadwyżka 5-letnia
+przechodzących vs reszty; (3) pary i komplet składników strategii (PEG < 2, sprzedaż 5 lat > 30 %, ROE > 15 %, dług / kapitał < 0,5): nadwyżka par, interakcja = efekt pary - suma
+efektów pojedynczych; (4) częstotliwość przebudowy: portfel 20 % najlepszych wg wyniku modelu i wg kompletu strategii, przebudowa co 1 / 3 / 6 / 12 / 24 / 60 mies.;
+(5) model: rangi parametrów w przekroju, (a) regresja Fama-MacBeth na nadwyżce 12 i 60 mies., (b) LightGBM z treningiem kroczącym (trening do roku Y-1 z wynikiem znanym
+przed startem testu, test w roku Y) na nadwyżce 12 mies.; ocena poza próbą: IC i nadwyżka górnego kwintyla; ważność SHAP. Strona-raport z wynikami.
+Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność); 5-letnie okna od startów 2012-2021 nakładają się (efektywnie ~2 niezależne okresy).
