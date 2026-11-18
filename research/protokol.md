@@ -546,3 +546,4 @@ efektów pojedynczych; (4) częstotliwość przebudowy: portfel 20 % najlepszych
 (5) model: rangi parametrów w przekroju, (a) regresja Fama-MacBeth na nadwyżce 12 i 60 mies., (b) LightGBM z treningiem kroczącym (trening do roku Y-1 z wynikiem znanym
 przed startem testu, test w roku Y) na nadwyżce 12 mies.; ocena poza próbą: IC i nadwyżka górnego kwintyla; ważność SHAP. Strona-raport z wynikami.
 Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność); 5-letnie okna od startów 2012-2021 nakładają się (efektywnie ~2 niezależne okresy).
+Wynik etapu 47 (2026-11-18): patrz R071; dywidendy (stopa, wzrost) i EV/EBITDA niewiarygodne (kwartalne przepływy SEC są narastające - TTM rzadko z kompletu).
