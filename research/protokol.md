@@ -723,3 +723,5 @@ Wybór jak w etapie 62 (przychody 5 lat > +50 %, obsunięcie przychodów ≥ −
 Zmiany: transza 2 % konta (max 4 / mies.); nowa spółka — kolejność od najniższego PEG, bez progu (wariant: tylko PEG < 2); dokupienie trzymanej — tylko gdy PEG < 2,
 do 10 % konta; przycinanie do 10 %: (a) w styczniu, (b) gdy PEG > 3 (sprawdzane co miesiąc), (c) oba [wariant główny]; nadwyżka do SPY. Warianty: limit 15 %,
 bez NVDA. Hipoteza: z przycinaniem wynik bliżej SPY niż 20 % z etapu 62, ok. 15–17 %; bez NVDA < SPY.
+
+Wynik etapu 63 (2026-11-18): przycinanie do 10 % (styczeń / PEG > 3) + dokup 2 % przy PEG < 2: 15,2 %/rok vs SPY 14,1 %, DD −23 %, wszystkie okna 5-letnie lepsze od SPY, ale średnio tylko 41 % kapitału w spółkach (6 spółek). Bez NVDA 13,2 %. Rodzaj przycinania prawie bez znaczenia (15,2–15,6 %). Hipoteza potwierdzona (15–17 %; bez NVDA < SPY).
