@@ -563,3 +563,4 @@ przyszły CAGR przychodów 5 lat = "przychody 5 lat (CAGR)" w t + 60 (ta sama se
 estymata ważona, marża operacyjna, ROE, quick ratio, dług / kapitał. Miary: korelacja rang w każdym miesiącu startu (2012-2021), średnia i t NW (lag 60);
 kwintyle predyktora -> mediana przyszłego CAGR EPS. Druga część: korelacja przyszłego CAGR EPS 5 lat z nadwyżką ceny w tych samych 5 latach (czy EPS napędza cenę)
 oraz korelacja z nadwyżką po kontroli P/E na starcie (czy wzrost był już w cenie).
+Wynik etapu 49 (2026-11-18): przychody 5 l. przewidują przyszły EPS 5 l. (IC +0,08) i przyszłe przychody (+0,31), przeszły EPS - odwrotnie (-0,22); przyszły EPS mocno napędza cenę (+0,42), ale najlepszym 'predyktorem' przyszłego EPS jest P/E (+0,37), więc rynek już go wycenia; efekt przychodów skupiony w górnym kwintylu.

@@ -22,6 +22,7 @@ for cel in ('EPS_przyszly_5l', 'przychody_przyszle_5l', 'e60'):
 T = pd.DataFrame(rows)
 # kwintyle przychodów 5 lat -> mediana przyszłego EPS 5 lat i nadwyżki
 Z = X[['mp', 'przychody 5 lat (CAGR)', 'EPS_przyszly_5l', 'przychody_przyszle_5l', 'e60']].dropna(subset=['przychody 5 lat (CAGR)'])
+Z = Z[Z.groupby('mp').mp.transform('size') >= 20]
 Z['q'] = Z.groupby('mp')['przychody 5 lat (CAGR)'].transform(lambda s: pd.qcut(s.rank(method='first'), 5, labels=False) + 1)
 KW = Z.groupby('q').agg(przychody_5l_mediana=('przychody 5 lat (CAGR)', 'median'), EPS_przyszly_mediana=('EPS_przyszly_5l', 'median'),
                          przychody_przyszle_mediana=('przychody_przyszle_5l', 'median'), nadwyzka_ceny_5l_srednia=('e60', 'mean'), n=('e60', 'size'))
