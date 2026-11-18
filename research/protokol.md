@@ -572,3 +572,4 @@ dla porównania PE PEG z EPS 5 lat < 2. Zestawy: S0 wszystkie spółki; S1 R; S2
 Wyniki dla każdego zestawu: (a) portfel równych wag spółek zestawu ze startu t: czy pobił (i) równe wagi wszystkich spółek, (ii) SPY, po 12 i po 60 mies.
 - odsetek startów, w których pobił, średnia przewaga; (b) pojedyncza spółka: odsetek spółek zestawu, które pobiły SPY po 60 mies.; (c) lata kalendarzowe 2012-2025:
 portfel ze stycznia trzymany rok - w ilu latach pobił SPY. Średnia liczba spółek w zestawie. Ograniczenia jak etap 47 (przeżywalność, nakładające się okna).
+Wynik etapu 50 (2026-11-18): przychody +8 % co rok + dług < 1 + FCF > 0 pobijają SPY w 54 % 5-letnich okresów (wszystkie spółki 31 %); warunki ROE nie pomagają; PEG z przychodów < 1 podnosi do 72 %, ale zestaw ma średnio 2 spółki; na rok częstość pobicia 35-59 %.
