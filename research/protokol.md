@@ -715,3 +715,11 @@ warianty WB (wypada z warunków), WC (nigdy). Dodatkowo (gdyby „obsunięcie”
 Kontrola: bez najlepszej spółki i bez NVDA. Miary jak w etapie 61. Hipoteza: więcej spółek niż w etapie 61, zwrot ≈ SPY ± 2 pp.
 
 Wynik etapu 62 (2026-11-18): mediana 4 spółki; 20,0 %/rok (SPY 14,1 %), ale NVDA = 63 % portfela na koniec; bez NVDA 12,2 %; z przycinaniem pozycji do 15 % w styczniu 16,9 % (DD −27 %). Obsunięcie ceny zamiast przychodów 8,4–10,5 %. Hipoteza (≈ SPY ± 2 pp) — z NVDA odrzucona, bez NVDA potwierdzona (−1,9 pp).
+
+## Etap 63: etap 62 + przycinanie do 10 % (raz w roku lub gdy PEG > 3) i dokupowanie po 2 % przy PEG < 2 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „rebalansowanie raz do roku lub gdy PEG przekroczy 3 — wtedy ucinamy do 10 % konta; jak spadnie PEG znowu poniżej 2, dokupujemy o 2 % itd.”
+Wybór jak w etapie 62 (przychody 5 lat > +50 %, obsunięcie przychodów ≥ −20 %, dług < 1, FCF > 0, ROE > 15 % w ≥ 4 z 5), sprzedaż WA.
+Zmiany: transza 2 % konta (max 4 / mies.); nowa spółka — kolejność od najniższego PEG, bez progu (wariant: tylko PEG < 2); dokupienie trzymanej — tylko gdy PEG < 2,
+do 10 % konta; przycinanie do 10 %: (a) w styczniu, (b) gdy PEG > 3 (sprawdzane co miesiąc), (c) oba [wariant główny]; nadwyżka do SPY. Warianty: limit 15 %,
+bez NVDA. Hipoteza: z przycinaniem wynik bliżej SPY niż 20 % z etapu 62, ok. 15–17 %; bez NVDA < SPY.
