@@ -460,3 +460,13 @@ Ranking malejąco po CAGR przychodów TTM z 5 lat wśród członków S&P 500 z d
 Warianty filtrów: (a) bez filtrów, (b) kapitalizacja > 10 mld, (c) > 10 mld + dług / kapitał < 1, (d) > 10 mld + dług < 1 + ROE > 15 % (= kontrola etapu 38b).
 Przebudowa: raz w roku (marzec) i co miesiąc. Okres 2015-03 ... 2026-09; miary: CAGR, połowy, maxDD, Sharpe, Calmar, różnica vs równe wagi spółek > 10 mld. 8 wariantów.
 Wynik etapu 40 (2026-11-17): sam ranking po przychodach 5 lat bez filtrów 3,4-8,2 % (poniżej rynku); każdy filtr jakości dodaje (> 10 mld, dług < 1, ROE > 15 %) - pełny zestaw roczny 20,9 %.
+
+## Etap 41: kiedy sprzedać - które pogorszenie fundamentów zapowiada koniec wzrostu ceny (zapisane 2026-11-18 PRZED uruchomieniem, opisowe)
+Obserwacje: spółka x koniec miesiąca, członkowie S&P 500 z danymi SEC, 2012-01 ... 2025-09 (12 mies. naprzód). Podzbiór "liderzy" = zwrot 6 mies. > +30 %
+i zamknięcie nad SMA 10 (spółki, które się trzyma). Wyniki: nadwyżka zwrotu 6 i 12 mies. nad równymi wagami uniwersum; P(spadek >= 25 % od ceny w t
+w ciągu 6 mies.); P(zwrot 12 mies. < 0).
+Sygnały (znane na t): przychody - ostatni kwartał r/r < 0; spadek wzrostu r/r o >= 10 pp vs 3 mies. wcześniej (hamowanie); ważona estymata użytkownika
+niższa niż 3 mies. wcześniej; EPS TTM r/r < 0; spadek wzrostu EPS r/r o >= 10 pp vs 3 mies.; marża operacyjna TTM niższa o >= 2 pp r/r; ROE niższe o
+>= 5 pp r/r; dług / kapitał wyższy o >= 0,2 r/r; FCF niższy niż rok wcześniej; FCF < 0; P/E > 1,5 x mediana P/E z 36 mies.; technicznie: zamknięcie pod SMA 10.
+Miary: średnia nadwyżka przy sygnale vs bez, różnica z 95 % bootstrapem blokowym po miesiącach; korelacja rang wielkości ciągłych (zmiany) z nadwyżką 12 mies.
+(średnia po miesiącach, t Newey-West, lag 12); macierz korelacji rang sygnałów ciągłych między sobą. Wielokrotne testy: ~13 sygnałów x 2 grupy -> |t| > 3.
