@@ -470,3 +470,4 @@ niższa niż 3 mies. wcześniej; EPS TTM r/r < 0; spadek wzrostu EPS r/r o >= 10
 >= 5 pp r/r; dług / kapitał wyższy o >= 0,2 r/r; FCF niższy niż rok wcześniej; FCF < 0; P/E > 1,5 x mediana P/E z 36 mies.; technicznie: zamknięcie pod SMA 10.
 Miary: średnia nadwyżka przy sygnale vs bez, różnica z 95 % bootstrapem blokowym po miesiącach; korelacja rang wielkości ciągłych (zmiany) z nadwyżką 12 mies.
 (średnia po miesiącach, t Newey-West, lag 12); macierz korelacji rang sygnałów ciągłych między sobą. Wielokrotne testy: ~13 sygnałów x 2 grupy -> |t| > 3.
+Wynik etapu 41 (2026-11-18): pogorszenie fundamentów nie przewiduje słabszego zwrotu (cena już to wyceniła); hamowanie przychodów, FCF < 0 i cena pod SMA 10 ok. podwajają ryzyko spadku >= 25 % w 6 mies.; najlepszy moment wyjścia nadal cenowy.
