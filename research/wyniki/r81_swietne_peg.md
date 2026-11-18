@@ -55,3 +55,7 @@ S1 = przychody r/r < 10 % dwa lata z rzędu, S2 = mniej niż 3 z 5 lat z przycho
 
 ## Kontrola: kolejność losowa (bez progu PEG, S1), 12 losowań
 CAGR średnio 20,0 % (18,6–21,1 %), max DD średnio −32,8 % (−29,9…−35,6 %). Kolejność po PEG: 19,4 %, DD −27,1 %.
+
+## Kontrola koncentracji (wariant bez progu PEG, kolejność PEG, S1)
+Pierwsze kupno 2016-01 (wcześniej brak 5 lat danych). 184 kupna, 37 sprzedaży. Na koniec NVDA ≈ 4,1 jednostki z kapitału startowego 1 (dominuje portfel).
+Bez NVDA (NVDA nigdy nie jest „świetna”): 12,4 %/rok (SPY 14,1 %), DD −21 %, okna 60 mies. 58 %. Bez NVDA, AMZN, MPWR, LRCX, FANG: 11,1 %.
