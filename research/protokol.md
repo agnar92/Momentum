@@ -758,3 +758,6 @@ Wszechświat jak w etapie 65 (B). Co miesiąc spółka z wszechświata, której 
 (min 1 %), z rezerwy w SPY (brak rezerwy = brak kupna). Bez przycinania, bez przebudowy, bez dokupowania. Sprzedaż (warianty): X1 P/E > 50 i PEG > 3;
 X2 P/E > 40 i PEG > 3; X3 P/E > 30 i PEG > 2; X4 = X1 lub przychody r/r < 8 % dwa lata z rzędu; X0 nigdy. Pieniądze ze sprzedaży do SPY. Ponowny zakup dozwolony.
 Kontrola: bez NVDA; wielkość stała 5 % zamiast 5 %/PEG. Hipoteza: bez przebudowy wynik zależy od 1–2 spółek; sprzedaż przy wysokim P/E i PEG ≈ trzymanie (wycena IC ~0).
+Poprawka etapu 66 przed odczytem wniosków (2026-11-18): w 1. przebiegu kupowano spółki, które już spełniały warunek sprzedaży (np. NVDA 2019-11..2020-02 kupiona i sprzedana co miesiąc przy P/E ~60, PEG ~3,5). Poprawione: nie kupujemy spółki z aktywnym sygnałem sprzedaży. Wynik 1. przebiegu: wyniki/r88_bez_przebudowy_v1_blad_wejscia.md.
+
+Wynik etapu 66 (2026-11-18, po poprawce): bez przebudowy 11,1–14,4 %/rok (SPY 14,1 %), gorzej niż wagi 1/PEG z przebudową co miesiąc (15,5 %, etap 65). Rezerwa wydana głównie w 2016 (17 kupień), później brak pieniędzy na nowe spółki. Sprzedaż przy P/E > 50 i PEG > 3 obniża wynik (11,1 % vs 13,5 % bez sprzedaży); łagodniejszy próg P/E > 30 i PEG > 2 13,9 %; z warunkiem przychodów 14,4 %. Hipoteza: wycena jako wyjście ≈ trzymanie — odrzucona (X1 szkodzi, X3 ≈).

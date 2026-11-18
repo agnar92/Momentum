@@ -11,6 +11,9 @@ def sim(wyj='X1', stala=None, bez=(), log=None):
     for a, m in enumerate(mies[:-1]):
         i = im_[m]; i1 = im_[mies[a + 1]]
         pe, pg = nz(PEm[i]), nz(PEG[i])
+        def sygnal(j):
+            return {'X1': pe[j] > 50 and pg[j] > 3, 'X2': pe[j] > 40 and pg[j] > 3, 'X3': pe[j] > 30 and pg[j] > 2,
+                    'X4': (pe[j] > 50 and pg[j] > 3) or (nz(R0[i])[j] < 0.08 and nz(R1[i])[j] < 0.08), 'X0': False}[wyj]
         for j in list(poz):
             hi = {'X1': pe[j] > 50 and pg[j] > 3, 'X2': pe[j] > 40 and pg[j] > 3, 'X3': pe[j] > 30 and pg[j] > 2,
                   'X4': (pe[j] > 50 and pg[j] > 3) or (R0[i, j] < 0.08 and R1[i, j] < 0.08), 'X0': False}[wyj]
@@ -19,7 +22,7 @@ def sim(wyj='X1', stala=None, bez=(), log=None):
                 if log is not None: log.append((str(m), 'SPRZEDAJ', tick[j], round(float(PEm[i, j]), 1), round(float(PEG[i, j]), 2)))
         e = sp + sum(poz.values())
         ok = np.flatnonzero(UNI[i] & ~wyl & (pg > 0) & np.isfinite(Cv[i]) & np.isfinite(Cv[i1]))
-        ok = [j for j in ok[np.argsort(pg[ok])] if j not in poz]
+        ok = [j for j in ok[np.argsort(pg[ok])] if j not in poz and not sygnal(j)]
         for j in ok:
             w = stala if stala else min(0.10, max(0.01, 0.05 / pg[j]))
             kw = min(w * e, sp)
