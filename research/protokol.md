@@ -502,3 +502,13 @@ CAGR, połowy (2011-2018 / 2019-2026), maxDD, Sharpe, Calmar, różnica vs CEM10
 Wynik etapu 44 (2026-11-18): filtr długu w CEM10 obniża maks. spadek o 2-5 pp; CAGR 2011-26 lekko niższy (< 1: 20,5 vs 21,7 %), 2015-26 wyższy (25,7 vs 22,8 %); wariant przepuszczający brak danych najlepszy (24,1 / 29,4 %), ale to po części efekt doboru spółek bez danych SEC.
 Etap 44b (2026-11-18, po wynikach 44, kontrola): CEM10 tylko na spółkach z danymi dług / kapitał, bez progu - rozdziela efekt dostępności danych od progu.
 Wynik etapu 44b: CEM10 tylko na spółkach z danymi o długu, bez progu: 2011-26 21,2 % / DD -30 %, 2015-26 28,4 % / -30 %; próg < 1 przy tych samych spółkach obniża do 20,5 / 25,7 %, < 0,5 do 19,8 / 24,1 % - sam próg długu nie pomaga, poprawa w 44 wynikała z doboru spółek z danymi.
+
+## Etap 45: screener "low risk, high reward" ze zrzutu użytkownika (zapisane 2026-11-18 PRZED uruchomieniem)
+Kupno (wszystkie warunki, znane na datę): łączny wzrost przychodów TTM 5 lat > +50 %; przychody TTM r/r > +5 %; EPS TTM r/r > +5 %; ROE > 15 %; 0 <= dług / kapitał < 1;
+FCF (ostatni rok) > 0; PEG (5Y exp-base) = P/E / (100 x CAGR EPS 5 lat) w (0, 1); bez sektorów Financials, Materials, Energy, Utilities, Real Estate
+(GICS z /home/user/eodhd-data/gics.csv dla obecnych członków, dla pozostałych SIC z SEC submissions: 6000-6799, 1000-1499, 2900-2999, 4900-4949, 4960-4999,
+2600-2699, 2800-2829, 2840-2899, 3300-3399, 2400-2499, 3200-3299). Ranking po najniższym PEG, maks. N = 10 (dodatkowo 20) pozycji, kontrola co miesiąc
+(wariant: co kwartał luty/maj/sierpień/listopad), wolne miejsca uzupełniane kolejnymi przechodzącymi screener.
+Sprzedaż (użytkownik): gdy co najmniej 2 z 3: PEG > 3 (lub CAGR EPS 5 lat <= 0), wzrost przychodów 5 lat < +50 %, dług / kapitał > 1. Warianty sprzedaży: (S2) 2 z 3;
+(Sb) PEG > 3 i przychody 5 lat < 50 % (oba najważniejsze); (S1) którykolwiek z 3; (S0) nigdy. Kontrola: bez wykluczenia sektorów.
+Okres 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni udział w akcjach, mediana czasu trzymania, liczba kandydatów. Rozpoznawcze.
