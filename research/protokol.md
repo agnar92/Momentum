@@ -629,3 +629,5 @@ Użytkownik: „jeżeli sprzedam spółkę, to sprawdź aktualnie top 1 spółk�
 zmiana: przy sprzedaży w kontroli miesięcznej cały kapitał ze sprzedaży (max 10 % konta, nadwyżka w SPY) idzie od razu w spółkę spełniającą warunki
 z najniższym PEG, której nie mamy; brak takiej = SPY. Porównanie z etapem 54 (kapitał do SPY). Miary jak w etapie 54.
 Hipoteza: różnica < 1 pp (sprzedaży między przebudowami jest mało, a spółka z najniższym PEG nie jest lepsza od SPY).
+
+Wynik etapu 55 (2026-11-18): zastępowanie sprzedanej spółki tą z najniższym PEG nie zmienia wyniku (wagi PEG, styczeń: 14,1 % → 14,1 %, DD −24,5 → −25,7 %; co kwartał +0,3 pp; równe wagi −1,0 pp), ok. 19 zamian rocznie. Hipoteza potwierdzona.
