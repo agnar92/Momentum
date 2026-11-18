@@ -478,3 +478,4 @@ Pomysł użytkownika: trzymaj, dopóki ROE >= 10 % i nie spada r/r. Sygnały (RO
 (a) Opis jak etap 41 (nadwyżka 12 mies., P(spadek >= 25 % w 6 mies.), wszyscy i liderzy). (b) Reguła wyjścia w strategii etapu 38b (d): co marzec 10 spółek > 10 mld,
 dług < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; wyjście co miesiąc: brak (trzymaj do marca) / sygnał R1..R5 / zamknięcie pod SMA 10 / R4 lub SMA 10;
 sprzedane miejsce czeka w gotówce do marca. 2015-03 ... 2026-09; CAGR, maxDD, Sharpe, Calmar. Rozpoznawcze.
+Wynik etapu 42 (2026-11-18): wyjście przy ROE spadającym r/r i < 15 % (R5) lub ROE < 10 % (R1) lekko poprawia strategię (21,4-21,9 % vs 20,9 %, DD -35..-38 % vs -41 %, Sharpe 1,03-1,04 vs 0,96); wyjście przy każdym spadku ROE r/r (R3) za częste (6,1 %); u liderów R5 -4,6 pp/12 mies. (95 %, nie Bonferroni).
