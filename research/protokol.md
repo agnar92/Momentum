@@ -640,3 +640,5 @@ Kryteria sprzedaży (miesięcznie): K1 przychody 5 lat ≤ +50 %, K2 dług/kapit
 lub równe, limit 10 %. Przebudowa (styczeń / co kwartał): spółki spełniające 4 warunki + trzymane, którym padło < 2 kryteria; wagi 1/PEG (trzymana bez PEG
 = najmniejsza waga z listy). Po sprzedaży: SPY albo spółka z najniższym PEG (etap 55). Porównanie z etapami 54–55 (sprzedaż przy 1 kryterium).
 Hipoteza: łagodniejsza sprzedaż = mniej transakcji, wynik w granicach ±1 pp.
+
+Wynik etapu 56 (2026-11-18): sprzedaż przy 2 z 5 kryteriów jest gorsza o 1–2 pp/rok od sprzedaży przy jednym (wagi PEG, styczeń: 12,2–12,4 % vs 14,1 %; SPY 14,1 %), DD mniejszy o ok. 1 pp, portfel puchnie do 51–60 spółek. K5 z PEG > 3 czy samo P/E > 50 — bez różnicy (P/E > 50 prawie nie występuje przy tych warunkach). Hipoteza (±1 pp) odrzucona: łagodniejsza sprzedaż szkodzi.
