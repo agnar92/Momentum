@@ -479,3 +479,15 @@ Pomysł użytkownika: trzymaj, dopóki ROE >= 10 % i nie spada r/r. Sygnały (RO
 dług < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; wyjście co miesiąc: brak (trzymaj do marca) / sygnał R1..R5 / zamknięcie pod SMA 10 / R4 lub SMA 10;
 sprzedane miejsce czeka w gotówce do marca. 2015-03 ... 2026-09; CAGR, maxDD, Sharpe, Calmar. Rozpoznawcze.
 Wynik etapu 42 (2026-11-18): wyjście przy ROE spadającym r/r i < 15 % (R5) lub ROE < 10 % (R1) lekko poprawia strategię (21,4-21,9 % vs 20,9 %, DD -35..-38 % vs -41 %, Sharpe 1,03-1,04 vs 0,96); wyjście przy każdym spadku ROE r/r (R3) za częste (6,1 %); u liderów R5 -4,6 pp/12 mies. (95 %, nie Bonferroni).
+
+## Etap 43: inwestowanie długoterminowe - trzymaj, dopóki fundamenty się zgadzają; sprzedaż przy załamaniu fundamentów lub przewartościowaniu (zapisane 2026-11-18 PRZED uruchomieniem)
+Podejście użytkownika: kupno spółek dobrych fundamentalnie i trzymanie latami (bez patrzenia na wykres), sprzedaż tylko, gdy fundamenty się łamią albo spółka jest przewartościowana.
+Wybór i kupno: jak etap 38b (d) - > 10 mld, dług / kapitał < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; maks. 10 pozycji; wolne miejsca uzupełniane
+w terminach kontroli kolejnymi z bieżącego rankingu (których nie mamy i które nie mają aktywnego sygnału sprzedaży). BRAK corocznej wymiany - pozycja trwa do sygnału.
+Kontrola sygnałów raz na kwartał po sezonie raportów (luty, maj, sierpień, listopad). Sygnały sprzedaży (wszystkie znane na datę kontroli):
+X1 P/E > 1,5 x mediana P/E z 5 lat (60 mies., min. 36); X2 P/E > 2 x mediana P/E z 5 lat; X3 PEG z mediany wzrostu = P/E / (100 x mediana 5 rocznych zmian EPS TTM r/r) > 2
+(lub mediana <= 0); X4 PEG bieżący = P/E / (100 x wzrost EPS TTM r/r) > 2 (wzrost <= 0 -> sygnał X5); X5 EPS TTM r/r < 0; X6 dług / kapitał > 1;
+X7 przychody (ostatni kwartał r/r) < 0 przy medianie 5 rocznych zmian > 0 (spadek wbrew normie); X8 załamanie = X5 lub X6 lub X7; X9 załamanie lub przewartościowanie = X8 lub X2;
+X10 X5 przez 2 kolejne kontrole (potwierdzony spadek EPS). Odniesienia: kupno bez sprzedaży (trzymaj zawsze, wolne miejsca tylko po zniknięciu spółki),
+coroczna wymiana (etap 38b), równe wagi spółek > 10 mld, SPY. 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni czas trzymania, liczba sprzedaży.
+Ograniczenie: 11,5 roku danych - kilka pełnych 5-letnich cykli trzymania. Rozpoznawcze.
