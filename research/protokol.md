@@ -761,3 +761,8 @@ Kontrola: bez NVDA; wielkość stała 5 % zamiast 5 %/PEG. Hipoteza: bez przebud
 Poprawka etapu 66 przed odczytem wniosków (2026-11-18): w 1. przebiegu kupowano spółki, które już spełniały warunek sprzedaży (np. NVDA 2019-11..2020-02 kupiona i sprzedana co miesiąc przy P/E ~60, PEG ~3,5). Poprawione: nie kupujemy spółki z aktywnym sygnałem sprzedaży. Wynik 1. przebiegu: wyniki/r88_bez_przebudowy_v1_blad_wejscia.md.
 
 Wynik etapu 66 (2026-11-18, po poprawce): bez przebudowy 11,1–14,4 %/rok (SPY 14,1 %), gorzej niż wagi 1/PEG z przebudową co miesiąc (15,5 %, etap 65). Rezerwa wydana głównie w 2016 (17 kupień), później brak pieniędzy na nowe spółki. Sprzedaż przy P/E > 50 i PEG > 3 obniża wynik (11,1 % vs 13,5 % bez sprzedaży); łagodniejszy próg P/E > 30 i PEG > 2 13,9 %; z warunkiem przychodów 14,4 %. Hipoteza: wycena jako wyjście ≈ trzymanie — odrzucona (X1 szkodzi, X3 ≈).
+
+## Etap 66b: jak etap 66, ale kupno tylko przy PEG < 2 (zapisane 2026-11-18 PRZED uruchomieniem)
+Użytkownik: „jak NVDA mogła wejść z 3,3 — to za drogo, poniżej 2 to cena godziwa”. W etapie 66 nowe spółki nie miały progu PEG (wniosek z etapów 59–63).
+Teraz: kupno tylko przy PEG < 2 (warianty < 1,5 i < 1); reszta bez zmian (wielkość 5 %/PEG, bez przebudowy, wyjścia X0–X4, kontrola bez NVDA).
+Hipoteza: niższy wynik niż bez progu (więcej kapitału w SPY), mniejszy DD.
