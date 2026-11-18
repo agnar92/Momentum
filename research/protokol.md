@@ -619,3 +619,5 @@ Przebudowa do wag docelowych: co 12 mies. (styczeń), co 3 mies. (sty/kwi/lip/pa
 spółka, która nie spełnia już czterech warunków, sprzedana, pieniądze w SPY do następnej przebudowy. Koszt 0,1 % od obrotu. 2015-01..2026-09.
 Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średnia liczba spółek, średni udział w spółkach, obrót roczny; skład na 2026-09.
 Hipoteza: wagi wg PEG ≈ równe wagi (różnica < 2 pp = szum); częstsza przebudowa nie poprawia wyniku (koszty, powrót do średniej), a kontrola miesięczna zmniejsza DD.
+
+Wynik etapu 54 (2026-11-18): co miesiąc warunki spełnia mediana 39 spółek. Najlepszy wariant (wagi 1/PEG, przebudowa w styczniu, kontrola miesięczna) 14,1 %/rok = SPY 14,1 %, DD −24,5 % vs −23,9 %, 83 % okien 5-letnich lepszych od SPY. Przebudowa co kwartał gorsza (11,0–12,4 %), co miesiąc 13,1 %. Wagi wg PEG lepsze od równych o 0–1,4 pp i mniejszy DD o 3–5 pp. Hipoteza: wagi ≈ równe — potwierdzona co do CAGR; częstsza przebudowa nie pomaga — potwierdzona; kontrola miesięczna pomaga (+1,4–1,9 pp). Uwaga: wzrost przychodów 5 lat od dna COVID daje skrajnie niski PEG (RCL 0,09, UAL, DAL).
