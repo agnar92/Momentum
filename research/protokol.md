@@ -564,3 +564,11 @@ estymata ważona, marża operacyjna, ROE, quick ratio, dług / kapitał. Miary: 
 kwintyle predyktora -> mediana przyszłego CAGR EPS. Druga część: korelacja przyszłego CAGR EPS 5 lat z nadwyżką ceny w tych samych 5 latach (czy EPS napędza cenę)
 oraz korelacja z nadwyżką po kontroli P/E na starcie (czy wzrost był już w cenie).
 Wynik etapu 49 (2026-11-18): przychody 5 l. przewidują przyszły EPS 5 l. (IC +0,08) i przyszłe przychody (+0,31), przeszły EPS - odwrotnie (-0,22); przyszły EPS mocno napędza cenę (+0,42), ale najlepszym 'predyktorem' przyszłego EPS jest P/E (+0,37), więc rynek już go wycenia; efekt przychodów skupiony w górnym kwintylu.
+
+## Etap 50: teza użytkownika - jak często pobijamy rynek (zapisane 2026-11-18 PRZED uruchomieniem)
+Miara: nie wielkość zysku, lecz częstość pobicia rynku. Filtry (znane na start t, co miesiąc 2012-01 ... 2025-09): R przychody TTM rosną w KAŻDYM z ostatnich 5 lat o >= 8 %;
+D dług / kapitał 0-1; F FCF > 0; O ROE > 15 %; S ROE nie spada r/r (ROE_t >= ROE_t-12 - 1 pp); P PEG z przychodów = P/E / (100 x CAGR przychodów 5 lat) < 2 (i < 1);
+dla porównania PE PEG z EPS 5 lat < 2. Zestawy: S0 wszystkie spółki; S1 R; S2 R+D+F; S3 S2+O; S4 S3+S; S5 S4+P<2; S6 S4+P<1; S7 S4+PE<2; S8 R+D+F+P<2 (bez ROE).
+Wyniki dla każdego zestawu: (a) portfel równych wag spółek zestawu ze startu t: czy pobił (i) równe wagi wszystkich spółek, (ii) SPY, po 12 i po 60 mies.
+- odsetek startów, w których pobił, średnia przewaga; (b) pojedyncza spółka: odsetek spółek zestawu, które pobiły SPY po 60 mies.; (c) lata kalendarzowe 2012-2025:
+portfel ze stycznia trzymany rok - w ilu latach pobił SPY. Średnia liczba spółek w zestawie. Ograniczenia jak etap 47 (przeżywalność, nakładające się okna).
