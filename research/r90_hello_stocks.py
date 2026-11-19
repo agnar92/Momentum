@@ -77,7 +77,7 @@ def limit(SC, PEG, N, S, E):
 
 
 out = ['# Etap 67: strategia Lower Risk (Hello Stocks): kupno 7/7, trzymanie 6/7, sprzedaż <= 5/7', '',
-       'Wszechświat: S&P 500 PIT (ze spółkami usuniętymi), bez 5 sektorów. PEG autora jest z prognozy 5-letniej — tu przybliżenia historyczne.', '']
+       os.environ.get('OPIS', 'Wszechświat: S&P 500 PIT (ze spółkami usuniętymi)') + ', bez 5 sektorów. PEG autora jest z prognozy 5-letniej — tu przybliżenia historyczne.', '']
 for nazwa, PEG in (('PEG = P/E / historyczny wzrost EPS 5 lat', PEG_EPS), ('PEG = P/E / wzrost przychodów 5 lat', PEG_REV)):
     SC = wynik(PEG)
     lic = pd.Series({m: int((SC[im_[m]] == 7).sum()) for m in ms if pd.Period('2015-01', 'M') <= m <= KONIEC})

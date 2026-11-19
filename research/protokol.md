@@ -798,3 +798,5 @@ companyfacts dla wszystkich kandydatów: te same pozycje co dotąd + liczba akcj
 spośród spółek z danymi SEC (spółki raportujące w IFRS / 20-F bez us-gaap odpadają — ograniczenie). Ten skład zastępuje S&P 500 w łańcuchu r19 → r25 → r59 → r66 → r90
 (ścieżki przez zmienne środowiskowe, osobny cache); reguły etapu 67 bez zmian (7 kryteriów, 5 sektorów wykluczonych, 7/7 / 6/7 / ≤ 5/7, nielimitowany kapitał
 i portfel 15 / 20 / 30). Porównanie z etapem 67 (S&P 500). Hipoteza: szerszy wszechświat podnosi wynik od 2025 (więcej mniejszych zwycięzców), ale nie do +140 %.
+
+Wynik etapu 68 (2026-11-19): top 500 USA (91 spółek spoza S&P 500 w 2026-10; z 13 spółek autora spoza S&P 9 w naszym składzie — HEI, ONC, TOST, UI wypadły przez brak liczby akcji / 20-F / obroty). Od 2025-01 nielimitowany kapitał: +35,5 % (PEG z EPS) vs SPY +12,9 % przy tych samych przepływach (S&P 500: +30,8 %); portfel 15–30: od 2025 +65…+71 %, 2015–2026 17,8–19,1 %/rok (S&P 500: 18,5–19,6 %). Hipoteza potwierdzona: szerszy rynek podnosi wynik o kilka pp, nie do +140 %.

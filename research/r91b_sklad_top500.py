@@ -51,7 +51,8 @@ for m in C.index:
     s = CAP.loc[m].dropna().sort_values(ascending=False)
     top = s.index[:500]
     wiersze.append((m.to_timestamp(how='end').date().isoformat(), ','.join(sorted({baza(c) for c in top}))))
-pd.DataFrame(wiersze, columns=['date', 'tickers']).to_csv(f'{OUT}/sklady/sp500_pit_source.csv', index=False)
+W_ = pd.DataFrame(wiersze, columns=['date', 'tickers']); W_ = W_[W_.tickers.str.len() > 0]
+W_.to_csv(f'{OUT}/sklady/sp500_pit_source.csv', index=False)
 shutil.copy('/home/user/eodhd-data/ndx_czlonkostwo.csv', f'{OUT}/sklady/ndx_czlonkostwo.csv')
 n = CAP.loc['2010-01':].notna().sum(1); print('spółek z kapitalizacją: min', n.min(), 'mediana', n.median(), flush=True)
 for y in (2010, 2015, 2020, 2025):
