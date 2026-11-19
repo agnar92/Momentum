@@ -12,24 +12,32 @@ mies = [m for m in C.index if OD - 1 <= m <= DO]
 con = duckdb.connect(DB, read_only=True)
 
 # --- EPS kwartalny -> baza ceny skorygowanej ---
-Q = {}
+RAW = {}
 for fn in os.listdir(SECQ):
     d = json.load(open(os.path.join(SECQ, fn)))
     if not d or 'eps' not in d: continue
-    q = kwartaly(d['eps']['rows'])
-    if len(q) >= 8: Q[fn[:-5].replace('.', '-')] = q
-tick = [k + '.US' for k in Q]
+    RAW[fn[:-5].replace('.', '-')] = d['eps']['rows']
+tick = [k + '.US' for k in RAW]
 px = con.execute("SELECT ticker, date, close, adj FROM dc WHERE ticker IN (SELECT unnest(?::VARCHAR[])) AND date >= '2005-01-01'", [tick]).df()
 px['date'] = pd.to_datetime(px.date); px['f'] = px.adj / px.close
 FAK = {t[:-3]: g.set_index('date').f.sort_index() for t, g in px.groupby('ticker')}
+# poprawka (2026-11-19): korekta o splity KAŻDEGO wiersza (wg daty złożenia) PRZED wyliczeniem 4. kwartału = rok - Q1..Q3;
+# wcześniej korekta po kwartaly() mieszała EPS sprzed i po splicie w jednym roku (NVDA 2024: Q4 = -4,49 USD)
+Q = {}
+for k, rows in RAW.items():
+    fs = FAK.get(k)
+    if fs is None: continue
+    adj = []
+    for r in rows:
+        fa = fs.asof(pd.Timestamp(r[3]))
+        if np.isfinite(fa): adj.append([r[0], r[1], r[2] * fa] + list(r[3:]))
+    q = kwartaly(adj)
+    if len(q) >= 8: Q[k] = q
 print('spółki SEC', len(Q), 'z cenami', len(FAK), flush=True)
 rek = []
 for k, q in Q.items():
-    fs = FAK.get(k)
-    if fs is None: continue
     for e, (v, f) in q.items():
-        fa = fs.asof(pd.Timestamp(f))
-        if np.isfinite(fa): rek.append((k, pd.Timestamp(e), v * fa, pd.Timestamp(f)))
+        rek.append((k, pd.Timestamp(e), v, pd.Timestamp(f)))
 E = pd.DataFrame(rek, columns=['kod', 'end', 'eps', 'filed']).sort_values(['kod', 'end']).reset_index(drop=True)
 
 

@@ -800,3 +800,9 @@ spośród spółek z danymi SEC (spółki raportujące w IFRS / 20-F bez us-gaap
 i portfel 15 / 20 / 30). Porównanie z etapem 67 (S&P 500). Hipoteza: szerszy wszechświat podnosi wynik od 2025 (więcej mniejszych zwycięzców), ale nie do +140 %.
 
 Wynik etapu 68 (2026-11-19): top 500 USA (91 spółek spoza S&P 500 w 2026-10; z 13 spółek autora spoza S&P 9 w naszym składzie — HEI, ONC, TOST, UI wypadły przez brak liczby akcji / 20-F / obroty). Od 2025-01 nielimitowany kapitał: +35,5 % (PEG z EPS) vs SPY +12,9 % przy tych samych przepływach (S&P 500: +30,8 %); portfel 15–30: od 2025 +65…+71 %, 2015–2026 17,8–19,1 %/rok (S&P 500: 18,5–19,6 %). Hipoteza potwierdzona: szerszy rynek podnosi wynik o kilka pp, nie do +140 %.
+
+## Poprawka danych (2026-11-19): EPS przy splicie w trakcie roku finansowego
+Wykryte przy sprawdzaniu PEG dla NVDA: 4. kwartał = EPS roczny − Q1..Q3 liczony z wartości sprzed korekty o splity; przy splicie w trakcie roku (NVDA 10:1 w 06.2024)
+Q4 wychodził ujemny (−4,49 USD), EPS TTM i wzrost EPS r/r w 2025–26 = brak → kryterium K3 niespełnione (NVDA 6/7 zamiast 7/7). Członek z EPS TTM > 0 bez wzrostu
+r/r: 5,9 % obserwacji. Poprawka w r59: korekta każdego wiersza EPS (współczynnik adj/close w dniu złożenia) PRZED wyliczeniem Q4. Przeliczenie: cache top 500 i S&P 500,
+etapy 67 i 68 (wyniki przed poprawką zachowane). Etapy 31–66 korzystały z tego samego cache (EPS, P/E, PEG z EPS) — do ewentualnego przeliczenia.
