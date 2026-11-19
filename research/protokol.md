@@ -823,3 +823,13 @@ i 2018–2023; (b) portfel równych wag spółek we wzorcu przebudowywany co mie
 (kilka wielkich zwycięzców, wiele odwróceń), wzorzec PARABOLA mało trwały.
 
 Wynik etapu 69 (2026-11-19): PARABOLA (typ NVIDIA) po wykryciu daje w 36 mies. średnio −9 pp względem średniej spółki (mediana −21 pp, 35 % pobić); wzorzec prawie nie trwa (5,5 % po roku), najczęściej łapie szczyty cyklu (fundusze, półprzewodniki pamięci, surowce). STABILNY (typ Microsoft): +6 pp średnio w 36 mies., ale tylko w 2018–2023 (+10 pp), w 2012–2017 −1 pp, mediana −2 pp. Portfele: 13,7 % i 9,9 %/rok vs SPY 14,7 %, QQQ 19,6 %. Hipoteza: PARABOLA wysoka średnia / niska mediana — częściowo (średnia też ujemna); STABILNY bije średnią o kilka pp — tylko w drugiej połowie.
+
+## Etap 70: kupno tylko przy PEG < 2 i trzymanie do 5 lat — MSFT, NVDA i spółki z wzorców (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „takie spółki zaczynają zarabiać po kilku latach, np. 5, bo dopiero rynek je wycenia; dlatego ważne jest PEG i kupowanie po rozsądnej cenie;
+sprawdź, kiedy Microsoft miał PEG poniżej 2 — kupuj; tak samo NVIDIA”.
+PEG = P/E (TTM) ÷ (100 × CAGR EPS 5 lat), dane top 500 USA po poprawce EPS (etap 68); wariant z CAGR przychodów 5 lat. Dla każdego miesiąca 2012-01..2025-09:
+zwrot ceny 12 / 36 / 60 mies. naprzód (60 mies. tylko starty do 2021-09). (a) MSFT i NVDA: miesiące z PEG < 1, 1–2, ≥ 2 (lub brak PEG) — średni zwrot i nadwyżka
+nad SPY; (b) spółki we wzorcach STABILNY / PARABOLA (etap 69) oraz wszystkie spółki top 500: to samo w koszykach PEG; nadwyżka nad średnią spółek i nad SPY,
+mediana, odsetek pobić, połowy startów 2012–2016 / 2017–2021. Hipoteza: dla pojedynczych spółek (MSFT, NVDA) kupno przy PEG < 2 daje lepszy zwrot 5-letni;
+w przekroju PEG < 2 w spółkach STABILNY daje kilka pp więcej niż PEG ≥ 2, ale efekt słaby (etap 47: PEG ~ 0 dla 5 lat).
