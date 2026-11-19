@@ -807,3 +807,17 @@ Q4 wychodził ujemny (−4,49 USD), EPS TTM i wzrost EPS r/r w 2025–26 = brak 
 r/r: 5,9 % obserwacji. Poprawka w r59: korekta każdego wiersza EPS (współczynnik adj/close w dniu złożenia) PRZED wyliczeniem Q4. Przeliczenie: cache top 500 i S&P 500,
 etapy 67 i 68 (wyniki przed poprawką zachowane). Etapy 31–66 korzystały z tego samego cache (EPS, P/E, PEG z EPS) — do ewentualnego przeliczenia.
 Wynik po poprawce EPS (2026-11-19): top 500 od 2025-01 +35,9 % (PEG z EPS) / +18,1 % (PEG z przychodów), NVDA kupiona w 2025 (+91 %); S&P 500 +31,3 % / +14,6 %; portfele 15–30: 17,7–21,3 %/rok 2015–2026. Wnioski etapów 67–68 bez zmian.
+
+## Etap 69: dwa wzorce wzrostu sprzedaży i zysków — „paraboliczny” (jak NVIDIA) i „stabilny, znaczny” (jak Microsoft); czy się powtarzają w innych spółkach (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „szukamy dwóch typów wzrostowych sprzedaży: jeden jak NVIDIA — paraboliczna sprzedaż rok do roku; drugi jak Microsoft — wzrost stabilny, ale znaczny;
+przeanalizuj wykresy sprzedaży i zarobków i szukaj podobnych wzorców w innych, sprawdź, czy się powtarzają”.
+Dane: top 500 USA (etap 68), przychody i zysk netto kwartalnie z SEC → TTM znane od daty złożenia; ceny miesięczne (skorygowane). Okres: 2012-01..2026-09.
+Cechy (na koniec miesiąca, z kwartałów znanych do t): g_k = wzrost przychodów TTM r/r dla kolejnych kwartałów; g0 = ostatni, g4 = 4 kwartały wcześniej.
+PARABOLA (typ NVIDIA): g0 ≥ 30 %, przyspieszenie g0 − g4 ≥ 15 pp, zysk netto TTM > 0 i wzrost zysku TTM r/r ≥ 50 %.
+STABILNY (typ Microsoft): wszystkie g z ostatnich 12 kwartałów w [8 %, 30 %], odch. std ≤ 5 pp, zysk TTM r/r > 0 teraz, rok i dwa lata temu, marża operacyjna
+teraz ≥ marża 3 lata temu − 2 pp. Sprawdzenie kalibracji: miesiące NVDA i MSFT oznaczone wzorcem (wykres przychodów i zysku obu spółek).
+Wyniki: (a) zwrot 12 / 36 mies. naprzód spółek we wzorcu vs średnia spółek top 500 (równe wagi) i vs SPY — średnia, mediana, odsetek pobić, osobno starty 2012–2017
+i 2018–2023; (b) portfel równych wag spółek we wzorcu przebudowywany co miesiąc vs SPY, QQQ, równe wagi top 500; (c) trwałość wzorca: P(wzorzec za 12 mies. | wzorzec teraz);
+(d) lista spółek we wzorcu dziś. Hipoteza: STABILNY bije średnią spółkę o kilka pp/rok (konsekwencja wzrostu, etap 58), PARABOLA ma wysoki średni, ale niski medianowy wynik
+(kilka wielkich zwycięzców, wiele odwróceń), wzorzec PARABOLA mało trwały.
