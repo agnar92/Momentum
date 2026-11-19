@@ -806,3 +806,4 @@ Wykryte przy sprawdzaniu PEG dla NVDA: 4. kwartał = EPS roczny − Q1..Q3 liczo
 Q4 wychodził ujemny (−4,49 USD), EPS TTM i wzrost EPS r/r w 2025–26 = brak → kryterium K3 niespełnione (NVDA 6/7 zamiast 7/7). Członek z EPS TTM > 0 bez wzrostu
 r/r: 5,9 % obserwacji. Poprawka w r59: korekta każdego wiersza EPS (współczynnik adj/close w dniu złożenia) PRZED wyliczeniem Q4. Przeliczenie: cache top 500 i S&P 500,
 etapy 67 i 68 (wyniki przed poprawką zachowane). Etapy 31–66 korzystały z tego samego cache (EPS, P/E, PEG z EPS) — do ewentualnego przeliczenia.
+Wynik po poprawce EPS (2026-11-19): top 500 od 2025-01 +35,9 % (PEG z EPS) / +18,1 % (PEG z przychodów), NVDA kupiona w 2025 (+91 %); S&P 500 +31,3 % / +14,6 %; portfele 15–30: 17,7–21,3 %/rok 2015–2026. Wnioski etapów 67–68 bez zmian.
