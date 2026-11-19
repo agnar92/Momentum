@@ -18,9 +18,12 @@ def ttm(rows):
 mies = [m for m in ms if pd.Period('2012-01', 'M') <= m <= pd.Period('2026-09', 'M')]
 ME = np.array([m.to_timestamp(how='end').value for m in mies])
 P_ = np.zeros((NT, NS), bool); S_ = np.zeros((NT, NS), bool); G0 = np.full((NT, NS), np.nan)
-SER = {}                        # do wykresu
+SER = {}
+import pickle
+GOTOWE = os.path.exists(f'{SZ}/wzorce.pkl') and os.environ.get('PRZELICZ') != '1'
+if GOTOWE: P_, S_, G0, SER = pickle.load(open(f'{SZ}/wzorce.pkl', 'rb'))                        # do wykresu
 cache_k = {}
-for j, k in enumerate(kod):
+for j, k in enumerate(kod if not GOTOWE else []):
     if k in cache_k: R, N, O = cache_k[k]
     else:
         p = f'{SZ}/sec_q/{k}.json'
@@ -64,12 +67,10 @@ for j, k in enumerate(kod):
                     if len(o0) and len(o3) and len(r3): ok = o0.iloc[-1] / vals[a] >= o3.iloc[-1] / r3.ttm.iloc[-1] - 0.02
                 S_[i, j] = ok
 print('cechy gotowe', flush=True)
-r19 = open(os.path.join(HERE, 'r19_cem10.py')).read(); exec(r19.split('warianty = {')[0].split('p = pd.read_parquet')[0])
-import duckdb
-con = duckdb.connect(DB, read_only=True)
-etfm = con.execute("SELECT ticker, date, adj FROM dc WHERE ticker IN ('SPY.US','QQQ.US') AND date >= '2011-01-01'").df()
-etfm['m'] = pd.to_datetime(etfm.date).dt.to_period('M'); etfm = etfm.sort_values('date').groupby(['ticker', 'm']).adj.last().unstack(0)
-spy, qqq = etfm['SPY.US'], etfm['QQQ.US']
+import pickle; pickle.dump((P_, S_, G0, SER), open(f'{SZ}/wzorce.pkl', 'wb'))
+exec(open(os.path.join(HERE, 'r19_cem10.py')).read().split('warianty = {')[0])   # etf
+spy, qqq = etf['SPY'], etf['QQQ']
+mies = [m for m in ms if pd.Period('2012-01', 'M') <= m <= pd.Period('2026-09', 'M')]   # r19 nadpisuje 'mies'
 def fwd(h):
     F = np.full((NT, NS), np.nan); F[:-h] = Cv[h:] / Cv[:-h] - 1; return F
 out = ['# Etap 69: wzorce PARABOLA (typ NVIDIA) i STABILNY (typ Microsoft) w top 500 USA', '']

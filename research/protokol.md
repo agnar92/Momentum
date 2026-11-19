@@ -821,3 +821,5 @@ Wyniki: (a) zwrot 12 / 36 mies. naprzód spółek we wzorcu vs średnia spółek
 i 2018–2023; (b) portfel równych wag spółek we wzorcu przebudowywany co miesiąc vs SPY, QQQ, równe wagi top 500; (c) trwałość wzorca: P(wzorzec za 12 mies. | wzorzec teraz);
 (d) lista spółek we wzorcu dziś. Hipoteza: STABILNY bije średnią spółkę o kilka pp/rok (konsekwencja wzrostu, etap 58), PARABOLA ma wysoki średni, ale niski medianowy wynik
 (kilka wielkich zwycięzców, wiele odwróceń), wzorzec PARABOLA mało trwały.
+
+Wynik etapu 69 (2026-11-19): PARABOLA (typ NVIDIA) po wykryciu daje w 36 mies. średnio −9 pp względem średniej spółki (mediana −21 pp, 35 % pobić); wzorzec prawie nie trwa (5,5 % po roku), najczęściej łapie szczyty cyklu (fundusze, półprzewodniki pamięci, surowce). STABILNY (typ Microsoft): +6 pp średnio w 36 mies., ale tylko w 2018–2023 (+10 pp), w 2012–2017 −1 pp, mediana −2 pp. Portfele: 13,7 % i 9,9 %/rok vs SPY 14,7 %, QQQ 19,6 %. Hipoteza: PARABOLA wysoka średnia / niska mediana — częściowo (średnia też ujemna); STABILNY bije średnią o kilka pp — tylko w drugiej połowie.
