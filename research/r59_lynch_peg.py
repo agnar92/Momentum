@@ -322,7 +322,7 @@ print('kandydaci (miesiąc): mediana', np.median(KAND.sum(axis=1)[im_[mies[0]]:]
 
 
 # --- bilans z SEC (r55a_sec_bilans.py) -> ROE i dług / kapitał na koniec każdego miesiąca ---
-BIL = json.load(open('/home/user/ndx/bilans.json'))
+BIL = json.load(open(os.environ.get('BILANS', '/home/user/ndx/bilans.json')))
 ROE = np.full((NT, NS), np.nan); DE = np.full((NT, NS), np.nan)
 kon = {m: m.to_timestamp(how='end') for m in DECm}
 
@@ -443,7 +443,7 @@ ew0 = rowne(); ew = ew0[ew0.index > OD] / ew0[ew0.index >= OD].iloc[0]
 cm0 = cem10(); cm = cm0[cm0.index > OD] / cm0[cm0.index >= OD].iloc[0]
 sp_ = etf['SPY'][(etf['SPY'].index >= OD) & (etf['SPY'].index <= DO)]; spy = (sp_ / sp_.iloc[0])[1:]
 
-FC = json.load(open('/home/user/ndx/fcf.json'))
+FC = json.load(open(os.environ.get('FCF_JSON', '/home/user/ndx/fcf.json')))
 FCF = np.full((NT, NS), np.nan)
 for k, rows_ in FC.items():
     if not rows_: continue
@@ -458,7 +458,7 @@ print('FCF wartości', np.isfinite(FCF).sum(), flush=True)
 
 
 # --- cache wskaźników miesięcznych dla kolejnych etapów ---
-np.savez_compressed('/home/user/ndx/wskazniki_cache.npz', Cv=Cv, U=U, EPS0=EPS0, PE_=PE_, G1=G1, GRW=GRW, RQ=RQ, MPE=MPE, ROE=ROE, DE=DE, G5=G5, REV5=REV5,
+np.savez_compressed(os.environ.get('CACHE', '/home/user/ndx/wskazniki_cache.npz'), Cv=Cv, U=U, EPS0=EPS0, PE_=PE_, G1=G1, GRW=GRW, RQ=RQ, MPE=MPE, ROE=ROE, DE=DE, G5=G5, REV5=REV5,
                     FCF=FCF, GF=GF, S10=S10.to_numpy(), BEAR=np.array([bool(spy_bear.get(m, False)) for m in C.index]),
                     mies=np.array([str(m) for m in C.index]), seria=np.array(list(C.columns)))
 print('cache zapisany', flush=True)

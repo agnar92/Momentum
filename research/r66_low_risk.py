@@ -2,7 +2,7 @@
 import os, json, datetime as dt, numpy as np, pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 exec(open(os.path.join(HERE, 'r19_cem10.py')).read().split('warianty = {')[0])   # best_map, etf, blok
-Z = np.load('/home/user/ndx/wskazniki_cache.npz', allow_pickle=True)
+Z = np.load(os.environ.get('CACHE', '/home/user/ndx/wskazniki_cache.npz'), allow_pickle=True)
 Cv, U, PE_, G1, ROE, DE, G5, FCF = (Z[k] for k in ('Cv', 'U', 'PE_', 'G1', 'ROE', 'DE', 'G5', 'FCF'))
 ms = [pd.Period(x, 'M') for x in Z['mies']]; ser = list(Z['seria']); im_ = {m: i for i, m in enumerate(ms)}; cols = {s: j for j, s in enumerate(ser)}
 NT, NS = Cv.shape
@@ -12,8 +12,8 @@ r39 = open(os.path.join(HERE, 'r39_peg.py')).read(); exec(r39[r39.index('def ttm
 # przychody TTM: zmiana r/r i łączna 5 lat, znane na koniec miesiąca
 RV1 = np.full((NT, NS), np.nan); RV5 = np.full((NT, NS), np.nan)
 M0 = [m for m in ms if pd.Period('2014-06', 'M') <= m <= pd.Period('2026-09', 'M')]
-for fn in os.listdir('/home/user/ndx/sec_q'):
-    d = json.load(open(os.path.join('/home/user/ndx/sec_q', fn)))
+for fn in os.listdir(os.environ.get('SEC_Q', '/home/user/ndx/sec_q')):
+    d = json.load(open(os.path.join(os.environ.get('SEC_Q', '/home/user/ndx/sec_q'), fn)))
     if not d or 'rev' not in d: continue
     q = kwartaly(d['rev']['rows'])
     if len(q) < 8: continue
@@ -33,7 +33,7 @@ for fn in os.listdir('/home/user/ndx/sec_q'):
 print('przychody', np.isfinite(RV1).sum(), np.isfinite(RV5).sum(), flush=True)
 # sektory
 g = pd.read_csv('/home/user/eodhd-data/gics.csv'); gics = dict(zip(g.Symbol.str.replace('.', '-'), g['GICS Sector']))
-sic = json.load(open('/home/user/ndx/sic.json'))
+sic = json.load(open(os.environ.get('SIC_JSON', '/home/user/ndx/sic.json')))
 WYKL = {'Financials', 'Materials', 'Energy', 'Utilities', 'Real Estate'}
 def wykluczony(k):
     if k in gics: return gics[k] in WYKL

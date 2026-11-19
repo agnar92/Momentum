@@ -101,4 +101,4 @@ for nazwa, PEG in (('PEG = P/E / historyczny wzrost EPS 5 lat', PEG_EPS), ('PEG 
             '### (1) Nielimitowany kapitał (1 jednostka na zakup); zysk = łączny zwrot z zainwestowanych jednostek; SPY = te same wpłaty i wypłaty', '',
             T.round(3).to_markdown(index=False), '', '### (2) Portfel N miejsc, wolna gotówka w SPY', '', pd.DataFrame(L).round(3).to_markdown(index=False), '',
             f'### Spółki >= 6/7 w {KONIEC}', '', teraz.round(2).to_markdown(index=False), '']
-open(os.path.join(HERE, 'wyniki', 'r90_hello_stocks.md'), 'w').write('\n'.join(out)); print('\n'.join(out))
+open(os.path.join(HERE, 'wyniki', os.environ.get('WYNIK', 'r90_hello_stocks.md')), 'w').write('\n'.join(out)); print('\n'.join(out))
