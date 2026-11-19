@@ -835,3 +835,14 @@ mediana, odsetek pobić, połowy startów 2012–2016 / 2017–2021. Hipoteza: d
 w przekroju PEG < 2 w spółkach STABILNY daje kilka pp więcej niż PEG ≥ 2, ale efekt słaby (etap 47: PEG ~ 0 dla 5 lat).
 
 Wynik etapu 70 (2026-11-19): spółki o stabilnym wzroście (typ Microsoft) kupione przy PEG < 1 dały w 5 lat średnio +54 pp ponad średnią spółkę (mediana +53 pp, 64 % pobić SPY), przy PEG 1–2 i ≥ 2 — od −32 do −37 pp; efekt w obu połowach, ale tylko 13 różnych spółek. Dla wzorca PARABOLA i dla wszystkich spółek PEG działa słabo. MSFT: najlepsze lata zakupu (2015–2018) miały PEG ≥ 2 lub brak PEG (spadek EPS po odpisach). Hipoteza: dla pojedynczych spółek — nie (MSFT odwrotnie); w przekroju STABILNY + PEG < 2 — efekt dużo silniejszy niż zakładano, ale tylko przy PEG < 1.
+
+## Etap 71: własna prognoza wzrostu EPS na 5 lat (z historii EPS i przychodów) w PEG (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „weź przykładowe szacowanie po wzroście EPS i sprzedaży, sam oszacuj i dodaj do PEG, sprawdź wtedy”.
+Prognoza wzrostu EPS (CAGR 5 lat naprzód), dane top 500 USA po poprawce EPS: F1 historyczny CAGR EPS 5 lat; F2 CAGR przychodów 5 lat; F3 estymata ważona przychodów
+(ostatnie 4 kwartały r/r, wagi 0,1/0,2/0,3/0,4 — wzór użytkownika); F4 średnia F1 i F2; F5 model: regresja (najmniejsze kwadraty, zmienne przycięte do [−50 %, 100 %])
+przyszłego CAGR EPS 5 lat na F1, F2, F3 i wzrost EPS r/r, dopasowana na startach 2012–2016 i stosowana do wszystkich (2017+ = poza próbą); prognozy przycięte do [0, 60 %].
+Odniesienie (nieosiągalne): F* = faktyczny przyszły CAGR EPS 5 lat. PEG_k = P/E ÷ (100 × F_k).
+Miary: (a) trafność: IC Spearmana prognozy z faktycznym CAGR EPS 5 lat i średni błąd bezwzględny (starty 2012–2021); (b) jak w etapie 70: zwrot 3 i 5 lat
+wg koszyków PEG < 1 / 1–2 / ≥ 2 dla spółek STABILNY i wszystkich, nadwyżka nad średnią spółek, pobicie SPY, połowy 2012–2016 / 2017+; liczba różnych spółek.
+Hipoteza: F5 ≥ F1 w trafności, ale IC prognozy ≤ 0,3; PEG z F5 daje wyraźniejszy podział niż z F1 tylko poza próbą o kilka pp.
