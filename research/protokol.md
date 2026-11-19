@@ -848,3 +848,10 @@ wg koszyków PEG < 1 / 1–2 / ≥ 2 dla spółek STABILNY i wszystkich, nadwyż
 Hipoteza: F5 ≥ F1 w trafności, ale IC prognozy ≤ 0,3; PEG z F5 daje wyraźniejszy podział niż z F1 tylko poza próbą o kilka pp.
 
 Wynik etapu 71 (2026-11-19): najlepsza własna prognoza (model F5: wzrost przychodów + mean reversion historycznego EPS) ma IC 0,25 poza próbą (historyczny EPS −0,21). W całym top 500 PEG z każdą prognozą słabo dzieli zwroty (mediany nadwyżki ok. −15…−22 pp w każdym koszyku), tylko z faktycznym przyszłym EPS (nieosiągalne) PEG < 1 daje +94 pp. W spółkach STABILNY niski PEG pomaga przy każdej prognozie (+51…+164 pp), ale to 1–12 spółek. Hipoteza potwierdzona (F5 trafniejszy, IC ≤ 0,3; zysk zwrotu z lepszej prognozy mały w przekroju).
+
+## Etap 72: PEG z własną prognozą (model F5 i estymata przychodów F3) — MSFT, NVDA i portfel spółek stabilnych (zapisane 2026-11-19 PRZED uruchomieniem)
+Użytkownik: „jaki zysk z NVIDIA i MSFT przy takim estymowanym EPS i PEG; sprawdź też portfel spółek stabilnych z tym szacowaniem EPS do PEG”.
+(a) MSFT, NVDA: koszyki PEG (< 1, 1–2, ≥ 2) wg F5 i F3, zwrot 1 / 3 / 5 lat i nadwyżka nad SPY (jak etap 70). (b) Portfel: co roku w styczniu kupno spółek STABILNY
+(etap 69) z PEG < 1 (wariant < 2, < 1,5) wg F5 / F3 / F1, każda za 1/10 konta (max 10 pozycji, kolejność od najniższego PEG), trzymanie 5 lat (wariant: sprzedaż,
+gdy przestaje być STABILNY i PEG ≥ 3), wolna gotówka w SPY, koszt 0,1 %; 2013-01..2026-09; CAGR, DD, vs SPY / QQQ; kontrola bez najlepszej spółki.
+Hipoteza: portfel ≈ SPY ± 3 pp (mało spółek, większość w SPY).
