@@ -780,8 +780,10 @@ Wszechświat: członkowie S&P 500 PIT ze spółkami usuniętymi (autor ma szersz
 (1) Nielimitowany kapitał: każda spółka, która osiąga 7/7 i nie jest trzymana, kupowana za 1 jednostkę; trzymana dopóki ma ≥ 6/7; sprzedaż przy ≤ 5/7
 (albo koniec notowań); ponowne wejście dozwolone. Wynik okresu startującego w miesiącu S i kończącego się w E: zysk % = (wartość pozycji otwartych + wpływy ze sprzedaży)
 / suma zainwestowana − 1 (start z pustym portfelem: w S kupowane wszystkie 7/7); porównanie: te same przepływy w SPY (każda jednostka w SPY od kupna do sprzedaży lub E).
-Okresy: S = 2025-01, E = 2026-10 (ostatni pełny miesiąc cen) — weryfikacja tezy „+140 % od 2025”; oraz S = styczeń każdego roku 2015–2024 z E = S + 21 mies.
+Okresy: S = 2025-01, E = 2026-09 (ostatni miesiąc z fundamentami; poprawione przed odczytem: w 2026-10 brak danych przychodów -> wszystko sprzedawane) — weryfikacja tezy „+140 % od 2025”; oraz S = styczeń każdego roku 2015–2024 z E = S + 21 mies.
 (taka sama długość) i E = 2026-10. Także roczna stopa (IRR) strategii i SPY przy tych samych przepływach.
 (2) Portfel ograniczony: N ∈ {15, 20, 30} równych miejsc (1/N konta przy kupnie), kupno 7/7 od najniższego PEG gdy jest wolne miejsce, trzymanie ≥ 6/7, sprzedaż ≤ 5/7,
 wolna gotówka w SPY, bez przebudowy; 2015-01..2026-10, CAGR, DD, okna vs SPY; także wyniki od 2025-01.
 Hipoteza: +140 % w ~21 mies. na S&P 500 nie do odtworzenia (spodziewane rzędu +20–60 %); inne lata zmienne; portfel ograniczony ≈ SPY ± 3 pp.
+
+Wynik etapu 67 (2026-11-19): (1) nielimitowany kapitał od 2025-01 do 2026-09: +30,8 % (PEG z EPS) / +10,4 % (PEG z przychodów) vs SPY przy tych samych przepływach +12,2 / +8,3 % — teza „+140 %” nie potwierdzona na S&P 500 (autor: szerszy rynek USA i PEG z prognozy). Okna 21-mies. od stycznia 2015–2024: −4 % … +30 %. (2) Portfel 15–30 miejsc 2015–2026: 18,5–20,8 %/rok vs SPY 14,1 %, DD −22 … −34 %; bez FIX 17,3–17,7 %, bez 5 najlepszych spółek 16,1–17,0 %. Hipoteza: +140 % nie do odtworzenia — potwierdzona; portfel ograniczony ≈ SPY ± 3 pp — odrzucona (lepszy o 2–7 pp).

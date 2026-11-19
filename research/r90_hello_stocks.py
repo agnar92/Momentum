@@ -7,7 +7,7 @@ spy = etf['SPY']
 PEG_EPS = np.where((PE_ > 0) & (G5 > 0), PE_ / (100 * G5), np.nan)
 g5r = np.where(RV5 > -1, (1 + RV5) ** 0.2 - 1, np.nan)
 PEG_REV = np.where((PE_ > 0) & (g5r > 0), PE_ / (100 * g5r), np.nan)
-KONIEC = pd.Period('2026-10', 'M')
+KONIEC = pd.Period('2026-09', 'M')   # ostatni miesiąc z fundamentami (RV liczone do 2026-09)
 tick = np.array([s.split('.US')[0] for s in ser])
 
 
@@ -92,13 +92,13 @@ for nazwa, PEG in (('PEG = P/E / historyczny wzrost EPS 5 lat', PEG_EPS), ('PEG 
     T = pd.DataFrame(rows)
     L = []
     for N in (15, 20, 30):
-        L.append(dict(N=N, okres='2015-01..2026-10', **limit(SC, PEG, N, pd.Period('2015-01', 'M'), KONIEC)))
-        L.append(dict(N=N, okres='2025-01..2026-10', **limit(SC, PEG, N, pd.Period('2025-01', 'M'), KONIEC)))
+        L.append(dict(N=N, okres='2015-01..2026-09', **limit(SC, PEG, N, pd.Period('2015-01', 'M'), KONIEC)))
+        L.append(dict(N=N, okres='2025-01..2026-09', **limit(SC, PEG, N, pd.Period('2025-01', 'M'), KONIEC)))
     i = im_[KONIEC]; ok = np.flatnonzero(SC[i] >= 6)
     teraz = pd.DataFrame(dict(spolka=tick[ok], wynik=SC[i, ok], PEG=PEG[i, ok])).sort_values(['wynik', 'PEG'], ascending=[False, True])
     out += [f'## {nazwa}', '', f'Spółek 7/7 w miesiącu: mediana {lic.median():.0f} ({lic.min()}-{lic.max()}); >= 6/7: mediana {lic6.median():.0f}. '
-            f'W 2026-10: 7/7 {int((SC[i] == 7).sum())}, 6/7 {int((SC[i] == 6).sum())}.', '',
+            f'W {KONIEC}: 7/7 {int((SC[i] == 7).sum())}, 6/7 {int((SC[i] == 6).sum())}.', '',
             '### (1) Nielimitowany kapitał (1 jednostka na zakup); zysk = łączny zwrot z zainwestowanych jednostek; SPY = te same wpłaty i wypłaty', '',
             T.round(3).to_markdown(index=False), '', '### (2) Portfel N miejsc, wolna gotówka w SPY', '', pd.DataFrame(L).round(3).to_markdown(index=False), '',
-            '### Spółki >= 6/7 w 2026-10', '', teraz.round(2).to_markdown(index=False), '']
+            f'### Spółki >= 6/7 w {KONIEC}', '', teraz.round(2).to_markdown(index=False), '']
 open(os.path.join(HERE, 'wyniki', 'r90_hello_stocks.md'), 'w').write('\n'.join(out)); print('\n'.join(out))
