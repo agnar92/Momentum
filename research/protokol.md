@@ -846,3 +846,5 @@ Odniesienie (nieosiągalne): F* = faktyczny przyszły CAGR EPS 5 lat. PEG_k = P/
 Miary: (a) trafność: IC Spearmana prognozy z faktycznym CAGR EPS 5 lat i średni błąd bezwzględny (starty 2012–2021); (b) jak w etapie 70: zwrot 3 i 5 lat
 wg koszyków PEG < 1 / 1–2 / ≥ 2 dla spółek STABILNY i wszystkich, nadwyżka nad średnią spółek, pobicie SPY, połowy 2012–2016 / 2017+; liczba różnych spółek.
 Hipoteza: F5 ≥ F1 w trafności, ale IC prognozy ≤ 0,3; PEG z F5 daje wyraźniejszy podział niż z F1 tylko poza próbą o kilka pp.
+
+Wynik etapu 71 (2026-11-19): najlepsza własna prognoza (model F5: wzrost przychodów + mean reversion historycznego EPS) ma IC 0,25 poza próbą (historyczny EPS −0,21). W całym top 500 PEG z każdą prognozą słabo dzieli zwroty (mediany nadwyżki ok. −15…−22 pp w każdym koszyku), tylko z faktycznym przyszłym EPS (nieosiągalne) PEG < 1 daje +94 pp. W spółkach STABILNY niski PEG pomaga przy każdej prognozie (+51…+164 pp), ale to 1–12 spółek. Hipoteza potwierdzona (F5 trafniejszy, IC ≤ 0,3; zysk zwrotu z lepszej prognozy mały w przekroju).
