@@ -855,3 +855,5 @@ Użytkownik: „jaki zysk z NVIDIA i MSFT przy takim estymowanym EPS i PEG; spra
 (etap 69) z PEG < 1 (wariant < 2, < 1,5) wg F5 / F3 / F1, każda za 1/10 konta (max 10 pozycji, kolejność od najniższego PEG), trzymanie 5 lat (wariant: sprzedaż,
 gdy przestaje być STABILNY i PEG ≥ 3), wolna gotówka w SPY, koszt 0,1 %; 2013-01..2026-09; CAGR, DD, vs SPY / QQQ; kontrola bez najlepszej spółki.
 Hipoteza: portfel ≈ SPY ± 3 pp (mało spółek, większość w SPY).
+
+Wynik etapu 72 (2026-11-19): z prognozą F5 NVDA nigdy nie ma PEG < 2 (model przewiduje spowolnienie po szybkim wzroście EPS), MSFT tylko w 2014–2016. Portfele spółek stabilnych z PEG z własną prognozą: 12,6–15,5 %/rok vs SPY 14,6 % (QQQ 20,2 %), średnio 1–6 spółek, reszta w SPY. Hipoteza (≈ SPY ± 3 pp) potwierdzona.
