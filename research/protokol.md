@@ -768,3 +768,20 @@ Teraz: kupno tylko przy PEG < 2 (warianty < 1,5 i < 1); reszta bez zmian (wielko
 Hipoteza: niższy wynik niż bez progu (więcej kapitału w SPY), mniejszy DD.
 
 Wynik etapu 66b (2026-11-18): z progiem PEG przy kupnie i wyjściem X4 (P/E > 50 i PEG > 3 lub przychody < 8 % dwa lata): PEG < 2 14,5 %, PEG < 1,5 15,1 %, PEG < 1 15,1 % (SPY 14,1 %); bez NVDA praktycznie bez zmian (14,2 / 15,0 / 14,9 %) — po raz pierwszy wynik nie zależy od NVDA. Większość kapitału w SPY (58–70 %). Bez sprzedaży lub sprzedaż tylko po wycenie gorsze (10,8–13,3 %). Hipoteza (niższy wynik niż bez progu) odrzucona: próg przy braku przebudowy pomaga.
+
+## Etap 67: strategia „Lower Risk (Hello Stocks)” — 7 kryteriów, kupno 7/7, trzymanie 6/7, sprzedaż ≤ 5/7 (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik (PDF z zestawieniem): „wyszukuje i kupuje spółki z 7/7, trzyma, gdy mają 6/7, a gdy 5/7 — sprzedaje; autor twierdzi, że od 2025 ma 140 % zysku.
+Nielimitowany kapitał … trzymamy wszystkie i mierzymy zysk procentowy; sprawdź na inne lata; sprawdź też portfel 15–30 spółek”.
+Kryteria (na koniec miesiąca, PIT): K1 przychody 5 lat > +50 %, K2 przychody TTM r/r > 5 %, K3 EPS TTM r/r > 5 %, K4 ROE > 15 %, K5 0 ≤ dług/kapitał < 1, K6 FCF TTM > 0,
+K7 0 < PEG < 1, gdzie PEG = P/E ÷ (100 × wzrost EPS 5 lat). Autor używa PEG z PROGNOZY 5-letniej („5Y Exp-Based”), której historycznie nie mamy — przybliżenie:
+(a) historyczny CAGR EPS 5 lat [główne], (b) CAGR przychodów 5 lat. Wykluczone sektory: finanse, materiały, energia, użyteczność publiczna, nieruchomości (GICS / SIC).
+Wszechświat: członkowie S&P 500 PIT ze spółkami usuniętymi (autor ma szerszy rynek USA — ograniczenie). Brak danych dla kryterium = niespełnione.
+(1) Nielimitowany kapitał: każda spółka, która osiąga 7/7 i nie jest trzymana, kupowana za 1 jednostkę; trzymana dopóki ma ≥ 6/7; sprzedaż przy ≤ 5/7
+(albo koniec notowań); ponowne wejście dozwolone. Wynik okresu startującego w miesiącu S i kończącego się w E: zysk % = (wartość pozycji otwartych + wpływy ze sprzedaży)
+/ suma zainwestowana − 1 (start z pustym portfelem: w S kupowane wszystkie 7/7); porównanie: te same przepływy w SPY (każda jednostka w SPY od kupna do sprzedaży lub E).
+Okresy: S = 2025-01, E = 2026-10 (ostatni pełny miesiąc cen) — weryfikacja tezy „+140 % od 2025”; oraz S = styczeń każdego roku 2015–2024 z E = S + 21 mies.
+(taka sama długość) i E = 2026-10. Także roczna stopa (IRR) strategii i SPY przy tych samych przepływach.
+(2) Portfel ograniczony: N ∈ {15, 20, 30} równych miejsc (1/N konta przy kupnie), kupno 7/7 od najniższego PEG gdy jest wolne miejsce, trzymanie ≥ 6/7, sprzedaż ≤ 5/7,
+wolna gotówka w SPY, bez przebudowy; 2015-01..2026-10, CAGR, DD, okna vs SPY; także wyniki od 2025-01.
+Hipoteza: +140 % w ~21 mies. na S&P 500 nie do odtworzenia (spodziewane rzędu +20–60 %); inne lata zmienne; portfel ograniczony ≈ SPY ± 3 pp.
