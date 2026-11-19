@@ -787,3 +787,14 @@ wolna gotówka w SPY, bez przebudowy; 2015-01..2026-10, CAGR, DD, okna vs SPY; t
 Hipoteza: +140 % w ~21 mies. na S&P 500 nie do odtworzenia (spodziewane rzędu +20–60 %); inne lata zmienne; portfel ograniczony ≈ SPY ± 3 pp.
 
 Wynik etapu 67 (2026-11-19): (1) nielimitowany kapitał od 2025-01 do 2026-09: +30,8 % (PEG z EPS) / +10,4 % (PEG z przychodów) vs SPY przy tych samych przepływach +12,2 / +8,3 % — teza „+140 %” nie potwierdzona na S&P 500 (autor: szerszy rynek USA i PEG z prognozy). Okna 21-mies. od stycznia 2015–2024: −4 % … +30 %. (2) Portfel 15–30 miejsc 2015–2026: 18,5–20,8 %/rok vs SPY 14,1 %, DD −22 … −34 %; bez FIX 17,3–17,7 %, bez 5 najlepszych spółek 16,1–17,0 %. Hipoteza: +140 % nie do odtworzenia — potwierdzona; portfel ograniczony ≈ SPY ± 3 pp — odrzucona (lepszy o 2–7 pp).
+
+## Etap 68: strategia Hello Stocks na „top 500 spółek USA wg kapitalizacji” (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: autor robi „screening of the top 500 US stocks by market cap” (nie S&P 500; 13 z 60 spółek jego listy jest poza S&P 500).
+Dane: kandydaci = kody z szerokiego zbioru EODHD (14 300) ze średnimi obrotami 12 mies. w top 600 w dowolnym miesiącu od 2009 (bez warrantów / preferowanych / OTC),
+CIK: dotychczasowe mapy + lista SEC + nazwy EODHD (aktywne i wycofane) dopasowane do cik-lookup-data i sprawdzone pokryciem okresu raportów;
+companyfacts dla wszystkich kandydatów: te same pozycje co dotąd + liczba akcji (dei:EntityCommonStockSharesOutstanding, zapas us-gaap CommonStockSharesOutstanding)
+-> /home/user/ndx/szer/. Kapitalizacja = cena (niekorygowana, koniec miesiąca) × ostatnia znana liczba akcji (≤ 400 dni). Skład = 500 największych w danym miesiącu
+spośród spółek z danymi SEC (spółki raportujące w IFRS / 20-F bez us-gaap odpadają — ograniczenie). Ten skład zastępuje S&P 500 w łańcuchu r19 → r25 → r59 → r66 → r90
+(ścieżki przez zmienne środowiskowe, osobny cache); reguły etapu 67 bez zmian (7 kryteriów, 5 sektorów wykluczonych, 7/7 / 6/7 / ≤ 5/7, nielimitowany kapitał
+i portfel 15 / 20 / 30). Porównanie z etapem 67 (S&P 500). Hipoteza: szerszy wszechświat podnosi wynik od 2025 (więcej mniejszych zwycięzców), ale nie do +140 %.
