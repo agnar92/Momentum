@@ -833,3 +833,5 @@ zwrot ceny 12 / 36 / 60 mies. naprzód (60 mies. tylko starty do 2021-09). (a) M
 nad SPY; (b) spółki we wzorcach STABILNY / PARABOLA (etap 69) oraz wszystkie spółki top 500: to samo w koszykach PEG; nadwyżka nad średnią spółek i nad SPY,
 mediana, odsetek pobić, połowy startów 2012–2016 / 2017–2021. Hipoteza: dla pojedynczych spółek (MSFT, NVDA) kupno przy PEG < 2 daje lepszy zwrot 5-letni;
 w przekroju PEG < 2 w spółkach STABILNY daje kilka pp więcej niż PEG ≥ 2, ale efekt słaby (etap 47: PEG ~ 0 dla 5 lat).
+
+Wynik etapu 70 (2026-11-19): spółki o stabilnym wzroście (typ Microsoft) kupione przy PEG < 1 dały w 5 lat średnio +54 pp ponad średnią spółkę (mediana +53 pp, 64 % pobić SPY), przy PEG 1–2 i ≥ 2 — od −32 do −37 pp; efekt w obu połowach, ale tylko 13 różnych spółek. Dla wzorca PARABOLA i dla wszystkich spółek PEG działa słabo. MSFT: najlepsze lata zakupu (2015–2018) miały PEG ≥ 2 lub brak PEG (spadek EPS po odpisach). Hipoteza: dla pojedynczych spółek — nie (MSFT odwrotnie); w przekroju STABILNY + PEG < 2 — efekt dużo silniejszy niż zakładano, ale tylko przy PEG < 1.
