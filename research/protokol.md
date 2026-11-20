@@ -887,3 +887,5 @@ Użytkownik: „podobno używa jeszcze ROCE, też powyżej 15 %, jako Z5”. ROC
 (ostatnie znane, ≤ 400 dni; zobowiązania bieżące — nowe pobranie z SEC; brak zobowiązań bieżących (np. banki) = brak ROCE). Z5 = Z4 + ROCE > 15 %; dodatkowo Z3 + ROCE > 15 %
 (bez warunku rosnącego ROE). Analiza i portfel jak w etapie 74 (bez progu PEG / PEG < 2, przycinanie do 15 %, bez NVDA). Hipoteza: ROCE w dużej mierze pokrywa się z ROE i ROA
 (mało spółek odpada), zmiana wyniku w granicach szumu.
+
+Wynik etapu 75 (2026-11-20): ROCE jest silnie powiązane z ROE (0,83) i ROA (0,88). Z5 (Z4 + ROCE > 15 %): mediana nadwyżki 5 lat +22 pp (Z4 +13), ale tylko w 2017+ (+26 pp); w 2012–2016 +0,7 pp (10 spółek). Portfel z przycinaniem 17,7 % vs 16,0 % (Z4), bez NVDA 13,0 % vs 12,3 %. Hipoteza (zmiana w granicach szumu) potwierdzona — poprawa niestabilna między połowami.
