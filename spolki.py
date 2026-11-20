@@ -78,7 +78,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or "waluta" not in ex:          # stary format cache (bez waluty / MSSF) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 2 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -125,7 +125,8 @@ def ceny(tickers, log=print):
     for i in range(0, len(tickers), 100):
         part = tickers[i:i + 100]
         try:
-            d = yf.download(part, period="5y", interval="1wk", auto_adjust=True, progress=False, group_by="column", threads=True)["Close"]
+            dd_ = yf.download(part, period="5y", interval="1wk", auto_adjust=True, progress=False, group_by="column", threads=True, actions=True)
+            d, spl = dd_["Close"], dd_.get("Stock Splits")
         except Exception as e:  # noqa: BLE001
             log(f"yfinance: błąd ({e})")
             continue
@@ -133,7 +134,10 @@ def ceny(tickers, log=print):
             if t in d:
                 s = d[t].dropna()
                 if len(s) > 10:
-                    out[t] = ([x.strftime("%Y-%m-%d") for x in s.index], [round(float(v), 2) for v in s.values])
+                    sp = spl[t].fillna(0) if spl is not None and t in spl else None
+                    # splity (data, mnożnik liczby akcji) — do porównania liczby akcji w czasie (skup / rozwodnienie)
+                    sp = [(x.strftime("%Y-%m-%d"), float(v)) for x, v in sp[sp > 0].items()] if sp is not None else []
+                    out[t] = ([x.strftime("%Y-%m-%d") for x in s.index], [round(float(v), 2) for v in s.values], sp)
         log(f"ceny: {min(i + 100, len(tickers))}/{len(tickers)}")
     return out
 
@@ -157,7 +161,7 @@ def buduj(fv, ex, px, top=500):
     rows = []
     for rank, r in enumerate(lista, 1):
         t = r["ticker"]
-        m, hist = ocena.metryki(ex.get(t) or {}, r)
+        m, hist = ocena.metryki(ex.get(t) or {}, r, splity=(px.get(t) or (None, None, []))[2] if px.get(t) and len(px[t]) > 2 else [])
         sc = ocena.dcf_scenariusze(m, hist, r.get("sector"))
         m["dcf"] = sc["base"]["wartosc"] if sc else None
         m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None

@@ -889,3 +889,40 @@ Użytkownik: „podobno używa jeszcze ROCE, też powyżej 15 %, jako Z5”. ROC
 (mało spółek odpada), zmiana wyniku w granicach szumu.
 
 Wynik etapu 75 (2026-11-20): ROCE jest silnie powiązane z ROE (0,83) i ROA (0,88). Z5 (Z4 + ROCE > 15 %): mediana nadwyżki 5 lat +22 pp (Z4 +13), ale tylko w 2017+ (+26 pp); w 2012–2016 +0,7 pp (10 spółek). Portfel z przycinaniem 17,7 % vs 16,0 % (Z4), bez NVDA 13,0 % vs 12,3 %. Hipoteza (zmiana w granicach szumu) potwierdzona — poprawa niestabilna między połowami.
+
+## Etap 76: czy ocena ze strony wybiera dobre spółki, jakie wagi kategorii, nowe cechy jakości (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „czy możemy coś jeszcze określić lub dodać, żeby wyznaczyć dobrą spółkę? … sprawdzałeś korelację różnych parametrów?” + „do etapu 76 dodaj
+4 pierwsze punkty z «czego jeszcze nie badaliśmy»” (rozwodnienie / skup akcji, jakość zysku FCF ÷ zysk netto, stabilność marży brutto, momentum ceny).
+Dane: top 500 USA (etap 68, ze spółkami usuniętymi), koniec miesiąca 2012-01..2026-09, dane SEC znane w danym dniu (data złożenia); sektor: GICS (gics.csv),
+brak — z kodu SIC (zakresy jak w etapie 45, przypisane do sektorów GICS). Nowe pobranie z SEC: zysk brutto (GrossProfit, zapas: przychody − CostOfRevenue /
+CostOfGoodsAndServicesSold), aktywa bieżące, zapasy, gotówka + inwestycje krótkoterminowe.
+Wynik = nadwyżka zwrotu nad średnią spółek top 500 po 12 / 36 / 60 mies. (60 mies.: starty do 2021-09).
+
+(A) Ocena ze strony odtworzona historycznie (percentyle w sektorze, ≥ 5 spółek, brak = 50 pkt, ≥ 2 wskaźniki w grupie): Wzrost = przychody 1 r., CAGR 3 i 5 l.,
+EPS 1 r., EPS 5 l. (łącznie), lata z przychodami > 10 % (z 5); Siła = marża brutto / operacyjna / netto, ROE, ROA, ROCE, marża FCF, dług/kapitał (mniej
+lepiej), quick ratio, gotówka netto / kapitalizacja; Wycena = P/E, PEG (P/E ÷ CAGR EPS 5 l.), P/S, P/FCF (mniej lepiej), stopa FCF. Pominięte (brak historii):
+prognoza EPS analityków, potencjał DCF. Ogólna = 0,4 / 0,35 / 0,25. Miary: IC Spearmana (średnia miesięczna, t Neweya-Westa z opóźnieniem h − 1), nadwyżka
+kwintyli (K5 − K1), mediana nadwyżki K5, połowy 2012–2016 / 2017+.
+(B) Wagi: siatka wag (wzrost, siła, wycena) co 0,05, suma 1; wybór najlepszego IC 36 mies. na startach 2012–2018, sprawdzian na startach 2019–2023-09
+(36 mies.) i 2019–2021-09 (60 mies.); porównanie z 0,4 / 0,35 / 0,25 i z każdą grupą osobno.
+(C) Nowe cechy: C1 lata z EPS r/r > 0 (z 5), C2 lata z ROIC > 15 % (z 5; ROIC ≈ zysk operacyjny × 0,79 ÷ (kapitał + dług − gotówka)), C3 zmiana liczby
+akcji 3 lata (mniej = lepiej; skup), C4 FCF ÷ zysk netto (3 lata łącznie; zysk ≤ 0 = brak), C5 marża brutto (poziom) i C5b zmienność marży brutto
+(odch. std. rocznej marży z 5 lat, mniej = lepiej), C6 momentum: zwrot 3 mies., 6 mies., 12 mies. bez ostatniego (12-1). Dla każdej: IC 12 / 36 / 60 mies.,
+K5 − K1, połowy; IC częściowy po odjęciu oceny ogólnej (reszta rang z regresji na ranga oceny). Reguła przyjęcia do strony (ustalona teraz): IC 36 lub 60
+mies. o tym samym znaku w obu połowach, |t| ≥ 2 w całości i IC częściowy > 0 (po uwzględnieniu kierunku).
+Hipoteza: (A) ocena ogólna ma dodatni, ale słaby IC 60 mies. (0,03–0,08), siła i wzrost mocniejsze niż wycena; (B) najlepsze wagi przesuwają się od wyceny
+do wzrostu / siły, ale zysk poza próbą ≤ 0,02 IC; (C) C1 i C2 przechodzą regułę (etap 58), C3 słaby dodatni, C4 słaby, C5b dodatni, momentum 12-1 dodatni
+na 12 mies., ~0 na 60 mies.
+
+Wynik etapu 76 (2026-11-20): (A) ocena ogólna ze strony prawie nie przewiduje nadwyżki: IC 5 lat 0,02 (t 2,0), top 10 % spółek wg oceny — średnio +24 pp
+w 5 lat, ale mediana −17 pp (bije średnią 43 %). Siła finansowa działa (IC 5 lat 0,077, t 3,3, obie połowy), wycena ~0, wzrost liczony w sektorze ujemny
+(−0,04). (B) najlepsze wagi w próbie 0,05 / 0,95 / 0 (prawie sama siła): poza próbą IC 3 lata 0,054 vs 0,029 przy wagach strony (5 lat 0,057 vs 0,054);
+sama wycena: w próbie −0,06, poza próbą +0,14 — niestabilna. (C) regułę przechodzą: C1 lata z rosnącym zyskiem netto (IC 5 lat 0,051, t 3,2; częściowy 0,03)
+i C3 zmiana liczby akcji 3 lata — mniej akcji (skup) lepiej (IC 5 lat 0,093, t 4,9, obie połowy 0,08 / 0,10; częściowy 0,083, t 3,8; K5 − K1 +12 pp).
+Nie przechodzą: C2 lata z ROIC > 15 % (połowy z różnym znakiem), C4 FCF ÷ zysk (t 1,9), C5 marża brutto (t 1,4), C5b zmienność marży (~0), momentum 3 / 6 /
+12-1 mies. (~0). Diagnoza po wyniku (poza regułą): te same cechy rankowane w całym zbiorze zamiast w sektorze działają lepiej — lata z przychodami > 10 %
+IC 5 lat 0,058 (t 2,9) vs 0,001 w sektorze, gotówka netto / kapitalizacja 0,123 vs 0,072, marża netto 0,10 vs 0,056, quick ratio 0,084 vs −0,01; sektor
+technologiczny +66 pp nadwyżki 5 lat (pozostałe −36…−3 pp) — porównanie tylko w sektorze usuwa znaczną część sygnału. Hipoteza: (A) słabiej niż zakładano,
+siła > wycena — tak, wzrost > wycena — nie; (B) przesunięcie do siły — tak, zysk poza próbą 0,003–0,025 IC; (C) C1 tak, C2 nie, C3 silniej niż zakładano,
+C4 słaby — tak, C5b i momentum — nie.

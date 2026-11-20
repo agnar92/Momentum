@@ -50,7 +50,7 @@ def test_oceny_percentyle_w_sektorze():
     assert rows[9]["pct"]["rev_1y"] > rows[0]["pct"]["rev_1y"]
     assert rows[0]["pct"]["pe"] > rows[9]["pct"]["pe"]          # niższe P/E = lepiej
     assert rows[0]["oceny"]["ogolna"] is None                     # za mało wskaźników
-    assert rows[0]["kompletnosc"]["niepelne"] and rows[0]["kompletnosc"]["wszystkie"] == 23
+    assert rows[0]["kompletnosc"]["niepelne"] and rows[0]["kompletnosc"]["wszystkie"] == 25
 
 
 def test_strategie_i_typy():
@@ -82,7 +82,7 @@ def test_brak_danych_neutralnie_i_mediany():
     O.oceny(rows)
     o = rows[9]["oceny"]["wzrost"]
     pr = rows[9]["pct"]["rev_1y"] + rows[9]["pct"]["ni_1y"]
-    assert abs(o - round(10 * (pr + 5 * O.BRAK) / 7, 1)) < 1e-9     # brakujące wskaźniki liczone jako 50 pkt
+    assert abs(o - round(10 * (pr + 6 * O.BRAK) / 8, 1)) < 1e-9     # brakujące wskaźniki liczone jako 50 pkt
     assert rows[0]["sektor_med"]["pe"] == 14.5
 
 
@@ -114,3 +114,11 @@ def test_mloda_spolka_wzrost_z_dostepnych_lat():
     assert abs(m["ni_5y"] - (1.5 ** 5 - 1)) < 1e-2
     s = O.strategie(m, "Technology")
     assert s["7/7 (niskie ryzyko)"][0][0].endswith("(z 3,0 lat)")
+
+
+def test_zmiana_liczby_akcji_ze_splitem():
+    sh = {"2022-06-30": 100.0, "2025-06-30": 900.0}
+    # split 10:1 w 2024 -> 100 akcji = 1000 dzisiejszych; 900 = skup 10 %
+    assert abs(O.zmiana_akcji(sh, [("2024-06-10", 10.0)]) - (-0.1)) < 1e-9
+    assert O.zmiana_akcji(sh, []) is None          # bez splitu 9x więcej = poza zakresem (błąd danych)
+    assert O.zmiana_akcji({"2025-06-30": 5.0}, []) is None

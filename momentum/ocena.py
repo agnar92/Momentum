@@ -20,7 +20,7 @@ def _r(x, n=4):
     return None if x is None else round(x, n)
 
 
-def metryki(ex, fv, dzis=None):
+def metryki(ex, fv, dzis=None, splity=()):
     """ex = fundamenty.wyciag(...) (może być {}), fv = wiersz Finviz -> (wskaźniki, historia do wykresów)."""
     if ex.get("rev"):   # nieaktualne raporty SEC (ostatnie przychody > 550 dni temu, np. TM / HMC przestały składać XBRL) -> jak brak danych SEC
         ost = max(r[1] for rows in ex["rev"].values() for r in rows)
@@ -83,6 +83,12 @@ def metryki(ex, fv, dzis=None):
             a = F.wartosc_lata_temu(nt, e, lat)
             m[k] = n0 / a - 1 if a and a > 0 and n0 > 0 else None
     mlode(m, rt, nt)
+    # etap 76: lata ze wzrostem zysku netto (z 5) — zysk TTM wyższy niż rok wcześniej
+    if nt:
+        e, n0 = nt[-1]
+        zl = [F.wartosc_lata_temu(nt, e, k) if k else n0 for k in range(6)]
+        if all(x is not None for x in zl):
+            m["zysk_lata"] = sum(zl[k] > zl[k + 1] for k in range(5))
     if ft:
         m["fcf_ttm"] = ft[-1][1]
         m["fcf_margin"] = ft[-1][1] / m["rev_ttm"] if m.get("rev_ttm") else None
@@ -139,6 +145,13 @@ def metryki(ex, fv, dzis=None):
     if m.get("fcf_margin") is None and m.get("fcf_ttm") and m.get("rev_ttm"):
         m["fcf_margin"] = m["fcf_ttm"] / m["rev_ttm"]
     sh = F.chwilowe(ex.get("shares", [])) if ex.get("shares") else {}
+    m["akcje_3l"] = zmiana_akcji(sh, splity)
+    if m["akcje_3l"] is None and ex.get("sh_dil"):    # spółki bez dei (kilka klas akcji): średnia rozwodniona liczba akcji, kwartały / lata
+        dil = {}
+        for s_, e_, v_, f_ in sorted(ex["sh_dil"], key=lambda r: r[3]):
+            if (80 <= (F.D(e_) - F.D(s_)).days <= 100 or 350 <= (F.D(e_) - F.D(s_)).days <= 380) and e_ not in dil:
+                dil[e_] = v_
+        m["akcje_3l"] = zmiana_akcji(dict(sorted(dil.items())), splity)
     s_fv = m["mcap"] / p if m.get("mcap") and p else None
     m["shares"] = list(sh.values())[-1] if sh else s_fv
     if s_fv and (not m["shares"] or abs(m["shares"] / s_fv - 1) > 0.35):   # akcje kilku klas / błędny dei (np. FOX = 1) -> kapitalizacja ÷ cena
@@ -154,6 +167,25 @@ def metryki(ex, fv, dzis=None):
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
         hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0)])
     return m, hist
+
+
+def zmiana_akcji(sh, splity=()):
+    """Etap 76: zmiana liczby akcji w 3 lata (ujemna = skup, dodatnia = rozwodnienie), skorygowana o splity [(data, mnożnik)]."""
+    if not sh:
+        return None
+    pkt = sorted(sh.items())
+    e0, s0 = pkt[-1]
+    cel = F.D(e0) - dt.timedelta(days=round(3 * 365.25))
+    z = [(e, v) for e, v in pkt if abs((F.D(e) - cel).days) <= 120]
+    if not z or not s0:
+        return None
+    e3, s3 = min(z, key=lambda x: abs((F.D(x[0]) - cel).days))
+    mn = 1.0
+    for d, r in splity or ():
+        if F.D(e3) < F.D(d) <= F.D(e0) and r > 0:
+            mn *= r
+    zm = s0 / (s3 * mn) - 1 if s3 and s3 > 0 else None
+    return zm if zm is not None and -0.6 < zm < 3 else None
 
 
 def mlode(m, rt, nt):
@@ -213,8 +245,9 @@ def _pct(x):
 
 # --- oceny względem sektora --------------------------------------------------------------------------------------
 GRUPY = {
-    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1)],
-    "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1)],
+    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1)],
+    "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1),
+             ("akcje_3l", -1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
 

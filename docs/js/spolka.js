@@ -146,12 +146,13 @@
               ${w("Przychody 3 lata (łącznie)" + (m.hist_lat < 3 ? zl : ""), pz(m.rev_3y) + " · rocznie " + pr(m.rev_cagr3), "rev_cagr3", ["rev_cagr3", pr, "rocznie"])}${w("Zysk netto 3 lata", pz(m.ni_3y))}
               ${w("Przychody 5 lat (łącznie)" + zl, pz(m.rev_5y) + " · rocznie " + pr(m.rev_cagr5), "rev_cagr5", ["rev_cagr5", pr, "rocznie"])}${w("Zysk netto 5 lat" + (zl && W.ok(m.ni_5y) ? " (przeliczony na 5 lat)" : ""), pz(m.ni_5y), "ni_5y", ["ni_5y", pz])}
               ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5", ["eps_next5", pr])}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? W.fmtNum(m.rev_lata_10, Number.isInteger(m.rev_lata_10) ? 0 : 1) + (m.rev_lata_n ? ` (przeliczone z ${m.rev_lata_n} lat)` : "") : "–", "rev_lata_10", ["rev_lata_10", cal])}
+              ${w("Lata ze wzrostem zysku netto (z 5)", W.ok(m.zysk_lata) ? m.zysk_lata : "–", "zysk_lata", ["zysk_lata", cal])}
               <div class="wiersz"><span>Ocena wzrostu</span>${oc(K.oceny.wzrost)}</div>${sklad("wzrost")}</div>
             <div class="kol k-sila"><div class="naglowek-kol">🛡️ Siła finansowa</div>
               ${w("Marża brutto", pr(m.gm), "gm", ["gm", pr])}${w("Marża operacyjna", pr(m.om), "om", ["om", pr])}${w("Marża netto", pr(m.nm), "nm", ["nm", pr])}
               ${w("ROE", pr(m.roe), "roe", ["roe", pr])}${w("ROA", pr(m.roa), "roa", ["roa", pr])}${w("ROIC", pr(m.roic), null, ["roic", pr])}${w("ROCE", pr(m.roce), "roce", ["roce", pr])}
               ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD · marża " + pr(m.fcf_margin), "fcf_margin", ["fcf_margin", pr, "(marża FCF)"])}${w("Dług / kapitał", W.fmtNum(m.de), "de", ["de", nm2])}
-              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}
+              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}${w("Liczba akcji, zmiana 3 lata", W.ok(m.akcje_3l) ? pz(m.akcje_3l) + (m.akcje_3l < -0.005 ? " (skup akcji)" : m.akcje_3l > 0.005 ? " (nowe akcje)" : "") : "–", "akcje_3l", ["akcje_3l", pz])}
               <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
               ${w("P/E", W.fmtNum(m.pe), "pe", ["pe", nm2])}${w("Forward P/E", W.fmtNum(m.fpe), null, ["fpe", nm2])}${w("P/S", W.fmtNum(m.ps), "ps", ["ps", nm2])}${w("P/B", W.fmtNum(m.pb), null, ["pb", nm2])}
