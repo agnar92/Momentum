@@ -962,3 +962,29 @@ przychodów 3 l. +19, P/E +17, skup akcji +15 (G5: 46 % bije średnią vs 35 % w
 Niezgodne połowy: zysk 5 l., ROA, ROE, ROCE, marża operacyjna i brutto, dług, lata ze wzrostem zysku, PEG (2012–2016 wysoki PEG lepiej, 2017+ gorzej), momentum.
 Średnie ciągną najlepsze spółki: odsetek spółek bijących średnią w G5 to 38–49 %. Hipoteza: schodki dla lat z przychodami, marż (FCF, netto), gotówki, skupu — tak;
 ROE / ROA — nie (niestabilne); brak schodka dla P/E i P/S — nie (wyższa wycena była lepsza), dla przychodów 1 r. i momentum — tak.
+
+## Etap 79: szukanie bez założeń — ok. 50 cech z raportów i cen, wybór na 2012–2016, sprawdzian na 2017+ (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „nadal robisz podsumowanie moich, zamiast sprawdzić, co tak naprawdę ma znaczenie”. Zbiór jak w etapie 76 (top 500 USA PIT bez wykluczonych sektorów).
+Cechy: wszystkie z etapów 76–78 + nowe: log kapitalizacji; wzrost aktywów 1 r.; wzrost kapitału własnego 3 l.; zysk brutto / aktywa; narosty (zysk − przepływy
+operacyjne) / aktywa; capex / przychody; zapasy r/r − przychody r/r; gotówka / aktywa; current ratio; książkowa / rynkowa (kapitał / kapitalizacja); EV / przychody;
+stopa zysku (zysk / kapitalizacja); zmiana marży operacyjnej 1 r. i 3 l.; zmiana marży brutto 3 l.; zmiana ROE 3 l.; przyspieszenie przychodów (1 r. − CAGR 3 l.);
+przyspieszenie zysku; najgorszy rok przychodów z 5; zmienność rocznego wzrostu przychodów (5 l.); maks. spadek przychodów TTM w 5 l.; zmienność zysku (5 l.);
+dźwignia operacyjna (wzrost zysku operacyjnego − wzrost przychodów, 3 l.); wzrost zysku 3 l.; przychody ostatni kwartał r/r i jego przyspieszenie (kwartał r/r −
+ten sam 4 kwartały wcześniej); zmiana liczby akcji 1 r.; zwrot ceny 3 l. i 5 l. (odwrócenie długoterminowe); zmienność ceny 12 mies.; odległość od maks. 12 mies.
+Metoda: (1) każda cecha osobno: IC Spearmana i G5 − G1 (kwintyle) dla nadwyżki 3 i 5 lat; okres WYBORU = starty 2012-01..2016-12, SPRAWDZIAN = starty 2017-01..
+(2021-09 dla 5 l., 2023-09 dla 3 l.). „Odkrycie” = |t NW| ≥ 2 w wyborze i ten sam znak w sprawdzianie z |IC| ≥ połowa IC z wyboru. (2) Model LightGBM (płytkie
+drzewa, 200 drzew, uczenie 0,03, liście ≥ 200 obs.) na rangach cech (w miesiącu) → ranga nadwyżki 5 l.; uczenie na wyborze, ocena na sprawdzianie: IC, nadwyżka
+najlepszej piątki (G5) i porównanie z oceną ogólną strony (wersja z etapu 77) na tych samych startach; ważność cech = spadek IC po przemieszaniu cechy (sprawdzian).
+Uwaga: zwroty okresu wyboru (do 2021) częściowo nakładają się w czasie na zwroty sprawdzianu (od 2017).
+Hipoteza: odkrycia ≤ 10 cech, w tym gotówka netto / płynność, marża FCF, konsekwencja przychodów, zysk brutto / aktywa (znany czynnik), wzrost aktywów (ujemny);
+model poza próbą IC 0,05–0,10, lepszy od oceny strony o ≤ 0,03.
+
+Wynik etapu 79 (2026-11-20): odkrycia (5 lat; |t| ≥ 2 w 2012–2016 i ten sam znak w 2017+): skup akcji 3 l. (IC 0,082 / 0,104) i 1 r., marża FCF (0,115 / 0,070;
+G5 − G1 +47 / +56 pp), marża netto i operacyjna, lata z przychodami > 10 % (0,074 / 0,052), CAGR przychodów 5 l., lata ze wzrostem zysku, wielkość (0,052 / 0,145),
+niska zmienność kursu, oraz ujemne: szybki wzrost kapitału własnego 3 l. (−0,078 / −0,100) i zapasy rosnące szybciej niż sprzedaż; dla 3 lat dodatkowo capex /
+przychody ujemnie (−0,029 / −0,106; w 5 l. sprawdzian −0,130, G5 − G1 −59 pp). Zmieniły znak między okresami: ROE, ROA, ROCE, zmiana ROE (2012–2016 ujemne, 2017+
+mocno dodatnie), wskaźnik księgowa / rynkowa (2017+ −0,164: tanie „value” przegrywały), zwrot 3–5 l., zmienność zysku; gotówka netto i quick ratio silne w 2012–2016,
+słabsze w 2017+. Model LightGBM poza próbą (2017–2021): IC 0,126 (t 2,3) vs ocena strony 0,076 (t 4,3), ale najlepsza piątka modelu +14,6 pp vs strony +27,3 pp;
+najważniejsze w modelu: wielkość, księgowa / rynkowa, gotówka / aktywa, capex / przychody, maks. spadek przychodów 5 l., skup akcji, marża operacyjna. Hipoteza:
+≤ 10 odkryć — 12 (5 l.); gotówka / płynność — tylko w 2012–2016; zysk brutto / aktywa — nie; wzrost aktywów — nie; model lepszy o ≤ 0,03 — o 0,05 IC, ale gorsza piątka.
