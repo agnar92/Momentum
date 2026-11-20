@@ -879,3 +879,5 @@ K4 ROE > 15 %, K5 ROA (zysk netto TTM / aktywa) > 10 %, K6 ROE teraz > ROE 60 mi
 (max 4 / mies.), max 10 % na spółkę przy kupnie, kolejność od najniższego PEG (P/E ÷ CAGR przychodów 5 lat), warianty: bez progu PEG / PEG < 2; dokupowanie przy tych samych
 warunkach; sprzedaż przy załamaniu (przychody r/r < 5 % teraz i rok temu lub dług/kapitał > 1); gotówka w SPY; 2013-01..2026-09; wariant z przycinaniem do 15 % w styczniu;
 bez NVDA. Hipoteza: Z3 / Z4 dają kilka pp nad średnią spółek w 5 lat; portfel ≈ SPY + 0–3 pp; K6 (ROE rośnie) bez efektu (etap 58: Δ ROE słabe).
+
+Wynik etapu 74 (2026-11-20): warunki jakości działają narastająco: mediana nadwyżki 5 lat nad średnią spółkę: Z1 −21 pp, Z2 −12, Z3 +1, Z4 (ROE rośnie vs 5 lat temu) +13 pp, w obu połowach (+15 / +13 pp), 77 spółek. Hipoteza: Z3/Z4 kilka pp — potwierdzona (więcej niż zakładano); K6 bez efektu — odrzucona (rosnące ROE dodaje najwięcej). Portfel Z4 20,5–22,8 %/rok, ale NVDA = 69–73 % portfela; bez NVDA 12,3 %, z przycinaniem do 15 % 16,0 % (SPY 14,6 %).
