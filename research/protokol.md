@@ -868,3 +868,5 @@ Dane top 500 USA (etap 68). STABILNA = przychody TTM r/r w [10 %, 18 %] teraz, 1
 PARABOLICZNA przy PEG < 1 (część paraboliczna max 30 % konta); dokupowanie trzymanych przy tych samych progach; trzymanie bez limitu czasu; sprzedaż tylko przy załamaniu:
 przychody r/r < 5 % teraz i rok temu albo dług/kapitał > 1; wolna gotówka w SPY. PEG = P/E ÷ (100 × CAGR EPS 5 lat) [wariant: ÷ CAGR przychodów 5 lat].
 Warianty: tylko STABILNE; tylko PARABOLICZNE; obie; bez NVDA. CAGR, DD, vs SPY / QQQ / równe wagi top 500. Hipoteza: (A) przewaga STABILNEJ rośnie z horyzontem; (B) obie ≈ SPY + 0–3 pp.
+
+Wynik etapu 73 (2026-11-20): (A) przewaga spółek o stabilnym wzroście 10–18 % nie rośnie wyraźnie z horyzontem (1 rok −4,8 pp, 3 lata −1,9, 5 lat +2,4 pp; 10 lat — 7 spółek, niewiarygodne); paraboliczne: wysoka średnia, ujemna mediana. Takie spółki to 1,2 % top 500 (3 lata z rzędu 10–18 %). (B) Portfele 10,5–13,2 %/rok vs SPY 14,6 %. Hipoteza (A) odrzucona, (B) — wynik poniżej SPY (gorzej niż zakładano).
