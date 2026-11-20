@@ -26,7 +26,7 @@
         h += wiersz("Typ spółki", K.map((k) => esc(k.typy && k.typy[0] ? k.typy[0][0] : "–")));
         h += wiersz("Kompletność danych", K.map((k) => (k.kompletnosc ? `${k.kompletnosc.niepelne ? "⚠ " : ""}${k.kompletnosc.liczone}/${k.kompletnosc.wszystkie}` : "–")), K.map((k) => (k.kompletnosc ? k.kompletnosc.liczone : null)));
         h += wiersz("Kapitalizacja", K.map((k) => W.fmtUsd(k.m.mcap)), K.map((k) => k.m.mcap));
-        h += sek("Oceny (0–10, na tle sektora)");
+        h += sek("Oceny (0–10, na tle 500 spółek)");
         for (const [g, n] of [["ogolna", "Ocena ogólna"], ["wzrost", "Wzrost"], ["sila", "Siła finansowa"], ["wycena", "Wycena (wyżej = taniej)"]]) {
             h += wiersz(n, K.map((k) => { const r = W.miejsce(LISTA, k.t, (x) => x.o && x.o[g]); return oc(k.oceny[g]) + (r ? `<br><span class="mut male">miejsce ${r.miejsce} z ${r.z}</span>` : ""); }), K.map((k) => k.oceny[g]));
         }

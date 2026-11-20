@@ -20,7 +20,7 @@ def _r(x, n=4):
     return None if x is None else round(x, n)
 
 
-def metryki(ex, fv, dzis=None):
+def metryki(ex, fv, dzis=None, splity=()):
     """ex = fundamenty.wyciag(...) (może być {}), fv = wiersz Finviz -> (wskaźniki, historia do wykresów)."""
     if ex.get("rev"):   # nieaktualne raporty SEC (ostatnie przychody > 550 dni temu, np. TM / HMC przestały składać XBRL) -> jak brak danych SEC
         ost = max(r[1] for rows in ex["rev"].values() for r in rows)
@@ -83,6 +83,26 @@ def metryki(ex, fv, dzis=None):
             a = F.wartosc_lata_temu(nt, e, lat)
             m[k] = n0 / a - 1 if a and a > 0 and n0 > 0 else None
     mlode(m, rt, nt)
+    # reguła użytkownika: fundamenty słabną 2 lata z rzędu (przychody lub zysk TTM r/r < 0 teraz i rok wcześniej) — etap 77: −4 pp w 5 lat
+    def _rr(seria, lat):
+        if not seria:
+            return None
+        e, v = seria[-1]
+        a = F.wartosc_lata_temu(seria, e, lat) if lat else v
+        b = F.wartosc_lata_temu(seria, e, lat + 1)
+        return a / b - 1 if a is not None and b and b > 0 else None
+    spadki = []
+    for nazwa, s in (("przychody", rt), ("zysk netto", nt)):
+        r0, r1 = _rr(s, 0), _rr(s, 1)
+        if r0 is not None and r1 is not None and r0 < 0 and r1 < 0:
+            spadki.append(nazwa)
+    m["spadek_2l"] = spadki or None
+    # etap 76: lata ze wzrostem zysku netto (z 5) — zysk TTM wyższy niż rok wcześniej
+    if nt:
+        e, n0 = nt[-1]
+        zl = [F.wartosc_lata_temu(nt, e, k) if k else n0 for k in range(6)]
+        if all(x is not None for x in zl):
+            m["zysk_lata"] = sum(zl[k] > zl[k + 1] for k in range(5))
     if ft:
         m["fcf_ttm"] = ft[-1][1]
         m["fcf_margin"] = ft[-1][1] / m["rev_ttm"] if m.get("rev_ttm") else None
@@ -139,6 +159,13 @@ def metryki(ex, fv, dzis=None):
     if m.get("fcf_margin") is None and m.get("fcf_ttm") and m.get("rev_ttm"):
         m["fcf_margin"] = m["fcf_ttm"] / m["rev_ttm"]
     sh = F.chwilowe(ex.get("shares", [])) if ex.get("shares") else {}
+    m["akcje_3l"] = zmiana_akcji(sh, splity)
+    if m["akcje_3l"] is None and ex.get("sh_dil"):    # spółki bez dei (kilka klas akcji): średnia rozwodniona liczba akcji, kwartały / lata
+        dil = {}
+        for s_, e_, v_, f_ in sorted(ex["sh_dil"], key=lambda r: r[3]):
+            if (80 <= (F.D(e_) - F.D(s_)).days <= 100 or 350 <= (F.D(e_) - F.D(s_)).days <= 380) and e_ not in dil:
+                dil[e_] = v_
+        m["akcje_3l"] = zmiana_akcji(dict(sorted(dil.items())), splity)
     s_fv = m["mcap"] / p if m.get("mcap") and p else None
     m["shares"] = list(sh.values())[-1] if sh else s_fv
     if s_fv and (not m["shares"] or abs(m["shares"] / s_fv - 1) > 0.35):   # akcje kilku klas / błędny dei (np. FOX = 1) -> kapitalizacja ÷ cena
@@ -154,6 +181,25 @@ def metryki(ex, fv, dzis=None):
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
         hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0)])
     return m, hist
+
+
+def zmiana_akcji(sh, splity=()):
+    """Etap 76: zmiana liczby akcji w 3 lata (ujemna = skup, dodatnia = rozwodnienie), skorygowana o splity [(data, mnożnik)]."""
+    if not sh:
+        return None
+    pkt = sorted(sh.items())
+    e0, s0 = pkt[-1]
+    cel = F.D(e0) - dt.timedelta(days=round(3 * 365.25))
+    z = [(e, v) for e, v in pkt if abs((F.D(e) - cel).days) <= 120]
+    if not z or not s0:
+        return None
+    e3, s3 = min(z, key=lambda x: abs((F.D(x[0]) - cel).days))
+    mn = 1.0
+    for d, r in splity or ():
+        if F.D(e3) < F.D(d) <= F.D(e0) and r > 0:
+            mn *= r
+    zm = s0 / (s3 * mn) - 1 if s3 and s3 > 0 else None
+    return zm if zm is not None and -0.6 < zm < 3 else None
 
 
 def mlode(m, rt, nt):
@@ -195,14 +241,14 @@ def mlode(m, rt, nt):
 
 
 def rozklady(rows):
-    """{sektor: {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
+    """{"wszystkie": {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
     out = {}
     for g, pola in GRUPY.items():
         for p, _ in pola:
             for r in rows:
                 v = r["m"].get(p)
                 if v is not None and not (p in ("pe", "peg", "pfcf", "ps") and v <= 0):
-                    out.setdefault(r["sector"], {}).setdefault(p, []).append(round(v, 4))
+                    out.setdefault("wszystkie", {}).setdefault(p, []).append(round(v, 4))
     return {s: {p: sorted(v) for p, v in d.items() if len(v) >= 5} for s, d in out.items()}
 
 
@@ -213,23 +259,26 @@ def _pct(x):
 
 # --- oceny względem sektora --------------------------------------------------------------------------------------
 GRUPY = {
-    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1)],
-    "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1)],
+    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1)],
+    "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1),
+             ("akcje_3l", -1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
 
 
-def percentyle(rows, pole, kier, grupa="sector"):
-    """Dla każdego wiersza: percentyl wartości `pole` w jego sektorze (0..1, 1 = najlepiej wg kierunku), None gdy brak."""
+def percentyle(rows, pole, kier, grupa=None):
+    """Dla każdego wiersza: percentyl wartości `pole` wśród wszystkich spółek (grupa=None; etap 77, decyzja użytkownika: odniesienie do całej 500)
+    albo w jego grupie (np. grupa="sector"); 0..1, 1 = najlepiej wg kierunku, None gdy brak."""
+    klucz = (lambda r: r[grupa]) if grupa else (lambda r: "wszystkie")
     od_sek = {}
     for r in rows:
         v = r["m"].get(pole)
         if v is not None and not (pole in ("pe", "peg", "pfcf", "ps") and v <= 0):
-            od_sek.setdefault(r[grupa], []).append(v)
+            od_sek.setdefault(klucz(r), []).append(v)
     out = []
     for r in rows:
         v = r["m"].get(pole)
-        lst = od_sek.get(r[grupa], [])
+        lst = od_sek.get(klucz(r), [])
         if v is None or len(lst) < 5 or (pole in ("pe", "peg", "pfcf", "ps") and v <= 0):
             out.append(None)
             continue
@@ -421,10 +470,13 @@ def dcf_scenariusze(m, hist=None, sektor=None):
 ETYKIETY = [(0.40, "Bardzo tania"), (0.15, "Niedowartościowana"), (-0.15, "Wyceniona uczciwie"), (-0.40, "Droga"), (-9, "Bardzo droga")]
 
 
+PEG_PROGI = [(0.5, "Bardzo tania"), (1, "Niedowartościowana"), (2, "Wyceniona uczciwie"), (3, "Droga")]
+
+
 def etykieta(pot, peg=None):
-    """Etykieta wyceny z potencjału DCF (wartość / cena − 1), zapas: PEG."""
+    """Etykieta wyceny: najpierw PEG (użytkownik: „na pierwszym planie PEG”; < 0,5 / < 1 / < 2 / < 3 / ≥ 3), zapas: potencjał DCF."""
+    if peg is not None and peg > 0:
+        return next((t for p, t in PEG_PROGI if peg < p), "Bardzo droga")
     if pot is not None:
         return next(t for p, t in ETYKIETY if pot >= p)
-    if peg is not None and peg > 0:
-        return "Niedowartościowana" if peg < 1 else "Wyceniona uczciwie" if peg < 2 else "Droga" if peg < 3 else "Bardzo droga"
     return None

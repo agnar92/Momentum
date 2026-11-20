@@ -149,6 +149,10 @@ def wyciag(facts):
     out["debt"] = dl
     sh = [[x["end"], x["val"], x["filed"]] for x in facts.get("dei", {}).get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])]
     out["shares"] = [r for r in sh if r[1] and r[1] > 0]
+    # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
+    out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
+                     if "start" in x and x["val"]]
+    out["v"] = 2
     return out
 
 
@@ -156,9 +160,11 @@ def przelicz(ex, kurs):
     """Kwoty wyciągu × kurs (waluta -> USD, jeden bieżący kurs dla całej historii: dynamika wzrostu jak w walucie spółki)."""
     if not kurs or kurs == 1:
         return ex
-    out = {"waluta": "USD", "waluta_zrodlo": ex.get("waluta"), "kurs": kurs, "shares": ex.get("shares", [])}
+    bez = ("waluta", "waluta_zrodlo", "kurs", "shares", "sh_dil", "v")      # bez przeliczania (liczby akcji, metadane)
+    out = {k: ex[k] for k in bez if k in ex}
+    out.update(waluta="USD", waluta_zrodlo=ex.get("waluta"), kurs=kurs)
     for k, d in ex.items():
-        if k in ("waluta", "waluta_zrodlo", "kurs", "shares"):
+        if k in bez:
             continue
         out[k] = {t: [r[:-2] + [r[-2] * kurs, r[-1]] for r in rows] for t, rows in d.items()}
     return out
