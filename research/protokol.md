@@ -1031,3 +1031,26 @@ poniżej mediany) 17,2–17,3 %; P3 (P1 lub 2 z 3 pogorszeń) 13,5–15,0 %. Bez
 dokupowania 15,0 % (SPY 14,0 %), z dokupowaniem 11,4 % (dokupowanie tanich SBUX, LUV); 2020–2026 bez 21,4 %, z 22,6 % (SPY 15,5 %, QQQ 20,8 %).
 Hipoteza: dokupowanie +0–2 pp — nie (≈ 0 w całości, −3,6 pp w 2013–2019, +1,2 pp w 2020–2026; koncentruje portfel); P1 ≈ P3 — nie (P3 −3…−5 pp, sprzedaje
 za wcześnie); P2 gorzej — tak (−1 pp); ≈ etap 80 S2 ± 2 pp — tak; bez NVDA SPY + 0–3 pp — tak (+1,6…+2,4 pp).
+
+## Etap 82: sygnały ostrzegawcze — co wyprzedza załamanie kursu dobrych spółek i czy sprzedaż na sygnale poprawia portfel (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, jakie parametry sprawiają pogorszenie ceny, żeby spodziewać się załamania i sprzedać spółkę”. Zbiór jak w etapie 80 (≥ 5 lat na giełdzie).
+Próba: spółki „dobre” — ocena ogólna w top 30 % zbioru w danym miesiącu (to, co mogłoby być w portfelu). Wynik: nadwyżka zwrotu nad średnią zbioru w 12 mies.
+i „załamanie” = nadwyżka 12 mies. ≤ −30 pp. Sygnały (stan na koniec miesiąca): Z1 przychody ostatniego kwartału r/r < 0; Z2 wzrost przychodów 12 mies. spadł
+o ≥ 10 pp vs rok wcześniej; Z3 marża operacyjna spadła o ≥ 3 pp r/r; Z4 zysk netto r/r < 0; Z5 ocena ogólna spadła o ≥ 1,5 pkt w 12 mies.; Z6 ocena siły spadła
+o ≥ 2 pkt w 12 mies.; Z7 kurs ≥ 30 % poniżej maks. 12 mies.; Z8 kurs poniżej średniej 10 mies.; Z9 zwrot 6 mies. ≤ −20 %; Z10 PEG > 3; Z11 P/E > 1,5 × mediana
+własnego P/E z 36 mies.; Z12 liczba akcji +3 % r/r (emisja); Z13 zapasy rosną o ≥ 10 pp szybciej niż przychody; Z14 FCF < 0; Z15 (odniesienie) fundamenty słabną
+2 lata z rzędu. Miary: dla każdego sygnału — średnia nadwyżka 12 mies. z sygnałem vs bez, odsetek załamań z sygnałem vs bez (krotność), liczba obserwacji;
+okres WYBORU starty 2013–2018, SPRAWDZIAN 2019–2025-09. Sygnał „ostrzegawczy” = w wyborze nadwyżka z sygnałem niższa o ≥ 5 pp (t ≥ 2, błąd grupowany po miesiącach)
+i ten sam znak w sprawdzianie. Portfel: strategia z etapu 81 bez dokupowania (sprzedaż P1) + dodatkowa sprzedaż przy każdym sygnale ostrzegawczym osobno
+i przy dwóch najlepszych łącznie; CAGR, DD, połowy 2013–2019 / 2020–2026, bez NVDA.
+Hipoteza: sygnały cenowe (Z7–Z9) i spadek oceny (Z5, Z6) wskazują gorszą przyszłość o kilka pp, ale jako reguła sprzedaży nie poprawiają portfela (sprzedają
+zwycięzców w korektach); wycena (Z10, Z11) — słaby sygnał; Z1 / Z3 — ostrzegawcze, poprawa portfela ≤ 1 pp.
+
+Wynik etapu 82 (2026-11-20): żaden sygnał nie przeszedł reguły ostrzegawczej. Dla dobrych spółek (ocena top 30 %) nadwyżka 12 mies. z sygnałem vs bez: w wyborze
+od −6 pp (emisja akcji, t −1,0) do +41 pp (P/E > 1,5 × własna mediana), w sprawdzianie od −43 pp (spadek oceny siły, 3 obs.) do +14 pp; odsetek załamań (≤ −30 pp)
+z sygnałem 6–24 % vs bez 10–17 % — sygnały cenowe (kurs −30 % od szczytu, zwrot 6 mies. ≤ −20 %) nieco częściej poprzedzają dalsze spadki (14–21 % vs 10–15 %),
+ale średnio bez gorszego zwrotu (odbicia). Portfel (P1 18,4 %/rok): każdy dodatkowy sygnał sprzedaży poza dwoma obniżył wynik — przychody kwartału r/r < 0: 13,4 %,
+spadek wzrostu przychodów: 13,2 %, spadek oceny: 14,3 %, kurs −30 % od szczytu: 14,4 %, kurs poniżej średniej 10 mies.: 15,3 % (DD −30 %), PEG > 3: 16,9 %;
+emisja akcji > 3 % r/r 19,5 % i FCF < 0 19,0 % (poprawa po fakcie, bez sprawdzenia w połowach). Hipoteza: sygnały cenowe nie poprawiają portfela — tak; Z1 / Z3
+ostrzegawcze — nie (Z1 −5 pp w portfelu); wycena słaba — tak (w wyborze wysokie P/E wręcz lepiej).
