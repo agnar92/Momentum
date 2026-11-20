@@ -174,8 +174,24 @@ def percentyle(rows, pole, kier, grupa="sector"):
     return out
 
 
+BRAK = 0.5                       # punkty (percentyl) za wskaźnik bez danych
+POLA_MEDIAN = [p for pola in GRUPY.values() for p, _ in pola] + ["fpe", "pb", "div", "roic"]
+
+
+def mediany(rows):
+    """{sektor: {pole: mediana}} — punkt odniesienia przy każdym wskaźniku na karcie spółki (np. typowe P/E w sektorze)."""
+    out = {}
+    for s in {r["sector"] for r in rows}:
+        g = [r["m"] for r in rows if r["sector"] == s]
+        out[s] = {}
+        for p in POLA_MEDIAN:
+            v = sorted(x[p] for x in g if x.get(p) is not None and not (p in ("pe", "fpe", "peg", "pfcf", "ps", "pb") and x[p] <= 0))
+            out[s][p] = (v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2) if len(v) >= 5 else None
+    return out
+
+
 def oceny(rows):
-    """Uzupełnia r['pct'] (percentyle wskaźników) i r['oceny'] (wzrost, siła, wycena, ogólna; 0-10)."""
+    """Uzupełnia r['pct'] (percentyle wskaźników), r['oceny'] (wzrost, siła, wycena, ogólna; 0-10) i r['sektor_med'] (mediany sektora)."""
     for r in rows:
         m = r["m"]
         m["net_cash_mc"] = m["net_cash"] / m["mcap"] if m.get("net_cash") is not None and m.get("mcap") else None
@@ -191,13 +207,17 @@ def oceny(rows):
         o = {}
         for g, pola in GRUPY.items():
             v = [r["pct"][p] for p, _ in pola if r["pct"].get(p) is not None]
-            o[g] = round(10 * sum(v) / len(v), 1) if len(v) >= 2 else None
+            # brak danych = neutralne 50 pkt (środek sektora): brakujące wskaźniki nie zawyżają ani nie zaniżają oceny
+            o[g] = round(10 * (sum(v) + BRAK * (len(pola) - len(v))) / len(pola), 1) if len(v) >= 2 else None
         w = [(o[g], wg) for g, wg in (("wzrost", 0.4), ("sila", 0.35), ("wycena", 0.25)) if o[g] is not None]
         o["ogolna"] = round(sum(a * b for a, b in w) / sum(b for _, b in w), 1) if len(w) == 3 or (len(w) == 2 and o["wzrost"] is not None) else None
         r["oceny"] = o
         # niepełne dane (młoda spółka, emitent zagraniczny bez raportów us-gaap): < 75 % wskaźników albo w którejś kategorii < 60 % jej wskaźników
         slabe = [g for g, pola in GRUPY.items() if sum(1 for p, _ in pola if r["pct"].get(p) is not None) < 0.6 * len(pola)]
         r["kompletnosc"] = dict(liczone=n, wszystkie=wszystkie, niepelne=n < 0.75 * wszystkie or bool(slabe), kategorie=slabe)
+    med = mediany(rows)
+    for r in rows:
+        r["sektor_med"] = med.get(r["sector"], {})
 
 
 # --- typ spółki (kategorie Petera Lyncha, reguły własne) -------------------------------------------------------------

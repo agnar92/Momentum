@@ -75,35 +75,38 @@
 
     function metryki() {
         const m = M, p = K.pct || {};
-        const w = (n, v, pole) => {
+        const S = K.sektor_med || {};
+        // n: nazwa, v: wartość (tekst), pole: percentyl (ocena), med: [pole mediany, formatowanie, dopisek]
+        const w = (n, v, pole, med) => {
             const d = pole ? W.opisPercentyla(p[pole]) : null;
-            return `<div class="wiersz"><span>${n}: <b>${v}</b></span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
+            const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana sektora: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
+            return `<div class="wiersz"><span>${n}: <b>${v}</b><br>${mtxt}</span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
         };
-        const pr = (x) => W.fmtPct(x, 1), pz = (x) => W.fmtPct(x, 1, true);
+        const pr = (x) => W.fmtPct(x, 1), pz = (x) => W.fmtPct(x, 1, true), nm2 = (x) => W.fmtNum(x), cal = (x) => W.fmtNum(x, 0);
         const sklad = (g) => {
             const s = W.skladOceny(p, g);
             return `<details class="sklad"><summary>Jak powstała ocena ${W.fmtNum(K.oceny[g], 1)} (${s.liczone} wskaźników)</summary>
-              ${s.el.map((x) => `<div class="pkt ${x.pkt === null ? "nie-liczy" : ""}"><span>${esc(x.nazwa)}</span><span class="pas"><i style="width:${x.pkt || 0}%"></i></span><b>${x.pkt === null ? "–" : x.pkt}</b></div>`).join("")}
-              <div class="mut" style="margin-top:6px">Punkty = percentyl w sektorze ${esc(K.sector || "")} (100 = najlepsza spółka sektora). Ocena = średnia punktów ÷ 10; „–” = brak danych, nie liczy się.</div></details>`;
+              ${s.el.map((x) => `<div class="pkt ${x.pkt === null ? "nie-liczy" : ""}"><span>${esc(x.nazwa)}</span><span class="pas"><i style="width:${x.pkt || 0}%"></i></span><b title="${x.pkt === null ? "brak danych — liczone jako 50 pkt (środek sektora)" : ""}">${x.pkt === null ? "50*" : x.pkt}</b></div>`).join("")}
+              <div class="mut" style="margin-top:6px">Punkty = percentyl w sektorze ${esc(K.sector || "")} (100 = najlepsza spółka sektora). Ocena = średnia punktów ÷ 10; 50* = brak danych, liczone neutralnie jako środek sektora (żeby brak danych nie zawyżał ani nie zaniżał oceny).</div></details>`;
         };
-        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie z innymi spółkami sektora ${esc(K.sector || "")} w 500 największych (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej).</div>
+        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie z innymi spółkami sektora ${esc(K.sector || "")} w 500 największych (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej). Pod wartością: mediana sektora, np. typowe P/E w tej branży.</div>
           <div class="kol3">
             <div class="kol k-wzrost"><div class="naglowek-kol">📈 Wzrost</div>
-              ${w("Przychody 1 rok (12 mies.)", pz(m.rev_1y), "rev_1y")}${w("Przychody kwartał r/r", pz(m.rev_q_yoy))}${w("Zysk netto 1 rok", pz(m.ni_1y), "ni_1y")}
-              ${w("Przychody 3 lata (łącznie)", pz(m.rev_3y), "rev_cagr3")}${w("Zysk netto 3 lata", pz(m.ni_3y))}
-              ${w("Przychody 5 lat (łącznie)", pz(m.rev_5y), "rev_cagr5")}${w("Zysk netto 5 lat", pz(m.ni_5y), "ni_5y")}
-              ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5")}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? m.rev_lata_10 : "–", "rev_lata_10")}
+              ${w("Przychody 1 rok (12 mies.)", pz(m.rev_1y), "rev_1y", ["rev_1y", pz])}${w("Przychody kwartał r/r", pz(m.rev_q_yoy))}${w("Zysk netto 1 rok", pz(m.ni_1y), "ni_1y", ["ni_1y", pz])}
+              ${w("Przychody 3 lata (łącznie)", pz(m.rev_3y) + " · rocznie " + pr(m.rev_cagr3), "rev_cagr3", ["rev_cagr3", pr, "rocznie"])}${w("Zysk netto 3 lata", pz(m.ni_3y))}
+              ${w("Przychody 5 lat (łącznie)", pz(m.rev_5y) + " · rocznie " + pr(m.rev_cagr5), "rev_cagr5", ["rev_cagr5", pr, "rocznie"])}${w("Zysk netto 5 lat", pz(m.ni_5y), "ni_5y", ["ni_5y", pz])}
+              ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5", ["eps_next5", pr])}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? m.rev_lata_10 : "–", "rev_lata_10", ["rev_lata_10", cal])}
               <div class="wiersz"><span>Ocena wzrostu</span>${oc(K.oceny.wzrost)}</div>${sklad("wzrost")}</div>
             <div class="kol k-sila"><div class="naglowek-kol">🛡️ Siła finansowa</div>
-              ${w("Marża brutto", pr(m.gm), "gm")}${w("Marża operacyjna", pr(m.om), "om")}${w("Marża netto", pr(m.nm), "nm")}
-              ${w("ROE", pr(m.roe), "roe")}${w("ROA", pr(m.roa), "roa")}${w("ROIC", pr(m.roic))}${w("ROCE", pr(m.roce), "roce")}
-              ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD", "fcf_margin")}${w("Dług / kapitał", W.fmtNum(m.de), "de")}
-              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD", "net_cash_mc")}${w("Quick ratio", W.fmtNum(m.qr), "qr")}
+              ${w("Marża brutto", pr(m.gm), "gm", ["gm", pr])}${w("Marża operacyjna", pr(m.om), "om", ["om", pr])}${w("Marża netto", pr(m.nm), "nm", ["nm", pr])}
+              ${w("ROE", pr(m.roe), "roe", ["roe", pr])}${w("ROA", pr(m.roa), "roa", ["roa", pr])}${w("ROIC", pr(m.roic), null, ["roic", pr])}${w("ROCE", pr(m.roce), "roce", ["roce", pr])}
+              ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD · marża " + pr(m.fcf_margin), "fcf_margin", ["fcf_margin", pr, "(marża FCF)"])}${w("Dług / kapitał", W.fmtNum(m.de), "de", ["de", nm2])}
+              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}
               <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
-              ${w("P/E", W.fmtNum(m.pe), "pe")}${w("Forward P/E", W.fmtNum(m.fpe))}${w("P/S", W.fmtNum(m.ps), "ps")}${w("P/B", W.fmtNum(m.pb))}
-              ${w("PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg")}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf")}
-              ${w("Stopa FCF", pr(m.fcf_yield), "fcf_yield")}${w("Stopa dywidendy", pr(m.div))}${w("Potencjał DCF", pz(m.dcf_pot), "dcf_pot")}
+              ${w("P/E", W.fmtNum(m.pe), "pe", ["pe", nm2])}${w("Forward P/E", W.fmtNum(m.fpe), null, ["fpe", nm2])}${w("P/S", W.fmtNum(m.ps), "ps", ["ps", nm2])}${w("P/B", W.fmtNum(m.pb), null, ["pb", nm2])}
+              ${w("PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg", ["peg", nm2])}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf", ["pfcf", nm2])}
+              ${w("Stopa FCF", pr(m.fcf_yield), "fcf_yield", ["fcf_yield", pr])}${w("Stopa dywidendy", pr(m.div), null, ["div", pr])}${w("Potencjał DCF", pz(m.dcf_pot), "dcf_pot", ["dcf_pot", pz])}
               <div class="wiersz"><span>Ocena wyceny</span>${oc(K.oceny.wycena)}</div>${sklad("wycena")}</div>
           </div>`;
     }

@@ -125,11 +125,13 @@
         wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
             ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
     };
-    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze) i ocena = średnia / 10
+    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze); brak danych = neutralne 50 pkt; ocena = średnia / 10
+    const BRAK = 0.5;
     function skladOceny(pct, grupa) {
         const el = GRUPY[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
         const z = el.filter((x) => x.pkt !== null);
-        const ocena = z.length >= 2 ? Math.round(10 * z.reduce((a, x) => a + pct[x.pole], 0) / z.length * 10) / 10 : null;
+        const suma = z.reduce((a, x) => a + pct[x.pole], 0) + BRAK * (el.length - z.length);
+        const ocena = z.length >= 2 ? Math.round(10 * suma / el.length * 10) / 10 : null;
         return { el, ocena, liczone: z.length };
     }
     // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością

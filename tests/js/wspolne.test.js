@@ -55,7 +55,7 @@ test("TTM z kwartałów", () => {
 
 test("skład oceny = średnia percentyli / 10 (jak Python), miejsce w rankingu", () => {
     const s = W.skladOceny({ rev_1y: 0.9, rev_cagr3: 0.7, ni_1y: null }, "wzrost");
-    assert.strictEqual(s.ocena, 8);
+    assert.strictEqual(s.ocena, Math.round(10 * (0.9 + 0.7 + 5 * 0.5) / 7 * 10) / 10);   // 5 brakujących po 50 pkt
     assert.strictEqual(s.liczone, 2);
     assert.strictEqual(s.el.find((x) => x.pole === "rev_1y").pkt, 90);
     const rows = [{ t: "A", o: 5 }, { t: "B", o: 9 }, { t: "C", o: null }];

@@ -73,3 +73,13 @@ def test_kwartaly_52_tygodniowe_z_16_tygodniowym_q4():
             ["2025-09-01", "2026-05-10", 300, "2026-06-01"], ["2025-09-01", "2026-08-30", 440, "2026-10-01"]]
     q = F.kwartalne(rows)
     assert q["2026-08-30"] == 140 and F.ttm(q) == [("2026-08-30", 440)]
+
+
+def test_brak_danych_neutralnie_i_mediany():
+    rows = [dict(sector="T", m=dict(rev_1y=0.1 * i, rev_cagr3=0.05 * i, ni_1y=0.02 * i, pe=10.0 + i, mcap=1e9)) for i in range(10)]
+    rows[9]["m"]["rev_cagr3"] = None          # najlepsza spółka bez jednego wskaźnika
+    O.oceny(rows)
+    o = rows[9]["oceny"]["wzrost"]
+    pr = rows[9]["pct"]["rev_1y"] + rows[9]["pct"]["ni_1y"]
+    assert abs(o - round(10 * (pr + 5 * O.BRAK) / 7, 1)) < 1e-9     # brakujące wskaźniki liczone jako 50 pkt
+    assert rows[0]["sektor_med"]["pe"] == 14.5

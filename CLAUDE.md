@@ -27,7 +27,7 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
 3. yfinance weekly closes, 5 years (adjusted) → price chart and 1W / 1M / 1Y / 5Y returns.
 4. `ocena.metryki` (growth 1Y / 3Y / 5Y TTM, quarter y/y, years with revenue > 10 % of last 5, margins / ROE / ROA / ROIC from Finviz, ROCE = operating
    income TTM / (assets − current liabilities), ROE now (SEC) vs 5 years ago, FCF TTM and margin, net cash, PEG = P/E ÷ (100 × Finviz EPS next 5Y));
-   `oceny` = percentile of each metric within its **sector** (≥ 5 peers), group score = mean × 10: Wzrost (growth), Siła (strength), Wycena (value; high =
+   `oceny` = percentile of each metric within its **sector** (≥ 5 peers), group score = mean × 10 with a missing metric counted as 0.5 (`BRAK`, neutral; user: missing data inflated scores, e.g. RDDT growth 9.7 from 4 of 7 metrics); `mediany` = sector medians shown under every metric on the card (`sektor_med`, user: „P/E powinien być do sektora”): Wzrost (growth), Siła (strength), Wycena (value; high =
    cheap), Ogólna = 0.4 / 0.35 / 0.25 (needs growth + one other group); `typy` = Lynch categories by own rules with fit 0–100; `strategie` = checklists
    from research: **7/7 (niskie ryzyko)** (the Hello-Stocks-style screen, stage 67–68: rev 5Y > +50 %, rev and earnings 1Y > 5 %, ROE > 15 %, D/E 0–1,
    FCF > 0, PEG 0–1; excluded sectors Financial, Basic Materials, Energy, Utilities, Real Estate), **Jakość (7 kryteriów)** (stages 74–75: rev 5Y CAGR > 8 %,
