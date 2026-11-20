@@ -361,7 +361,7 @@ def strategie(m, sektor):
           ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
           ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
           ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
-          ("PEG 0–1", m.get("peg"), m.get("peg") is not None and 0 < m["peg"] < 1)]
+          ("PEG 0–2", m.get("peg"), m.get("peg") is not None and 0 < m["peg"] < 2)]   # użytkownik: „daj te 7/7 kryteriów PEG do 2” (wcześniej 0–1)
     jak = [("Przychody 5 lat > 8 %/rok" + zl, m.get("rev_cagr5"), _gt(m.get("rev_cagr5"), 0.08)),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
