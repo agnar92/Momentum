@@ -988,3 +988,26 @@ mocno dodatnie), wskaźnik księgowa / rynkowa (2017+ −0,164: tanie „value�
 słabsze w 2017+. Model LightGBM poza próbą (2017–2021): IC 0,126 (t 2,3) vs ocena strony 0,076 (t 4,3), ale najlepsza piątka modelu +14,6 pp vs strony +27,3 pp;
 najważniejsze w modelu: wielkość, księgowa / rynkowa, gotówka / aktywa, capex / przychody, maks. spadek przychodów 5 l., skup akcji, marża operacyjna. Hipoteza:
 ≤ 10 odkryć — 12 (5 l.); gotówka / płynność — tylko w 2012–2016; zysk brutto / aktywa — nie; wzrost aktywów — nie; model lepszy o ≤ 0,03 — o 0,05 IC, ale gorsza piątka.
+
+## Etap 80: strategia ze strony — kupno spółek z najwyższą oceną przy uczciwej wycenie i reguły sprzedaży (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „jak byś wybierał akcje o najwyższym score i uczciwej wycenie, czy ta strategia zarabia i kiedy sprzedać? To jest teraz najważniejsze”.
+Zbiór: top 500 USA PIT bez wykluczonych sektorów (etap 76), tylko spółki z kursem sprzed ≥ 60 mies. (≥ 5 lat na giełdzie). Ocena ogólna jak na stronie
+(percentyle w całym zbiorze; wzrost: przychody 1 r., CAGR 3 / 5 l., zysk 1 r. / 5 l., lata z przychodami > 10 %, lata ze wzrostem zysku; siła: marże brutto /
+operacyjna / netto, ROE, ROA, ROCE, marża FCF, dług/kapitał, quick ratio, gotówka netto / kapitalizacja, zmiana liczby akcji 3 l., capex / przychody, wzrost
+kapitału 3 l.; wycena: P/E, PEG, P/S, P/FCF, stopa FCF; wagi 0,4 / 0,35 / 0,25). PEG historyczny = P/E ÷ (100 × CAGR zysku netto 5 l.) — prognozy analityków
+(używane na stronie) nie mają historii. Portfel co miesiąc, 2013-01..2026-09, koszt 0,1 % przy transakcji, równe wagi przy kupnie (1 / N konta), wolne miejsca
+uzupełniane spółkami z najwyższą oceną spełniającymi warunek kupna, gotówka w SPY.
+Kupno (K): ocena ogólna w top 10 % zbioru i PEG 0–2 (warianty: PEG 0–1; bez progu PEG; top 20 %). N = 20 (warianty 10, 30).
+Sprzedaż (S): S0 nigdy (tylko wycofanie z obrotu); S1 ocena spada poza top 30 %; S2 fundamenty słabną 2 lata z rzędu (przychody lub zysk r/r < 0 teraz i rok
+wcześniej); S3 PEG > 3 lub ujemny zysk; S4 = S2 lub S3; S5 co rok w styczniu sprzedaż spółek niespełniających warunku kupna.
+Miary: CAGR, maks. obsunięcie, średni czas trzymania, średnia liczba spółek, odsetek kapitału w spółkach; vs SPY, QQQ, równe wagi zbioru; połowy 2013–2019 /
+2020–2026; kontrola bez najlepszej spółki (NVDA). Hipoteza: K + S0/S2 ≈ SPY + 0–4 pp/rok; S1 (sprzedaż po spadku oceny) gorzej niż S0 przez koszty i wcześniejszą
+sprzedaż zwycięzców; S3 (PEG > 3) obcina zwycięzców — gorzej niż S0; S2 ≈ S0 ± 1 pp.
+
+Wynik etapu 80 (2026-11-20): kupno top 10 % oceny + PEG 0–2, N = 20, 2013-01..2026-09 (SPY 14,6 %/rok, QQQ 20,2 %, równe wagi 13,8 %): S0 nigdy 16,0 %
+(DD −29 %; tylko 24 zakupy — portfel z 2013 r.), S1 spadek oceny 16,7 %, S2 fundamenty słabną 2 lata 20,1 % (DD −36 %, mediana trzymania 24 mies.), S3 PEG > 3
+16,1 %, S4 (S2 lub S3) 16,9 %, S5 roczna przebudowa 16,3 %. Bez NVDA: S0 16,0 %, S2 16,4 %. Połowy: 2013–2019 S0 14,5 %, S2 13,2 %, S4 13,4 % (SPY 14,0 %);
+2020–2026 S0 14,9 %, S2 17,7 %, S3 22,1 %, S4 24,3 % (SPY 15,5 %, QQQ 20,8 %). PEG 0–1 + S0 30,9 % i N = 30 + S0 29,3 % to efekt NVDA (63–78 % portfela).
+Hipoteza: K + S0/S2 ≈ SPY + 0–4 pp — tak (+1,4 / +5,5 pp, bez NVDA +1,4 / +1,8 pp); S1 gorzej niż S0 — nie (podobnie); S3 obcina zwycięzców — w całości ≈ S0,
+w 2020–2026 lepiej; S2 ≈ S0 ± 1 pp — nie, S2 +4 pp (głównie NVDA i 2020–2026; w 2013–2019 −1,3 pp).
