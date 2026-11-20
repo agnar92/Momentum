@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metoda · Momentum</title>
+<link rel="stylesheet" href="css/styl.css">
+<link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+<header class="gora"><div class="w">
+  <a class="logo" href="index.html">Momen<span>tum</span></a>
+  <nav><a href="index.html">Spółki</a><a class="akt" href="metoda.html">Metoda</a></nav>
+</div></header>
+<main class="main" style="max-width:900px">
+<section class="karta">
+  <h2>Jak liczymy</h2>
+  <p><b>Spółki.</b> 500 największych spółek notowanych w USA wg kapitalizacji (Finviz), odświeżane co tydzień. Wskaźniki bieżące i prognozy analityków — Finviz;
+  historia przychodów, zysków, przepływów i bilansu — raporty SEC (pierwsza publikacja); ceny — Yahoo Finance.</p>
+  <p><b>Oceny 0–10.</b> Każdy wskaźnik porównujemy z innymi spółkami tego samego sektora (percentyl). Ocena grupy to średnia percentyli × 10:</p>
+  <ul>
+    <li><b>Wzrost</b> — przychody 1 rok, średni roczny wzrost przychodów 3 i 5 lat, zysk 1 i 5 lat, prognoza EPS 5 lat, liczba lat z przychodami &gt; 10 %.</li>
+    <li><b>Siła finansowa</b> — marże (brutto, operacyjna, netto), ROE, ROA, ROCE, marża FCF, dług/kapitał (mniej = lepiej), quick ratio, gotówka netto do kapitalizacji.</li>
+    <li><b>Wycena</b> — P/E, PEG, P/S, P/FCF (mniej = lepiej), stopa FCF i potencjał DCF (więcej = lepiej). Wysoka ocena wyceny = tanio.</li>
+    <li><b>Ogólna</b> = 40 % wzrost + 35 % siła + 25 % wycena.</li>
+  </ul>
+  <p><b>Typ spółki</b> (kategorie Petera Lyncha, reguły własne): szybko rosnąca (≥ 20 % rocznie), stabilnie rosnąca (duża, 8–18 % rocznie, równo), wolno rosnąca (&lt; 8 %),
+  cykliczna (duże wahania przychodów), wychodząca z kłopotów (zysk wrócił po stratach), ukryte aktywa (dużo gotówki, niska cena do wartości księgowej).</p>
+  <p><b>PEG</b> = P/E ÷ oczekiwany wzrost EPS w % (domyślnie prognoza analityków na 5 lat z Finviz). Scenariusze: wzrost × 0,67 / × 1 / × 1,26.</p>
+  <p><b>DCF</b>: przychody z ostatnich 12 mies. rosną o zadany procent przez 5 (7, 10) lat, potem wzrost spada liniowo do wzrostu długoterminowego przez 5 lat;
+  wolne przepływy = przychody × marża FCF; wartość końcowa = FCF × (1 + g) / (r − g); suma zdyskontowana + gotówka − dług, podzielona przez liczbę akcji.
+  Domyślnie: wzrost = mniejszy z (średni wzrost przychodów 3 lat, prognoza EPS 5 lat), najwyżej 25 %; marża FCF = mediana z ostatnich 12 mies. i 5 lat;
+  stopa dyskonta 10 %, wzrost długoterminowy 3 %. Etykieta: potencjał ≥ +40 % bardzo tania, +15…+40 % niedowartościowana, −15…+15 % uczciwie, −40…−15 % droga, poniżej −40 % bardzo droga.</p>
+  <p><b>Strategie</b> — kryteria z naszego badania (katalog research/ w repozytorium):</p>
+  <ul>
+    <li><b>7/7 (niskie ryzyko)</b>: przychody 5 lat &gt; +50 %, przychody i zysk 1 rok &gt; 5 %, ROE &gt; 15 %, dług/kapitał 0–1, FCF &gt; 0, PEG 0–1; bez finansów, surowców, energii,
+    użyteczności publicznej i nieruchomości. W teście 2015–2026 portfel 15–30 spółek (kupno 7/7, trzymanie przy 6/7, sprzedaż przy ≤ 5/7): 18–21 % rocznie vs SPY 14 %.</li>
+    <li><b>Jakość (7 kryteriów)</b>: przychody 5 lat &gt; 8 % rocznie, dług/kapitał 0–1, FCF &gt; 0, ROE &gt; 15 %, ROA &gt; 10 %, ROE wyższe niż 5 lat temu, ROCE &gt; 15 %.
+    W teście mediana wyniku 5-letniego +13 … +22 pp ponad przeciętną spółkę.</li>
+    <li><b>Konsekwentny wzrost</b>: przychody &gt; 10 % w co najmniej 3 z ostatnich 5 lat, dług &lt; 1, FCF &gt; 0.</li>
+  </ul>
+  <p class="mut">Wyniki historyczne nie gwarantują przyszłych. Strona jest narzędziem do analizy, nie rekomendacją.</p>
+</section>
+</main>
+</body>
+</html>

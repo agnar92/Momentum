@@ -1,120 +1,49 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momentum — GLB + marża operacyjna</title>
-<link rel="stylesheet" href="css/style.css">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0e1116">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Momentum">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" href="icons/favicon-32.png" type="image/png">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum · jakość vs wycena</title>
+<link rel="stylesheet" href="css/styl.css">
+<link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
-<header class="bar">
-    <strong class="brand">MOMENTUM <span>// GLB + marża operacyjna</span></strong>
-    <select id="rankSel" hidden title="Ranking CEM10: kolejność i zielone (S&amp;P 500 top 10, Nasdaq-100 top 5) według momentum 6 miesięcy albo 12-1"><option value="mom6">Ranking: 6 mies.</option><option value="mom121">Ranking: 12-1</option></select>
-    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. sygnał GLB 0–10 % i warunki">Filtry</button>
-    <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
-    <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
-    <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
-    <button type="button" id="gistBtn" title="Źródło danych: repo (Weekly Refresh) albo gist wysłany z desktopa (☁ Web) — wejdź na stronę z telefonu bez PC; w trybie auto wygrywa nowsze">☁ Gist</button>
-    <a class="btn" href="cem10.html" title="Miesięczna lista CEM10: USA (lider SPY/QQQ z 5M, 10 pozycji) i GPW (WIG20 + mWIG40, C-8, 5 pozycji); odświeżana 1. dnia miesiąca">📋 Lista CEM10</a>
-    <a class="btn" href="wycena.html" title="Niedowartościowane spółki S&amp;P 500 i Nasdaq-100: PEG ≤ 1 i wartość (EPS × prognoza wzrostu analityków) wyższa od ceny, sortowanie po potencjale; odświeżana 1. dnia miesiąca">💲 Wycena PEG</a>
-    <a class="btn" href="quality.html" title="Ranking jakości: sito fundamentalne Finviz + 10 lat raportów SEC (ROIC, marże, FCF, liczba akcji); wybór spółek długoterminowych raz w roku">🏛 Ranking jakości</a>
-    <a class="btn" href="flip.html" title="FLIP (finanse, liderzy, branża, pozycja) — lista spółek, budowanie pozycji transzami ±7 % i sygnały wyjścia TVOD">🧭 FLIP</a>
-    <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
-    <a id="refreshLink" class="btn" target="_blank" rel="noopener"
-       title="W GitHub Actions → Run workflow odświeża dane: skaner CEM10 (S&P 500 + Nasdaq-100: zapytanie Finviz na indeks, C-8 z tygodniowych cen, ranking momentum 12-1), potem ceny, SEC i EPS.">⟳ Odśwież dane</a>
-    <details class="rules"><summary>Zasady</summary>
-        <p><b>Reguły (badanie 2011–2025, ≈5600 spółek USA, portfel 10 pozycji):</b> skaner CEM10 — S&amp;P 500 + Nasdaq-100 z C-8 (kwartał &gt; 0, rok &gt; +30 %), ranking po <i>momentum 12-1</i> (kolumna <i>CEM #</i>), pierwsze 20 na zielono = do zakupu; wyjście: zamknięcie miesiąca pod SMA 10 (<i>RS sektora</i> tylko przy skanerze sektorowym; EPS Rating 1–99 = przybliżenie IBD, percentyl wśród spółek listy, tylko kolumna);
-            warunek: przychody kw. ≥ +15 % r/r i marża operacyjna ≥ +3 pp r/r (SEC, kolumna <i>Warunki</i>). RS, P/S i niespodzianki EPS są tylko kolumnami.</p>
-        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad <b>Green Line</b> (rekord wszech czasów na miesięcznych High, który stoi 3 miesiące łącznie, czyli szczyt i 2 zamknięte kolejne; po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy łącznie).
-            <i>WYBICIE</i> = tydzień przebicia, <i>SYGNAŁ</i> = kolejny tydzień 0–10 % nad linią po przebiciu od dołu; dalej niż 10 % — nie kupuj, a powrót w strefę po wyjściu wyżej to kupowanie spadku (stan <i>NAD</i>): po rajdzie > 10 % nad linią ta linia wygasa do powstania nowej. Linia ≤ 10 % nad ceną to aktualne ATH, więc cena jest wtedy nad SMA 50 i 200.
-</p>
-        <p><b>Wzorce Zangera (przycisk Z na wykresie):</b> Cup &amp; Handle, Flat Base, Ascending Triangle, Flaga/Proporzec — podpowiedź punktu kupna na tygodniowych świecach (progi poza Cup &amp; Handle to przybliżenie opisów ze strony chartpattern.com, niesprawdzone jako strategia). <i>Parabolic Curve</i> = ostrzeżenie przy wyjściu (zamknięcie tygodnia pod SMA 10).</p>
-        <p><b>Wyjście (zamknięcie tygodnia):</b> −10 % od ceny kupna albo pod Low tygodnia, w którym MACD (12, 26, 9) przeciął sygnał w dół <i>po wejściu</i>. Bez trailing stopów, stopu czasowego i dokładek; zwycięzców trzymaj do wyjścia. ½ przy −20 % od szczytu — opcjonalnie (wynik bez zmian).</p>
-        <p><b>Portfel:</b> 8–10 pozycji po równo; najpierw wyjścia, potem wejścia. Gdy sygnałów jest więcej niż miejsc — najbliżej Green Line (domyślna kolejność listy); nie sprzedawaj pozycji dla nowego sygnału. Wolne miejsca = gotówka w SPY. Nie pomijaj sygnałów: wynik robi kilka dużych ruchów.</p>
-        <p><b>Wykres (T = tygodniowy, M = miesięczny, Z = widok Zangera):</b> nad ceną RS Line jak w Deepvue (akcja / SPY, średnia 52 tyg. / 12 mies., ● zielony = nowy szczyt RS i ceny, ● różowy = RS przed ceną);
-            szare słupki, niebieska SMA 10, Green Line (kropkowana od świecy rekordu) ze strefą kupna 0–10 % nad linią i przerywaną na +5 %; zielone tło = SPY nad SMA 10 tego samego interwału.
-            <b>RWB</b> (przycisk / klawisz R): pasek u dołu ceny, ● Blue Dot i żółta strzałka pod świecą, na której RWB wraca po cofnięciu (= dokup); kolumna <i>RWB tyg.</i> = ile tygodni trwa bieżące RWB.
-            <b>⇥</b> = puste świece po prawej (linie w przyszłość), skala ceny: kółko nad osią / Shift, przeciągnięcie osi, środkowy przycisk; widok jest zapamiętany. <b>🛑 Stop</b> = ręczna linia do przeciągania,
-            <b>💰 Wielkość</b> = kapitał w PLN → akcje (ułamkowe) przy ryzyku w % kapitału. Prawy przycisk myszy na cenie = miarka (% i liczba świec). <b>C/C[52 tyg.]</b> = zamknięcie / zamknięcie sprzed 52 tygodni.
-            <b>☁ Gist</b> = dane wysłane z desktopa (tajny gist) — strona bierze nowsze: gist albo repo (Weekly Refresh działa osobno).</p>
-        <p>Historycznie ≈ 9–16 % rocznie przy obsunięciach ≈ −40 % (dane bez spółek zdelistowanych, więc wynik zawyżony). Heurystyka z backtestu, nie porada inwestycyjna.</p>
-    </details>
-</header>
-<main class="work">
-    <section class="list">
-        <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
-    </section>
-    <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="fundBtn" title="Ostatni raport, lista kontrolna strategii i plan wyjścia pozycji">📊 Fundamenty</button><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy (klawisz W)">T</button><button type="button" id="perM" class="per" title="Wykres miesięczny (klawisz M): pełna historia, Green Line z miesięcznych High; bieżący miesiąc z tygodniowych świec">M</button><button type="button" id="drawBtn" class="per" title="Tryb rysowania linii trendu (klawisz L): jedno przeciągnięcie myszą lub palcem = nowa linia, bez przytrzymywania. Linia sama staje się pozioma blisko poziomu. Esc wyłącza.">✏ Linia</button><button type="button" id="undoBtn" class="per" hidden title="Cofnij ostatnią zmianę linii (Ctrl+Z)">↶</button><button type="button" id="zangerBtn" class="per" title="Widok Zangera (klawisz Z): cena w skali log. i wolumen, bez RS / MACD / przychodów, z konturem wzorca (Cup &amp; Handle, Flat Base, Ascending Triangle, Flaga/Proporzec) i poziomem kupna; Parabolic Curve = ostrzeżenie przy wyjściu">Z</button><button type="button" id="rwbBtn" class="per" title="RWB (klawisz R): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup)">RWB</button><button type="button" id="futBtn" class="per" title="Puste świece po prawej (0 / 6 / 12 / 20 / 30) — miejsce na linie w przyszłość">⇥ 12</button><button type="button" id="priceBtn" class="per" title="Skala ceny: kółko nad osią (po prawej) albo z Shift = powiększ, przeciągnij oś = przesuń, środkowy przycisk = swobodne przesuwanie; ten przycisk (albo dwuklik na osi) = skala automatyczna">⤢ Cena</button><button type="button" id="stopBtn" class="per" title="Ręczny stop: czerwona linia do przeciągnięcia (dwuklik na wykresie = stop w tym miejscu, przyciąga do High / Low); ten sam poziom na T, M i Z">🛑 Stop</button><button type="button" id="sizeBtn" class="per" title="Wielkość pozycji: kapitał w PLN, kurs USD/PLN, ryzyko w % kapitału, akcje ułamkowe">💰 Wielkość</button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 %; ½ przy −20 % od szczytu opcjonalnie">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
-        <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
-        <div class="chart-body" id="chartBody"></div>
-        <div class="tip" id="tip" hidden></div>
-        <p class="hint">linie trendu: ✏ Linia (L) i jedno przeciągnięcie = nowa linia (myszą też bez włączania; telefon bez ✏: przytrzymaj palec i prowadź), także w pustym miejscu po prawej · linie T / Z i M widać wzajemnie (blade = tylko do odczytu) · blisko poziomu linia sama się prostuje · ↶ / Ctrl+Z cofa · chwyć koniec / środek = zmień / przesuń · klik = zaznacz, Delete = usuń · stop: dwuklik albo 🛑, przeciągnij czerwoną linię · skala ceny: kółko nad osią / Shift+kółko, przeciągnij oś, środkowy przycisk · suwak: przeciągnij ramkę / krawędzie · kółko lub + − = zoom · ← / → · ↑ / ↓ spółka</p>
-    </section>
-</main>
-<div class="loadbar" id="loadbar" hidden><div class="loadtrack"><div class="loadfill" id="loadfill"></div></div><span id="loadtext"></span></div>
-<footer class="status"><span id="counts"></span> · <span id="status">Ładowanie…</span></footer>
-<dialog id="fundDlg" class="wide fundamentals"><h3 id="fundTitle">Fundamenty</h3><div id="fundBody"></div></dialog>
-<dialog id="symDlg">
-    <form id="symForm">
-        <label>Symbol (np. SPY, ^GSPC, NVDA)<input id="symInput" list="symList" autocomplete="off" autocapitalize="characters"></label>
-        <datalist id="symList"></datalist>
-        <div id="symRecent" class="recent"></div>
-        <p id="symMsg" class="msg"></p>
-        <div class="dlg-btns"><button type="submit">Otwórz</button><button type="button" onclick="this.closest('dialog').close()">Anuluj</button></div>
-    </form>
-</dialog>
-<dialog id="fltDlg" class="wide">
-    <h3>Filtry listy <small>wszystkie warunki naraz · kliknij wartość, żeby ją włączyć</small></h3>
-    <div id="fltBody"></div>
-    <div class="dlg-btns"><button type="button" id="fltClear">Wyczyść filtry</button><button type="button" onclick="this.closest('dialog').close()">Gotowe</button></div>
-</dialog>
-<dialog id="alertDlg" class="wide">
-    <h3>Alerty <small>sprawdzane po wczytaniu nowych danych (zamknięcia tygodni)</small></h3>
-    <ul id="alertList" class="alerts"></ul>
-    <p id="alertInfo" class="recent"></p>
-    <div class="dlg-btns"><button type="button" id="notifyBtn" hidden>Włącz powiadomienia</button><button type="button" id="alertClear">Wyczyść</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
-</dialog>
-<dialog id="gistDlg">
-    <h3>☁ Źródło danych <small>repo / gist z desktopa</small></h3>
-    <label>ID gista (z desktopa: ☁ Web (gist))<input id="gistId" autocomplete="off" spellcheck="false" placeholder="np. 3f2a…"></label>
-    <label>Które dane pokazywać
-        <select id="gistMode"><option value="auto">nowsze (gist albo repo)</option><option value="gist">zawsze gist</option><option value="repo">zawsze repo (Weekly Refresh)</option></select>
-    </label>
-    <p id="gistInfo" class="dimtxt"></p>
-    <p class="dimtxt">Gist jest tajny: czyta go przeglądarka po samym ID (bez tokenu). Weekly Refresh na GitHubie działa osobno, więc strona ma dane także wtedy, gdy nie masz dostępu do PC.</p>
-    <div class="dlg-btns"><button type="button" id="gistSave">Zapisz i wczytaj ponownie</button><button type="button" onclick="this.closest('dialog').close()">Anuluj</button></div>
-</dialog>
-<dialog id="sizeDlg" class="sizedlg">
-    <h3 id="sizeTitle">Wielkość pozycji</h3>
-    <div class="szgrid">
-        <label>Kapitał (PLN)<input id="szCapital" inputmode="decimal"></label>
-        <label>Ryzyko (% kapitału)<input id="szRisk" inputmode="decimal"></label>
-        <label>Kurs USD/PLN<input id="szFx" inputmode="decimal"></label>
-        <label>Wejście (USD)<input id="szEntry" inputmode="decimal"></label>
-        <label>Stop (USD)<input id="szStop" inputmode="decimal"></label>
+<header class="gora"><div class="w">
+  <a class="logo" href="index.html">Momen<span>tum</span></a>
+  <nav><a class="akt" href="index.html">Spółki</a><a href="metoda.html">Metoda</a></nav>
+  <div class="szukaj"><input id="q" type="text" placeholder="Szukaj: NVDA, Microsoft…" autocomplete="off"></div>
+</div></header>
+<main class="main">
+  <section class="karta">
+    <h2>500 największych spółek USA: jakość a wycena</h2>
+    <div class="pod">Oceny 0–10 na tle sektora (wzrost, siła finansowa, wycena), typ spółki, dopasowanie do strategii z badania oraz wycena PEG i DCF. Dane z <span id="asof">–</span>. Informacyjnie, nie rekomendacja.</div>
+    <div class="narzedzia">
+      <select id="sektor"><option value="">Wszystkie sektory</option></select>
+      <select id="typ"><option value="">Każdy typ</option></select>
+      <select id="wycena"><option value="">Każda wycena</option></select>
+      <select id="strategia">
+        <option value="">Bez filtra strategii</option>
+        <option value="7/7 (niskie ryzyko)|7">7/7 — wszystkie kryteria</option>
+        <option value="7/7 (niskie ryzyko)|6">7/7 — co najmniej 6</option>
+        <option value="Jakość (7 kryteriów)|7">Jakość — wszystkie 7</option>
+        <option value="Jakość (7 kryteriów)|6">Jakość — co najmniej 6</option>
+        <option value="Konsekwentny wzrost|3">Konsekwentny wzrost</option>
+      </select>
+      <label class="mut"><input id="obs" type="checkbox"> tylko obserwowane ★</label>
+      <span id="ile" class="mut male"></span>
     </div>
-    <p id="szNote" class="dimtxt"></p>
-    <pre id="szOut" class="szout"></pre>
-    <div class="dlg-btns"><button type="button" id="szFxBtn">⟳ Kurs USD/PLN</button><button type="button" id="szDefaults">↺ Wejście i stop z wykresu</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
-</dialog>
-<dialog id="posDlg" class="wide poslist">
-    <h3>📌 Pozycje i obserwowane <small id="posMethod"></small></h3>
-    <div class="tblwrap"><table class="gt" id="posTable"></table></div>
-    <h4>🔔 Obserwowane (bez pozycji)</h4>
-    <div class="tblwrap"><table class="gt" id="watchTable"></table></div>
-    <p class="dimtxt">Klik w ticker = wykres · ✕ = usuń pozycję / przestań obserwować. Pozycję zaznaczasz przyciskiem 📌 na wykresie (kupno = ostatnie zamknięcie).</p>
-    <div class="dlg-btns"><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
-</dialog>
-<script src="js/lines.js"></script>
-<script src="js/chart.js"></script>
-<script src="js/app.js"></script>
+    <div id="err" class="blad" hidden></div>
+    <div class="tabela-wrap"><table>
+      <thead><tr>
+        <th></th><th data-k="nazwa">Spółka</th><th data-k="wzrost" class="n">Wzrost</th><th data-k="sila" class="n">Siła</th><th data-k="wycena" class="n">Wycena</th>
+        <th data-k="ogolna" class="n">Ocena</th><th>Typ</th><th data-k="peg" class="n">PEG</th><th data-k="dcf" class="n">DCF</th><th>Wycena DCF</th>
+        <th data-k="lr" class="n">7/7</th><th data-k="jak" class="n">Jakość</th><th data-k="zw" class="n">1 rok</th><th data-k="mc" class="n">Kapit.</th>
+      </tr></thead>
+      <tbody id="lista"></tbody>
+    </table></div>
+  </section>
+  <div class="stopka">Źródła: Finviz (wskaźniki, prognozy), SEC EDGAR (raporty), Yahoo Finance (ceny). Wycena DCF i PEG to model z założeniami do edycji na karcie spółki.</div>
+</main>
+<script src="js/wspolne.js"></script>
+<script src="js/lista.js"></script>
 </body>
 </html>

@@ -1,0 +1,94 @@
+:root {
+  --tlo: #f4f5f7; --karta: #ffffff; --tekst: #15171c; --tekst2: #5b6070; --linia: #e3e6eb;
+  --ciemne: #101826; --ciemne2: #182235; --ciemny-tekst: #e9edf5; --ciemny-tekst2: #9aa6bd;
+  --zielony: #16a34a; --zielony-tlo: #dcfce7; --zolty: #b45309; --zolty-tlo: #fef3c7; --czerwony: #dc2626; --czerwony-tlo: #fee2e2;
+  --niebieski: #2a78d6; --pomarancz: #eb6834; --akcent: #10b981;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--tlo); color: var(--tekst); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
+a { color: inherit; }
+.gora { background: var(--karta); border-bottom: 1px solid var(--linia); position: sticky; top: 0; z-index: 10; }
+.gora .w { max-width: 1320px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.logo { font-weight: 800; font-size: 20px; text-decoration: none; }
+.logo span { color: var(--akcent); }
+.gora nav a { color: var(--tekst2); text-decoration: none; margin-right: 14px; font-weight: 600; }
+.gora nav a.akt { color: var(--tekst); }
+.szukaj { margin-left: auto; position: relative; }
+.szukaj input { width: 260px; max-width: 70vw; padding: 8px 12px; border: 1px solid var(--linia); border-radius: 10px; font: inherit; }
+.main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+.karta { background: var(--karta); border: 1px solid var(--linia); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.karta h2 { margin: 0 0 2px; font-size: 20px; }
+.karta .pod { color: var(--tekst2); font-size: 12px; margin-bottom: 12px; }
+.mut { color: var(--tekst2); }
+.male { font-size: 12px; }
+.narzedzia { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+select, .narzedzia input[type=text], input[type=number] { padding: 7px 10px; border: 1px solid var(--linia); border-radius: 9px; font: inherit; background: #fff; }
+button, .przycisk { padding: 7px 12px; border: 1px solid var(--linia); border-radius: 9px; background: #fff; font: inherit; cursor: pointer; }
+button.akt, .przycisk.akt { background: var(--tekst); color: #fff; border-color: var(--tekst); }
+.tabela-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 8px; border-bottom: 1px solid var(--linia); text-align: left; white-space: nowrap; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--tekst2); cursor: pointer; user-select: none; }
+th.n, td.n { text-align: right; }
+tbody tr:hover { background: #f8fafc; cursor: pointer; }
+.firma b { display: block; }
+.firma small { color: var(--tekst2); }
+.ocena { display: inline-block; min-width: 42px; text-align: center; padding: 4px 8px; border-radius: 8px; font-weight: 700; }
+.o-swietna { background: #bbf7d0; color: #14532d; } .o-dobra { background: var(--zielony-tlo); color: #166534; }
+.o-srednia { background: var(--zolty-tlo); color: #92400e; } .o-slaba { background: var(--czerwony-tlo); color: #991b1b; } .brak { color: var(--tekst2); }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.p-bardzo-tania { background: #bbf7d0; color: #14532d; } .p-niedowartosciowana { background: var(--zielony-tlo); color: #166534; }
+.p-wyceniona-uczciwie { background: var(--zolty-tlo); color: #92400e; } .p-droga { background: #ffedd5; color: #9a3412; } .p-bardzo-droga { background: var(--czerwony-tlo); color: #991b1b; }
+.gw { color: #f59e0b; cursor: pointer; font-size: 17px; } .gw.off { color: #cbd5e1; }
+.plus { color: var(--zielony); } .minus { color: var(--czerwony); }
+/* karta spółki */
+.ciemna { background: linear-gradient(160deg, var(--ciemne), var(--ciemne2)); color: var(--ciemny-tekst); border: 0; }
+.ciemna .mut, .ciemna .pod { color: var(--ciemny-tekst2); }
+.ciemna .pole { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; }
+.naglowek { text-align: center; margin-bottom: 14px; }
+.naglowek h1 { margin: 0; font-size: 30px; display: inline-flex; gap: 10px; align-items: center; }
+.tick { font-size: 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; padding: 2px 8px; }
+.siatka3 { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 12px; }
+.siatka2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kol3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 900px) { .siatka3, .siatka2, .kol3 { grid-template-columns: 1fr; } }
+.pasek-wyceny { position: relative; height: 14px; border-radius: 99px; background: linear-gradient(90deg, #10b981, #84cc16 30%, #eab308 50%, #f97316 70%, #ef4444); margin: 18px 0 6px; }
+.pasek-wyceny .znak { position: absolute; top: -5px; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--ciemne); transform: translateX(-50%); }
+.skala { display: flex; justify-content: space-between; font-size: 11px; gap: 4px; }
+@media (max-width: 600px) { .skala span:nth-child(2), .skala span:nth-child(4) { display: none; } .naglowek h1 { font-size: 24px; } }
+.dopas { height: 8px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin: 6px 0; }
+.dopas i { display: block; height: 100%; background: linear-gradient(90deg, #22d3ee, #10b981); }
+.liczby { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.liczby div { background: #f8fafc; border: 1px solid var(--linia); border-radius: 10px; padding: 8px 10px; }
+.liczby small { display: block; color: var(--tekst2); font-size: 11px; text-transform: uppercase; }
+.liczby b { font-size: 17px; }
+.wynik-glowny { display: flex; justify-content: space-between; align-items: center; background: var(--ciemne); color: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+.wynik-glowny .ocena { font-size: 24px; padding: 6px 14px; }
+.wiersz-oceny { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--linia); }
+.metryki .naglowek-kol { display: flex; gap: 8px; align-items: center; font-weight: 700; font-size: 15px; padding: 10px; border-radius: 10px 10px 0 0; }
+.k-wzrost .naglowek-kol { background: #ecfdf5; } .k-sila .naglowek-kol { background: #eff6ff; } .k-wycena .naglowek-kol { background: #fffbeb; }
+.metryki .kol { border: 1px solid var(--linia); border-radius: 10px; }
+.metryki .wiersz { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--linia); font-size: 13px; }
+.b-dobrze { color: #15803d; font-weight: 600; } .dobrze { color: #16a34a; } .srednio { color: #b45309; } .slabo { color: #ea580c; } .b-slabo { color: #dc2626; font-weight: 600; }
+.kryt { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--linia); font-size: 13px; }
+.kryt .tak { color: var(--zielony); font-weight: 700; } .kryt .nie { color: var(--czerwony); font-weight: 700; }
+.zakladki { display: flex; gap: 6px; }
+.wej { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wej label { display: block; border: 1px solid var(--linia); border-radius: 10px; padding: 10px; font-size: 12px; color: var(--tekst2); }
+.wej input { width: 100%; margin-top: 6px; font-size: 18px; font-weight: 600; border: 1px solid var(--linia); }
+.chipy { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.chipy button { padding: 3px 8px; font-size: 11px; border-radius: 7px; }
+.peg-duzy { font-size: 46px; font-weight: 800; }
+.scen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.scen > div { border: 1px solid rgba(255,255,255,.15); border-radius: 10px; padding: 10px; text-align: center; }
+.scen > div.base { border-color: #fff; }
+.scen .t { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.bear .t { color: #f87171; } .bull .t { color: #34d399; }
+.peg-skala { position: relative; height: 12px; border-radius: 99px; background: linear-gradient(90deg, #10b981, #a3e635 25%, #eab308 50%, #f97316 75%, #ef4444); margin: 26px 0 6px; }
+.peg-skala .znak { position: absolute; top: -14px; border: 8px solid transparent; border-top: 12px solid #fff; transform: translateX(-50%); }
+svg text { font: 11px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--tekst2); }
+.legenda { display: flex; gap: 14px; font-size: 12px; color: var(--tekst2); justify-content: center; }
+.legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+.blad { background: var(--czerwony-tlo); color: #991b1b; padding: 12px; border-radius: 10px; }
+.stopka { color: var(--tekst2); font-size: 12px; text-align: center; padding: 20px; }
+.tooltip { position: fixed; pointer-events: none; background: #111827; color: #fff; padding: 6px 9px; border-radius: 8px; font-size: 12px; z-index: 50; white-space: nowrap; }
