@@ -1,1 +1,1 @@
-"""Strategia GLB + marża operacyjna + MACD (ta sama co w Momentum Desktop): obliczenia, Finviz, ceny, SEC."""
+"""Fundamenta — jakość vs wycena: obliczenia (fundamenty z SEC, oceny, wycena PEG i DCF)."""

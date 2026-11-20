@@ -252,7 +252,7 @@
 
     szukaj();
     fetch(`data/spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((k) => {
-        K = k; M = k.m; document.title = `${k.n} (${k.t}) · Momentum`;
+        K = k; M = k.m; document.title = `${k.n} (${k.t}) · Fundamenta`;
         domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); sprawozdania("q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
 })();

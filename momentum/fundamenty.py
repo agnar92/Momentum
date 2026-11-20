@@ -1,4 +1,4 @@
-"""Fundamenty spółki z SEC companyfacts i wskaźniki strony „Momentum — jakość vs wycena” (czyste funkcje, bez sieci).
+"""Fundamenty spółki z SEC companyfacts i wskaźniki strony „Fundamenta — jakość vs wycena” (czyste funkcje, bez sieci).
 
 Wyciąg z companyfacts (`wyciag`) -> serie kwartalne (przychody, zysk netto, zysk operacyjny, przepływy operacyjne, nakłady inwestycyjne)
 i bilansowe (gotówka, dług, kapitał własny, aktywa, zobowiązania bieżące, liczba akcji). Kwartały: wartości 3-miesięczne, a brakujące

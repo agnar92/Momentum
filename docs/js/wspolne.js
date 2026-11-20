@@ -1,4 +1,4 @@
-// Wspólne, czyste funkcje strony „Momentum — jakość vs wycena”: formatowanie, wycena DCF / PEG (te same wzory co momentum/ocena.py),
+// Wspólne, czyste funkcje strony „Fundamenta — jakość vs wycena”: formatowanie, wycena DCF / PEG (te same wzory co momentum/ocena.py),
 // filtrowanie i sortowanie listy. W przeglądarce: window.W; w testach (node): module.exports.
 "use strict";
 (function (root) {

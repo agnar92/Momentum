@@ -1,4 +1,4 @@
-"""Dane strony „Momentum — jakość vs wycena”: 500 największych spółek USA (Finviz) + raporty SEC + ceny tygodniowe (yfinance)
+"""Dane strony „Fundamenta — jakość vs wycena”: 500 największych spółek USA (Finviz) + raporty SEC + ceny tygodniowe (yfinance)
 -> docs/data/lista.json (tabela) i docs/data/spolki/<TICKER>.json (karta spółki).
 
 Uruchamiany co tydzień przez workflow „Dane spółek” (i ręcznie). Kolejność: sito Finviz cap_largeover (widoki 111 / 121 / 161, wszystkie strony),
@@ -19,7 +19,7 @@ from momentum import fundamenty, ocena
 OUT = os.path.join("docs", "data")
 URL = "https://finviz.com/screener/stocks"
 HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
-UA = {"User-Agent": os.environ.get("SEC_UA") or "Momentum research bot admin@example.com"}
+UA = {"User-Agent": os.environ.get("SEC_UA") or "Fundamenta research bot admin@example.com"}
 VIEWS = ("111", "121", "161")
 
 
