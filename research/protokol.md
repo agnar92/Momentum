@@ -881,3 +881,9 @@ warunkach; sprzedaż przy załamaniu (przychody r/r < 5 % teraz i rok temu lub d
 bez NVDA. Hipoteza: Z3 / Z4 dają kilka pp nad średnią spółek w 5 lat; portfel ≈ SPY + 0–3 pp; K6 (ROE rośnie) bez efektu (etap 58: Δ ROE słabe).
 
 Wynik etapu 74 (2026-11-20): warunki jakości działają narastająco: mediana nadwyżki 5 lat nad średnią spółkę: Z1 −21 pp, Z2 −12, Z3 +1, Z4 (ROE rośnie vs 5 lat temu) +13 pp, w obu połowach (+15 / +13 pp), 77 spółek. Hipoteza: Z3/Z4 kilka pp — potwierdzona (więcej niż zakładano); K6 bez efektu — odrzucona (rosnące ROE dodaje najwięcej). Portfel Z4 20,5–22,8 %/rok, ale NVDA = 69–73 % portfela; bez NVDA 12,3 %, z przycinaniem do 15 % 16,0 % (SPY 14,6 %).
+
+## Etap 75: + ROCE > 15 % (Z5) (zapisane 2026-11-20 PRZED uruchomieniem)
+Użytkownik: „podobno używa jeszcze ROCE, też powyżej 15 %, jako Z5”. ROCE = zysk operacyjny TTM ÷ kapitał zaangażowany, kapitał zaangażowany = aktywa ogółem − zobowiązania bieżące
+(ostatnie znane, ≤ 400 dni; zobowiązania bieżące — nowe pobranie z SEC; brak zobowiązań bieżących (np. banki) = brak ROCE). Z5 = Z4 + ROCE > 15 %; dodatkowo Z3 + ROCE > 15 %
+(bez warunku rosnącego ROE). Analiza i portfel jak w etapie 74 (bez progu PEG / PEG < 2, przycinanie do 15 %, bez NVDA). Hipoteza: ROCE w dużej mierze pokrywa się z ROE i ROA
+(mało spółek odpada), zmiana wyniku w granicach szumu.
