@@ -857,3 +857,14 @@ gdy przestaje być STABILNY i PEG ≥ 3), wolna gotówka w SPY, koszt 0,1 %; 201
 Hipoteza: portfel ≈ SPY ± 3 pp (mało spółek, większość w SPY).
 
 Wynik etapu 72 (2026-11-19): z prognozą F5 NVDA nigdy nie ma PEG < 2 (model przewiduje spowolnienie po szybkim wzroście EPS), MSFT tylko w 2014–2016. Portfele spółek stabilnych z PEG z własną prognozą: 12,6–15,5 %/rok vs SPY 14,6 % (QQQ 20,2 %), średnio 1–6 spółek, reszta w SPY. Hipoteza (≈ SPY ± 3 pp) potwierdzona.
+
+## Etap 73: inwestor długoterminowy — spółki stabilne (przychody 10–18 % r/r) i paraboliczne; czy fundamenty liczą się dopiero po 5–10 latach; portfel z dokupowaniem przy niskim PEG (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „autor twierdzi, że w długim terminie (5–10 lat) dopiero stabilne przychody mają znaczenie, a rok–dwa to sentyment; chcę mieć spółkę nawet 10 lat i kupować,
+gdy jest tania (PEG < 2, stabilne często ~1,5 to świetne okno; wzrostowe często < 1); 70 % spółek to stabilnie rosnące ze sprzedażą 10–18 % r/r; jedna paraboliczna da więcej”.
+Dane top 500 USA (etap 68). STABILNA = przychody TTM r/r w [10 %, 18 %] teraz, 12 i 24 mies. temu, 0 ≤ dług/kapitał < 1, FCF > 0. PARABOLICZNA = wzorzec PARABOLA (etap 69).
+(A) Horyzont: nadwyżka zwrotu nad średnią spółek top 500 po 12 / 36 / 60 / 120 mies. dla STABILNEJ, PARABOLICZNEJ i reszty (120 mies.: starty 2012–2016); mediana, odsetek pobić.
+(B) Portfel 2013-01..2026-09: co miesiąc kupno transzą 2 % konta (max 4 transze / mies., max 10 % na spółkę przy kupnie, kolejność od najniższego PEG): STABILNA przy PEG < 2,
+PARABOLICZNA przy PEG < 1 (część paraboliczna max 30 % konta); dokupowanie trzymanych przy tych samych progach; trzymanie bez limitu czasu; sprzedaż tylko przy załamaniu:
+przychody r/r < 5 % teraz i rok temu albo dług/kapitał > 1; wolna gotówka w SPY. PEG = P/E ÷ (100 × CAGR EPS 5 lat) [wariant: ÷ CAGR przychodów 5 lat].
+Warianty: tylko STABILNE; tylko PARABOLICZNE; obie; bez NVDA. CAGR, DD, vs SPY / QQQ / równe wagi top 500. Hipoteza: (A) przewaga STABILNEJ rośnie z horyzontem; (B) obie ≈ SPY + 0–3 pp.
