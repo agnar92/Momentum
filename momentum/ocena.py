@@ -101,10 +101,13 @@ def metryki(ex, fv, dzis=None):
             m["roce"] = ot[-1][1] / (a - lc)
         if nt and m["equity"] and m["equity"] > 0:
             m["roe_sec"] = nt[-1][1] / m["equity"]
-            e5 = [(ee, v) for ee, v in ch["eq"].items()]
-            eq5 = F.wartosc_lata_temu(e5, e, 5)
-            n5 = F.wartosc_lata_temu(nt, nt[-1][0], 5)
-            m["roe_5l"] = n5 / eq5 if eq5 and eq5 > 0 and n5 is not None else None
+            # ROE sprzed 3 lat; młodsza spółka: z najstarszego punktu (min. 1 rok wstecz), dla którego są zysk i kapitał
+            eqs = list(ch["eq"].items())
+            for lat in (3, 2.5, 2, 1.5, 1):
+                eqw, nw = F.wartosc_lata_temu(eqs, e, lat), F.wartosc_lata_temu(nt, nt[-1][0], lat)
+                if eqw and eqw > 0 and nw is not None:
+                    m["roe_wcz"], m["roe_wcz_lat"] = nw / eqw, lat
+                    break
     # zapas z Finviz (spółki bez raportów us-gaap, np. emitenci zagraniczni 20-F)
     s5, e5 = _pct(fv.get("sales5Years")), _pct(fv.get("eps5Years"))
     if m.get("rev_cagr5") is None and s5 is not None:
@@ -318,6 +321,14 @@ def _clip(x):
     return round(max(0.0, min(100.0, x)), 0)
 
 
+def _ile_lat(x):
+    """3 -> „3 lata”, 1 -> „1 rok”, 1.5 -> „1,5 roku”."""
+    if x != int(x):
+        return f"{x:.1f}".replace(".", ",") + " roku"
+    x = int(x)
+    return f"{x} {'rok' if x == 1 else 'lata' if x in (2, 3, 4) else 'lat'}"
+
+
 def W_LAT(m):
     return f"{m['hist_lat']:.1f}".replace(".", ",")
 
@@ -339,7 +350,8 @@ def strategie(m, sektor):
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
            ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
            ("ROA > 10 %", m.get("roa"), _gt(m.get("roa"), 0.10)),
-           ("ROE wyższe niż 5 lat temu", m.get("roe_5l"), m.get("roe_sec") is not None and m.get("roe_5l") is not None and m["roe_sec"] > m["roe_5l"]),
+           (f"ROE wyższe niż {_ile_lat(m.get('roe_wcz_lat') or 3)} temu",
+            m.get("roe_wcz"), m.get("roe_sec") is not None and m.get("roe_wcz") is not None and m["roe_sec"] > m["roe_wcz"]),
            ("ROCE > 15 %", m.get("roce"), _gt(m.get("roce"), 0.15))]
     kon = [("Przychody > 10 % w ≥ 3 z 5 lat" + (f" (przeliczone z {m['rev_lata_n']} lat)" if m.get("rev_lata_n") else ""), m.get("rev_lata_10"), m.get("rev_lata_10") is not None and m["rev_lata_10"] >= 3),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
