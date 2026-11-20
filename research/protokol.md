@@ -870,3 +870,12 @@ przychody r/r < 5 % teraz i rok temu albo dług/kapitał > 1; wolna gotówka w S
 Warianty: tylko STABILNE; tylko PARABOLICZNE; obie; bez NVDA. CAGR, DD, vs SPY / QQQ / równe wagi top 500. Hipoteza: (A) przewaga STABILNEJ rośnie z horyzontem; (B) obie ≈ SPY + 0–3 pp.
 
 Wynik etapu 73 (2026-11-20): (A) przewaga spółek o stabilnym wzroście 10–18 % nie rośnie wyraźnie z horyzontem (1 rok −4,8 pp, 3 lata −1,9, 5 lat +2,4 pp; 10 lat — 7 spółek, niewiarygodne); paraboliczne: wysoka średnia, ujemna mediana. Takie spółki to 1,2 % top 500 (3 lata z rzędu 10–18 %). (B) Portfele 10,5–13,2 %/rok vs SPY 14,6 %. Hipoteza (A) odrzucona, (B) — wynik poniżej SPY (gorzej niż zakładano).
+
+## Etap 74: wzrost przychodów 5 lat > 8 %/rok, dług < 1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE dziś > ROE 5 lat temu — portfel długoterminowy (zapisane 2026-11-20 PRZED uruchomieniem)
+Użytkownik: „CAGR 5 lat sprzedaży powyżej 8 % plus reszta (dług itd.); podobno ROE > 15 %, ROA > 10 % i ROE dziś większe niż 5 lat temu”.
+Dane top 500 USA (etap 68) + aktywa ogółem z SEC (nowe pobranie). Warunki na koniec miesiąca: K1 CAGR przychodów 5 lat > 8 %, K2 0 ≤ dług/kapitał < 1, K3 FCF > 0,
+K4 ROE > 15 %, K5 ROA (zysk netto TTM / aktywa) > 10 %, K6 ROE teraz > ROE 60 mies. temu (wariant: 36 mies.). Zestawy: Z1 = K1–K3; Z2 = Z1 + K4; Z3 = Z2 + K5; Z4 = Z3 + K6.
+(A) nadwyżka nad średnią spółek po 1 / 3 / 5 lat (mediana, pobicia, liczba spółek), połowy 2012–2016 / 2017+. (B) portfel w stylu użytkownika: co miesiąc transze 2 % konta
+(max 4 / mies.), max 10 % na spółkę przy kupnie, kolejność od najniższego PEG (P/E ÷ CAGR przychodów 5 lat), warianty: bez progu PEG / PEG < 2; dokupowanie przy tych samych
+warunkach; sprzedaż przy załamaniu (przychody r/r < 5 % teraz i rok temu lub dług/kapitał > 1); gotówka w SPY; 2013-01..2026-09; wariant z przycinaniem do 15 % w styczniu;
+bez NVDA. Hipoteza: Z3 / Z4 dają kilka pp nad średnią spółek w 5 lat; portfel ≈ SPY + 0–3 pp; K6 (ROE rośnie) bez efektu (etap 58: Δ ROE słabe).
