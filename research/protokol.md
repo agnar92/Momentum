@@ -944,3 +944,21 @@ wzrost ~0, wycena ~0. (B) flaga SPADEK (przychody lub zysk r/r < 0 dwa lata z rz
 (bez flagi +1,3 / +1,9 pp), odsetek pobić średniej 38 % vs 40 % (5 lat); efekt stały w połowach dla 5 lat, słaby. (C) spółki silne i stabilne (przychody > 10 %
 w ≥ 4 z 5 lat, zysk rósł w ≥ 4 z 5, bez SPADKU; mediana 18): średnio +17 pp w 5 lat (2017+ +24 pp, 2012–2016 −5 pp), mediana −27 pp (jak cały zbiór −24) —
 wynik średni ciągną najlepsze spółki. Hipoteza: (A) tak (0,066); (B) słabiej niż zakładano (−4 pp); (C) średnia tak, mediana nie, w 2012–2016 ujemna.
+
+## Etap 78: każdy parametr osobno — 5 grup (kwintyle) i zwrot w 3 / 5 lat (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „dlaczego nie analizujesz pojedynczo jeden parametr, czy wpływał na wzrost”. Analiza opisowa jednego parametru naraz, dane i cechy jak w etapie 76
+(top 500 USA PIT bez wykluczonych sektorów, starty co miesiąc 2012-01..2021-09 dla 5 lat, 2012-01..2023-09 dla 3 lat). Dla każdego parametru w każdym miesiącu
+spółki z wartością dzielone na 5 równych grup (G1 najniższa … G5 najwyższa wartość, bez odwracania kierunku); dla każdej grupy: średni zwrot spółki w 3 / 5 lat,
+nadwyżka nad średnią wszystkich spółek (pp), odsetek spółek bijących średnią; G5 − G1; zgodność znaku G5 − G1 w połowach 2012–2016 / 2017+. Parametry: wszystkie
+wskaźniki oceny (przychody 1 r., CAGR 3 / 5 l., lata z przychodami > 10 %, zysk 1 r. / 5 l., lata ze wzrostem zysku, marże, ROE, ROA, ROCE, marża FCF, dług/kapitał,
+quick ratio, gotówka netto / kapitalizacja, zmiana liczby akcji, P/E, PEG, P/S, P/FCF, stopa FCF) + FCF ÷ zysk, marża brutto, momentum 12-1.
+Hipoteza: rosnące G1 → G5 (lub malejące) z różnicą ≥ 10 pp w 5 lat dla: lata z przychodami > 10 %, marże, ROE / ROA, gotówka netto, zmiana liczby akcji (malejąca);
+brak wyraźnego schodka dla P/E, P/S, przychodów 1 r., momentum.
+
+Wynik etapu 78 (2026-11-20): 5 lat, G5 − G1 (nadwyżka nad średnią, pp), zgodne w obu połowach: gotówka − dług / kapitalizacja +55, quick ratio +53, marża FCF +51,
+FCF ÷ zysk +39, lata z przychodami > 10 % +34 (+35 / +33 — najrówniejszy schodek), P/S +26 (droższe lepiej), CAGR przychodów 5 l. +25, marża netto +24, CAGR
+przychodów 3 l. +19, P/E +17, skup akcji +15 (G5: 46 % bije średnią vs 35 % w G1), przychody 1 r. −9, zysk 1 r. −16 (najszybszy wzrost w ostatnim roku gorzej).
+Niezgodne połowy: zysk 5 l., ROA, ROE, ROCE, marża operacyjna i brutto, dług, lata ze wzrostem zysku, PEG (2012–2016 wysoki PEG lepiej, 2017+ gorzej), momentum.
+Średnie ciągną najlepsze spółki: odsetek spółek bijących średnią w G5 to 38–49 %. Hipoteza: schodki dla lat z przychodami, marż (FCF, netto), gotówki, skupu — tak;
+ROE / ROA — nie (niestabilne); brak schodka dla P/E i P/S — nie (wyższa wycena była lepsza), dla przychodów 1 r. i momentum — tak.
