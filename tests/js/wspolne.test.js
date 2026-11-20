@@ -76,3 +76,10 @@ test("percentyl i ocenyZ jak w ocena.py", () => {
     assert.strictEqual(o.wzrost, Math.round(10 * (2 + 0.5 * 6) / 8 * 10) / 10);
     assert.ok(o.ogolna > 0);
 });
+
+test("znacznik Jakość 7/7 i filtr", () => {
+    const a = { t: "A", n: "A", st: { "Jakość (7 kryteriów)": [7, 7] } }, b = { t: "B", n: "B", st: { "Jakość (7 kryteriów)": [6, 7] } };
+    assert.strictEqual(W.jakosc77(a), true);
+    assert.strictEqual(W.jakosc77(b), false);
+    assert.deepStrictEqual(W.filtruj([a, b], { jakosc: true }).map((r) => r.t), ["A"]);
+});

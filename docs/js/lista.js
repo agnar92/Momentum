@@ -14,13 +14,13 @@
     let MIEJSCA = {};
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
-        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs };
+        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked };
         const rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
             <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
-            <td class="firma"><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
+            <td class="firma"><b>${esc(r.n)}</b>${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
             <td class="n ogolna">${r.sp ? `<span class="spadek" title="Fundamenty słabną 2 lata z rzędu: ${esc(r.sp.join(" i "))}">⬇</span> ` : ""}${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td>${esc(r.typ || "–")}</td>
@@ -34,7 +34,7 @@
     }
     function opcje(id, wartosci) { $(id).insertAdjacentHTML("beforeend", wartosci.map((v) => `<option>${esc(v)}</option>`).join("")); }
     function podlacz() {
-        ["q", "sektor", "typ", "wycena", "strategia", "obs"].forEach((id) => $(id).addEventListener("input", rysuj));
+        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak"].forEach((id) => $(id).addEventListener("input", rysuj));
         document.querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
             const k = th.dataset.k; st = { sort: k, kier: st.sort === k ? -st.kier : (k === "peg" || k === "nazwa" ? 1 : -1) }; zapisz(KLUCZ, st); rysuj();
         }));
