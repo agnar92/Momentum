@@ -1,4 +1,4 @@
-"""Dane strony „Momentum — jakość vs wycena”: 500 największych spółek USA (Finviz) + raporty SEC + ceny tygodniowe (yfinance)
+"""Dane strony „Fundamenta — jakość vs wycena”: 500 największych spółek USA (Finviz) + raporty SEC + ceny tygodniowe (yfinance)
 -> docs/data/lista.json (tabela) i docs/data/spolki/<TICKER>.json (karta spółki).
 
 Uruchamiany co tydzień przez workflow „Dane spółek” (i ręcznie). Kolejność: sito Finviz cap_largeover (widoki 111 / 121 / 161, wszystkie strony),
@@ -19,7 +19,7 @@ from momentum import fundamenty, ocena
 OUT = os.path.join("docs", "data")
 URL = "https://finviz.com/screener/stocks"
 HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
-UA = {"User-Agent": os.environ.get("SEC_UA") or "Momentum research bot admin@example.com"}
+UA = {"User-Agent": os.environ.get("SEC_UA") or "Fundamenta research bot admin@example.com"}
 VIEWS = ("111", "121", "161")
 
 
@@ -77,11 +77,10 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                     return
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
-            if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
-                ex = json.load(open(p))
-            else:
+            ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
+            if ex is None or "waluta" not in ex:          # stary format cache (bez waluty / MSSF) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
-                ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {}
+                ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
                     json.dump(ex, open(p, "w"))
                 time.sleep(0.25)
@@ -92,6 +91,30 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
     th = [threading.Thread(target=praca) for _ in range(watki)]
     [x.start() for x in th]
     [x.join() for x in th]
+    waluty = sorted({ex.get("waluta") for ex in out.values() if ex.get("waluta") not in (None, "USD")})
+    k = kursy(waluty, log)
+    for t, ex in out.items():
+        w = ex.get("waluta")
+        if w and w != "USD":
+            out[t] = fundamenty.przelicz(ex, k.get(w)) if k.get(w) else {}   # bez kursu nie mieszamy walut
+    return out
+
+
+def kursy(waluty, log=print):
+    """{waluta: USD za 1 jednostkę} — bieżący kurs z yfinance (np. TWDUSD=X)."""
+    if not waluty:
+        return {}
+    import yfinance as yf
+    out = {}
+    try:
+        d = yf.download([f"{w}USD=X" for w in waluty], period="10d", interval="1d", progress=False, group_by="column")["Close"]
+        for w in waluty:
+            s = d[f"{w}USD=X"].dropna() if f"{w}USD=X" in d else []
+            if len(s):
+                out[w] = float(s.iloc[-1])
+    except Exception as e:  # noqa: BLE001
+        log(f"kursy walut: błąd ({e})")
+    log(f"kursy walut: {', '.join(f'{w} {v:.4g}' for w, v in out.items())}")
     return out
 
 
@@ -172,11 +195,12 @@ def zapisz(rows, out=OUT, today=None):
                           dcf_pot=r["m"].get("dcf_pot"), et=r["etykieta"], st=st, zw=r["zw"], rev_1y=r["m"].get("rev_1y"), rev_cagr5=r["m"].get("rev_cagr5"),
                           roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"),
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc")}
+        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "sektor_med")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF
         json.dump(_czysc(karta), open(os.path.join(out, "spolki", f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
+    json.dump(_czysc(ocena.rozklady(rows)), open(os.path.join(out, "sektory.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     json.dump(_czysc(dict(generated_at=today.isoformat(), n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
               open(os.path.join(out, "lista.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 

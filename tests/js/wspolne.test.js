@@ -55,9 +55,21 @@ test("TTM z kwartałów", () => {
 
 test("skład oceny = średnia percentyli / 10 (jak Python), miejsce w rankingu", () => {
     const s = W.skladOceny({ rev_1y: 0.9, rev_cagr3: 0.7, ni_1y: null }, "wzrost");
-    assert.strictEqual(s.ocena, 8);
+    assert.strictEqual(s.ocena, Math.round(10 * (0.9 + 0.7 + 5 * 0.5) / 7 * 10) / 10);   // 5 brakujących po 50 pkt
     assert.strictEqual(s.liczone, 2);
     assert.strictEqual(s.el.find((x) => x.pole === "rev_1y").pkt, 90);
     const rows = [{ t: "A", o: 5 }, { t: "B", o: 9 }, { t: "C", o: null }];
     assert.deepStrictEqual(W.miejsce(rows, "A", (r) => r.o), { miejsce: 2, z: 2 });
+});
+
+test("percentyl i ocenyZ jak w ocena.py", () => {
+    const lst = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    assert.strictEqual(W.percentyl(lst, 5, "rev_1y"), 0.45);
+    assert.strictEqual(W.percentyl(lst, 5, "pe"), 0.55);
+    assert.strictEqual(W.percentyl(lst, -1, "pe"), null);
+    assert.strictEqual(W.percentyl([1, 2], 1, "gm"), null);
+    const pct = { rev_1y: 1, rev_cagr3: 1, gm: 0.5, om: 0.5, pe: 0.2, peg: 0.4 };
+    const o = W.ocenyZ(pct);
+    assert.strictEqual(o.wzrost, Math.round(10 * (2 + 0.5 * 5) / 7 * 10) / 10);
+    assert.ok(o.ogolna > 0);
 });

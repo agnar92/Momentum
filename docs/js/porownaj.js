@@ -33,7 +33,8 @@
         for (const [g, n] of [["wzrost", "Wzrost — składniki"], ["sila", "Siła finansowa — składniki"], ["wycena", "Wycena — składniki"]]) {
             h += sek(n);
             for (const [pole, nazwa] of W.GRUPY[g]) {
-                h += wiersz(nazwa, K.map((k) => { const p = k.pct[pole]; return `${FMT[POLA[pole]](k.m[pole])} <span class="mut male">(${W.ok(p) ? Math.round(100 * p) : "–"})</span>`; }), K.map((k) => k.pct[pole]));
+                h += wiersz(nazwa, K.map((k) => { const p = k.pct[pole]; const md = k.sektor_med && W.ok(k.sektor_med[pole]) ? `<br><span class="mut male">sektor: ${FMT[POLA[pole]](k.sektor_med[pole])}</span>` : "";
+                    return `${FMT[POLA[pole]](k.m[pole])} <span class="mut male">(${W.ok(p) ? Math.round(100 * p) : "50*"})</span>${md}`; }), K.map((k) => k.pct[pole]));
             }
         }
         h += sek("Strategie (spełnione kryteria)");

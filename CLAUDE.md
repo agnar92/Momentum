@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-**Momentum — jakość vs wycena** (user, Nov 2026: „usuń wszystko co tam jest … strona porównująca jakość spółki do wyceny pod kątem PEG i DCF … znalezienie
+**Fundamenta — jakość vs wycena** (renamed from „Momentum”, user, Nov 2026: „zmień nazwę aplikacji, bo to już nie momentum”; repo and the Python package `momentum/` keep the old name; user, Nov 2026: „usuń wszystko co tam jest … strona porównująca jakość spółki do wyceny pod kątem PEG i DCF … znalezienie
 jakościowo wzrostowych spółek, które są na tle rynku znacznie lepsze”; layout inspired by screenshots of a commercial stock-analysis site the user follows,
 built with our own name, design, Polish texts and no AI-generated text). A static site (`docs/`, GitHub Pages) covering the **500 largest US-listed
 stocks by market cap EXCLUDING Financial, Basic Materials, Energy, Utilities and Real Estate** (user, Nov 2026: „wyklucz sektory, które autor mówi, że ciężko przewidzieć”; `spolki.wybierz`), refreshed weekly. The old app (CEM10 momentum lists, GLB charts, Wycena / Quality / FLIP pages, desktop gist sync …) was removed at
@@ -21,14 +21,14 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    list are kept ({tag: rows}) and `polacz` picks, per date, the first tag that has a value (companies switch tags, e.g. Revenues →
    RevenueFromContract…; NVDA's marketable securities tag stopped). Quarters (`kwartalne`): 3-month values plus differences of cumulative values of the
    same fiscal year (Q4 = FY − 9M; quarterly cash flow from YTD); first filing wins (no restatements). Debt (`dlug`): non-current + current + short-term
-   borrowings + commercial paper, fallback LongTermDebt. Foreign IFRS / 20-F filers have no us-gaap data (~100 of 500: TSM, ASML …) → Finviz fallbacks
+   borrowings + commercial paper, fallback LongTermDebt. Foreign filers: other reporting currencies (ASML EUR in us-gaap) and IFRS (`ifrs-full`, `TAGI_IFRS`, annual only) are read in the reporting currency (`waluta`) and converted with one current yfinance FX rate (`kursy`, `przelicz`: growth stays as in local currency); SEC data whose latest revenue is > 550 days old is ignored (TM / HMC stopped XBRL); the rest (no SEC filings, e.g. SKHY) → Finviz fallbacks
    (sales / EPS 5Y growth, FCF = mcap / P/FCF, cash = mcap / P/C, debt = D/E × mcap / P/B, revenue = mcap / P/S). Cash = max(SEC cash + short-term
    investments, Finviz mcap / P/C when > 1.2× SEC). < 70 % of tickers with SEC revenue = nothing written.
 3. yfinance weekly closes, 5 years (adjusted) → price chart and 1W / 1M / 1Y / 5Y returns.
 4. `ocena.metryki` (growth 1Y / 3Y / 5Y TTM, quarter y/y, years with revenue > 10 % of last 5, margins / ROE / ROA / ROIC from Finviz, ROCE = operating
    income TTM / (assets − current liabilities), ROE now (SEC) vs 5 years ago, FCF TTM and margin, net cash, PEG = P/E ÷ (100 × Finviz EPS next 5Y));
-   `oceny` = percentile of each metric within its **sector** (≥ 5 peers), group score = mean × 10: Wzrost (growth), Siła (strength), Wycena (value; high =
-   cheap), Ogólna = 0.4 / 0.35 / 0.25 (needs growth + one other group); `typy` = Lynch categories by own rules with fit 0–100; `strategie` = checklists
+   `oceny` = percentile of each metric within its **sector** (≥ 5 peers), group score = mean × 10 with a missing metric counted as 0.5 (`BRAK`, neutral; user: missing data inflated scores, e.g. RDDT growth 9.7 from 4 of 7 metrics); `mediany` = sector medians shown under every metric on the card (`sektor_med`, user: „P/E powinien być do sektora”): Wzrost (growth), Siła (strength), Wycena (value; high =
+   cheap), Ogólna = 0.4 / 0.35 / 0.25 (needs growth + one other group); young companies (`mlode`, history 1.9–5 years): growth 3Y / 5Y from available years (`hist_lat`), ni_5y annualised to 5 years, rev_lata_10 scaled to 5 (`rev_lata_n`) (user: „jeżeli spółka jest młodsza niż 5 lat to licz z tylu lat ile jest”); `rozklady` → `docs/data/sektory.json` (sorted sector values per metric) so the card can recompute scores from values the user types in for missing metrics (`W.percentyl`, `W.ocenyZ`, localStorage `fundamenta_wlasne`, ✎ on the list); `typy` = Lynch categories by own rules with fit 0–100; `strategie` = checklists
    from research: **7/7 (niskie ryzyko)** (the Hello-Stocks-style screen, stage 67–68: rev 5Y > +50 %, rev and earnings 1Y > 5 %, ROE > 15 %, D/E 0–1,
    FCF > 0, PEG 0–1; excluded sectors Financial, Basic Materials, Energy, Utilities, Real Estate), **Jakość (7 kryteriów)** (stages 74–75: rev 5Y CAGR > 8 %,
    D/E 0–1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE above 5 years ago, ROCE > 15 %), **Konsekwentny wzrost** (rev > 10 % in ≥ 3 of 5 years, D/E < 1, FCF > 0).

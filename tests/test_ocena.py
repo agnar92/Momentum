@@ -1,4 +1,5 @@
 """Testy obliczeń strony: kwartały z wartości narastających, TTM, dług, oceny, strategie, PEG i DCF."""
+import datetime as dt
 from momentum import fundamenty as F, ocena as O
 
 
@@ -73,3 +74,43 @@ def test_kwartaly_52_tygodniowe_z_16_tygodniowym_q4():
             ["2025-09-01", "2026-05-10", 300, "2026-06-01"], ["2025-09-01", "2026-08-30", 440, "2026-10-01"]]
     q = F.kwartalne(rows)
     assert q["2026-08-30"] == 140 and F.ttm(q) == [("2026-08-30", 440)]
+
+
+def test_brak_danych_neutralnie_i_mediany():
+    rows = [dict(sector="T", m=dict(rev_1y=0.1 * i, rev_cagr3=0.05 * i, ni_1y=0.02 * i, pe=10.0 + i, mcap=1e9)) for i in range(10)]
+    rows[9]["m"]["rev_cagr3"] = None          # najlepsza spółka bez jednego wskaźnika
+    O.oceny(rows)
+    o = rows[9]["oceny"]["wzrost"]
+    pr = rows[9]["pct"]["rev_1y"] + rows[9]["pct"]["ni_1y"]
+    assert abs(o - round(10 * (pr + 5 * O.BRAK) / 7, 1)) < 1e-9     # brakujące wskaźniki liczone jako 50 pkt
+    assert rows[0]["sektor_med"]["pe"] == 14.5
+
+
+def test_mssf_i_przeliczenie_walut():
+    def fy(y, v):
+        return {"start": f"{y}-01-01", "end": f"{y}-12-31", "val": v, "filed": f"{y + 1}-03-01", "form": "20-F", "fp": "FY"}
+    facts = {"ifrs-full": {"Revenue": {"units": {"TWD": [fy(2019 + i, 1000 * 1.2 ** i) for i in range(7)]}},
+                           "ProfitLoss": {"units": {"TWD": [fy(2019 + i, 300 * 1.2 ** i) for i in range(7)]}}}}
+    ex = F.wyciag(facts)
+    assert ex["waluta"] == "TWD" and "rev" in ex
+    usd = F.przelicz(ex, 0.03)
+    assert usd["waluta"] == "USD" and usd["waluta_zrodlo"] == "TWD"
+    m, _ = O.metryki(usd, {}, dzis=dt.date(2026, 6, 1))
+    assert abs(m["rev_ttm"] - 30 * 1.2 ** 6) < 1e-6
+    assert abs(m["rev_cagr3"] - 0.2) < 1e-9 and m["rev_lata_10"] == 5
+    stare, _ = O.metryki(usd, {}, dzis=dt.date(2028, 1, 1))   # raporty sprzed > 550 dni -> pomijane
+    assert stare.get("rev_ttm") is None
+
+
+def test_mloda_spolka_wzrost_z_dostepnych_lat():
+    def fy(y, v):
+        return {"start": f"{y}-01-01", "end": f"{y}-12-31", "val": v, "filed": f"{y + 1}-03-01"}
+    facts = {"us-gaap": {"Revenues": {"units": {"USD": [fy(2022 + i, 100 * 1.5 ** i) for i in range(4)]}},
+                         "NetIncomeLoss": {"units": {"USD": [fy(2022 + i, 10 * 1.5 ** i) for i in range(4)]}}}}
+    m, _ = O.metryki(F.wyciag(facts), {}, dzis=dt.date(2026, 6, 1))
+    assert m["hist_lat"] == 3.0
+    assert abs(m["rev_cagr5"] - 0.5) < 1e-3 and abs(m["rev_5y"] - (1.5 ** 3 - 1)) < 1e-9
+    assert m["rev_lata_10"] == 5 and m["rev_lata_n"] == 3
+    assert abs(m["ni_5y"] - (1.5 ** 5 - 1)) < 1e-2
+    s = O.strategie(m, "Technology")
+    assert s["7/7 (niskie ryzyko)"][0][0].endswith("(z 3,0 lat)")

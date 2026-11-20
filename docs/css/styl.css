@@ -140,3 +140,12 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 
 .uwaga { color: #d97706; font-weight: 700; cursor: help; }
 .ostrzezenie { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; }
+
+/* własne dane użytkownika */
+.wlasne { margin: 0 0 12px; padding: 10px 12px; border: 1px dashed var(--linia, #ccd); border-radius: 10px; }
+.wlasne summary { cursor: pointer; font-weight: 600; }
+.pola-wlasne { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.pola-wlasne label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
+.pola-wlasne input { width: 100%; box-sizing: border-box; padding: 6px 8px; }
+.wlasne button.drugi { background: transparent; }
+.moje { color: #7a5af8; font-weight: 700; }

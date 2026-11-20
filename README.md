@@ -1,4 +1,4 @@
-# Momentum — jakość vs wycena
+# Fundamenta — jakość vs wycena
 
 Statyczna strona (GitHub Pages, `docs/`) do szukania **jakościowych spółek wzrostowych**, które na tle rynku są wyraźnie lepsze, i do sprawdzania,
 czy ich cena jest rozsądna (PEG i DCF). Obejmuje 500 największych spółek notowanych w USA (bez finansów, surowców, energii, użyteczności publicznej i nieruchomości), dane odświeżane co tydzień.

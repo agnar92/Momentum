@@ -1,4 +1,4 @@
-// Wspólne, czyste funkcje strony „Momentum — jakość vs wycena”: formatowanie, wycena DCF / PEG (te same wzory co momentum/ocena.py),
+// Wspólne, czyste funkcje strony „Fundamenta — jakość vs wycena”: formatowanie, wycena DCF / PEG (te same wzory co momentum/ocena.py),
 // filtrowanie i sortowanie listy. W przeglądarce: window.W; w testach (node): module.exports.
 "use strict";
 (function (root) {
@@ -125,21 +125,48 @@
         wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
             ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
     };
-    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze) i ocena = średnia / 10
+    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze); brak danych = neutralne 50 pkt; ocena = średnia / 10
+    const BRAK = 0.5;
     function skladOceny(pct, grupa) {
         const el = GRUPY[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
         const z = el.filter((x) => x.pkt !== null);
-        const ocena = z.length >= 2 ? Math.round(10 * z.reduce((a, x) => a + pct[x.pole], 0) / z.length * 10) / 10 : null;
+        const suma = z.reduce((a, x) => a + pct[x.pole], 0) + BRAK * (el.length - z.length);
+        const ocena = z.length >= 2 ? Math.round(10 * suma / el.length * 10) / 10 : null;
         return { el, ocena, liczone: z.length };
     }
     // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością
+    // kierunek wskaźnika (jak GRUPY w ocena.py): 1 = więcej lepiej, -1 = mniej lepiej
+    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1 };
+    const DODATNIE = ["pe", "peg", "pfcf", "ps"];
+    // percentyl wartości v wśród wartości sektora (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
+    function percentyl(lst, v, pole) {
+        if (!ok(v) || !lst || lst.length < 5 || (DODATNIE.includes(pole) && v <= 0)) return null;
+        const mn = lst.filter((x) => x < v).length, rw = lst.filter((x) => x === v).length;
+        const p = (mn + 0.5 * rw) / lst.length;
+        return (KIER[pole] || 1) > 0 ? p : 1 - p;
+    }
+    // oceny z percentyli (jak ocena.oceny): grupy + ogólna 0,4 / 0,35 / 0,25
+    function ocenyZ(pct) {
+        const o = {};
+        Object.keys(GRUPY).forEach((g) => { o[g] = skladOceny(pct, g).ocena; });
+        const w = [["wzrost", 0.4], ["sila", 0.35], ["wycena", 0.25]].filter(([g]) => ok(o[g]));
+        o.ogolna = w.length === 3 || (w.length === 2 && ok(o.wzrost)) ? Math.round(10 * w.reduce((a, [g, x]) => a + o[g] * x, 0) / w.reduce((a, [, x]) => a + x, 0)) / 10 : null;
+        return o;
+    }
+    // pola, które użytkownik może uzupełnić sam: [pole, nazwa, jednostka] („%” = wpisywane w procentach)
+    const POLA_WLASNE = [["rev_1y", "Przychody 1 rok", "%"], ["rev_cagr3", "Przychody 3 lata, rocznie", "%"], ["rev_cagr5", "Przychody 5 lat, rocznie", "%"],
+        ["ni_1y", "Zysk netto 1 rok", "%"], ["ni_5y", "Zysk netto 5 lat, łącznie", "%"], ["eps_next5", "Prognoza EPS 5 lat, rocznie", "%"],
+        ["rev_lata_10", "Lata z przychodami > 10 % (z 5)", ""], ["gm", "Marża brutto", "%"], ["om", "Marża operacyjna", "%"], ["nm", "Marża netto", "%"],
+        ["roe", "ROE", "%"], ["roa", "ROA", "%"], ["roce", "ROCE", "%"], ["fcf_margin", "Marża FCF", "%"], ["de", "Dług / kapitał", ""], ["qr", "Quick ratio", ""],
+        ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
+
     function miejsce(rows, t, f) {
         const z = rows.filter((r) => ok(f(r))).sort((a, b) => f(b) - f(a));
         const i = z.findIndex((r) => r.t === t);
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { GRUPY, skladOceny, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
