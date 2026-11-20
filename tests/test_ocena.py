@@ -49,6 +49,7 @@ def test_oceny_percentyle_w_sektorze():
     assert rows[9]["pct"]["rev_1y"] > rows[0]["pct"]["rev_1y"]
     assert rows[0]["pct"]["pe"] > rows[9]["pct"]["pe"]          # niższe P/E = lepiej
     assert rows[0]["oceny"]["ogolna"] is None                     # za mało wskaźników
+    assert rows[0]["kompletnosc"]["niepelne"] and rows[0]["kompletnosc"]["wszystkie"] == 23
 
 
 def test_strategie_i_typy():

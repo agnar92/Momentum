@@ -49,13 +49,15 @@
     function liczby() {
         const m = M, z = K.zw || {}, o = K.oceny || {};
         const zw = (x, n) => `<div><small>${n}</small><b class="${x > 0 ? "plus" : x < 0 ? "minus" : ""}">${W.fmtPct(x, 1, true)}</b></div>`;
-        $("liczby").innerHTML = `
+        const kp = K.kompletnosc;
+        const ostrz = kp && kp.niepelne ? `<div class="ostrzezenie">⚠ <b>Niepełne dane:</b> ${kp.liczone} z ${kp.wszystkie} wskaźników${kp.kategorie && kp.kategorie.length ? ` (za mało w kategorii: ${kp.kategorie.map((g) => ({ wzrost: "Wzrost", sila: "Siła finansowa", wycena: "Wycena" })[g]).join(", ")})` : ""} — ocena może być zaburzona (np. młoda spółka bez historii albo spółka zagraniczna bez raportów w SEC). Sprawdź „Jak powstała ocena” przy wskaźnikach.</div>` : "";
+        $("liczby").innerHTML = ostrz + `
           <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle sektora ${esc(K.sector || "")}</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
           <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} · <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a></div>
           <div class="liczby" style="margin-top:12px">
             <div><small>Cena</small><b>${W.fmtCena(m.price)}</b></div><div><small>EPS (12 mies.)</small><b>${W.fmtNum(m.eps)}</b></div>
-            <div><small>Kapitalizacja</small><b>${W.fmtUsd(m.mcap)}</b></div><div><small>Miejsce</small><b>#${K.rank}</b></div>
+            <div><small>Kapitalizacja</small><b>${W.fmtUsd(m.mcap)}</b></div><div><small>Wielkość (kapit.)</small><b>#${K.rank}</b></div>
             ${zw(z["1t"], "1 tydzień")}${zw(z["1m"], "1 miesiąc")}${zw(z["1r"], "1 rok")}${zw(z["5l"], "5 lat")}
           </div>`;
     }

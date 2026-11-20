@@ -24,6 +24,7 @@
         const sek = (n) => `<tr class="sekcja"><td colspan="${K.length + 1}">${n}</td></tr>`;
         let h = `<thead><tr><th></th>${K.map((k) => `<th class="n" style="text-transform:none;font-size:14px;color:var(--tekst)"><a href="spolka.html?t=${encodeURIComponent(k.t)}">${esc(k.n)}</a><br><span class="mut male">${esc(k.t)} · ${esc(k.sector)}</span></th>`).join("")}</tr></thead><tbody>`;
         h += wiersz("Typ spółki", K.map((k) => esc(k.typy && k.typy[0] ? k.typy[0][0] : "–")));
+        h += wiersz("Kompletność danych", K.map((k) => (k.kompletnosc ? `${k.kompletnosc.niepelne ? "⚠ " : ""}${k.kompletnosc.liczone}/${k.kompletnosc.wszystkie}` : "–")), K.map((k) => (k.kompletnosc ? k.kompletnosc.liczone : null)));
         h += wiersz("Kapitalizacja", K.map((k) => W.fmtUsd(k.m.mcap)), K.map((k) => k.m.mcap));
         h += sek("Oceny (0–10, na tle sektora)");
         for (const [g, n] of [["ogolna", "Ocena ogólna"], ["wzrost", "Wzrost"], ["sila", "Siła finansowa"], ["wycena", "Wycena (wyżej = taniej)"]]) {
