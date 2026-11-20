@@ -82,7 +82,6 @@ def metryki(ex, fv, dzis=None, splity=()):
         for lat, k in ((1, "ni_1y"), (3, "ni_3y"), (5, "ni_5y")):
             a = F.wartosc_lata_temu(nt, e, lat)
             m[k] = n0 / a - 1 if a and a > 0 and n0 > 0 else None
-    mlode(m, rt, nt)
     # reguła użytkownika: fundamenty słabną 2 lata z rzędu (przychody lub zysk TTM r/r < 0 teraz i rok wcześniej) — etap 77: −4 pp w 5 lat
     def _rr(seria, lat):
         if not seria:
@@ -210,44 +209,6 @@ def zmiana_akcji(sh, splity=()):
             mn *= r
     zm = s0 / (s3 * mn) - 1 if s3 and s3 > 0 else None
     return zm if zm is not None and -0.6 < zm < 3 else None
-
-
-def mlode(m, rt, nt):
-    """Młoda spółka (debiut / wydzielenie, historia < 5 lat): wzrost z tylu lat, ile jest (min. 2). Przychody 3 / 5 lat = średnioroczny wzrost
-    z dostępnych lat (`hist_lat`), łączny wzrost przychodów = rzeczywisty z tych lat; zysk netto 5 lat w przeliczeniu na 5 lat (porównywalny
-    z innymi spółkami); lata z przychodami > 10 % przeskalowane do 5 (np. 2 z 2 = 5)."""
-    if not rt or m.get("rev_cagr5") is not None:
-        return
-    e, r0 = rt[-1]
-    pierwszy = next(((d, v) for d, v in rt if v and v > 0), None)
-    if not pierwszy:
-        return
-    lat = (F.D(e) - F.D(pierwszy[0])).days / 365.25
-    if lat < 1.9 or not r0 or r0 <= 0:
-        return
-    m["hist_lat"] = round(lat, 1)
-    g = (r0 / pierwszy[1]) ** (1 / lat) - 1
-    m["rev_cagr5"] = g
-    m["rev_5y"] = r0 / pierwszy[1] - 1
-    if m.get("rev_cagr3") is None:
-        m["rev_cagr3"] = g
-        m["rev_3y"] = m["rev_5y"] if lat < 3 else m.get("rev_3y")
-    if m.get("rev_lata_10") is None:
-        lata = []
-        for k in range(int(lat + 0.1)):
-            a, b = F.wartosc_lata_temu(rt, e, k + 1), F.wartosc_lata_temu(rt, e, k) if k else r0
-            if a and b and a > 0:
-                lata.append(b / a - 1)
-        if len(lata) >= 2:
-            m["rev_lata_10"] = round(5 * sum(x > 0.10 for x in lata) / len(lata), 1)
-            m["rev_lata"] = [_r(x) for x in lata]
-            m["rev_lata_n"] = len(lata)
-    if m.get("ni_5y") is None and nt:
-        n0 = nt[-1][1]
-        p = next(((d, v) for d, v in nt if (F.D(nt[-1][0]) - F.D(d)).days / 365.25 >= 1.9), None)
-        if p and p[1] and p[1] > 0 and n0 and n0 > 0:
-            ln = (F.D(nt[-1][0]) - F.D(p[0])).days / 365.25
-            m["ni_5y"] = (n0 / p[1]) ** (5 / ln) - 1
 
 
 def rozklady(rows):

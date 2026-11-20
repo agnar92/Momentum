@@ -103,19 +103,12 @@ def test_mssf_i_przeliczenie_walut():
     assert stare.get("rev_ttm") is None
 
 
-def test_mloda_spolka_wzrost_z_dostepnych_lat():
-    def fy(y, v):
-        return {"start": f"{y}-01-01", "end": f"{y}-12-31", "val": v, "filed": f"{y + 1}-03-01"}
-    facts = {"us-gaap": {"Revenues": {"units": {"USD": [fy(2022 + i, 100 * 1.5 ** i) for i in range(4)]}},
-                         "NetIncomeLoss": {"units": {"USD": [fy(2022 + i, 10 * 1.5 ** i) for i in range(4)]}}}}
-    m, _ = O.metryki(F.wyciag(facts), {}, dzis=dt.date(2026, 6, 1))
-    assert m["hist_lat"] == 3.0
-    assert abs(m["rev_cagr5"] - 0.5) < 1e-3 and abs(m["rev_5y"] - (1.5 ** 3 - 1)) < 1e-9
-    assert m["rev_lata_10"] == 5 and m["rev_lata_n"] == 3
-    assert abs(m["ni_5y"] - (1.5 ** 5 - 1)) < 1e-2
-    s = O.strategie(m, "Technology")
-    assert s["7/7 (niskie ryzyko)"][0][0].endswith("(z 3,0 lat)")
-
+def test_tylko_spolki_notowane_5_lat():
+    import spolki
+    dzis = dt.date(2026, 11, 20)
+    assert spolki.notowana_5_lat((["2021-11-22"], [1.0]), dzis)
+    assert not spolki.notowana_5_lat((["2025-02-24"], [1.0]), dzis)        # np. SNDK (wydzielenie 2025)
+    assert not spolki.notowana_5_lat(None, dzis)
 
 def test_zmiana_liczby_akcji_ze_splitem():
     sh = {"2022-06-30": 100.0, "2025-06-30": 900.0}

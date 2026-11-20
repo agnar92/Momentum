@@ -156,17 +156,36 @@ def wybierz(fv, top=500):
     return sorted((r for r in fv.values() if r.get("marketCap") and r.get("sector") not in ocena.SEKTORY_WYKL), key=lambda r: -r["marketCap"])[:top]
 
 
-def buduj(fv, ex, px, top=500):
-    lista = wybierz(fv, top)
-    rows = []
-    for rank, r in enumerate(lista, 1):
+def notowana_5_lat(c, dzis=None):
+    """Kurs od co najmniej ~5 lat (pierwsze notowanie tygodniowe ≤ dziś − 4,9 roku); yfinance zwraca maks. 5 lat."""
+    if not c or not c[0]:
+        return False
+    return dt.date.fromisoformat(c[0][0]) <= (dzis or dt.date.today()) - dt.timedelta(days=round(4.9 * 365.25))
+
+
+def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
+    """500 największych wg kapitalizacji (bez wykluczonych sektorów) spośród spółek notowanych co najmniej 5 lat (użytkownik: „top 500 po kapitalizacji,
+    które są minimum 5 lat na rynku”); `kandydaci` = tickery z pobranymi danymi (domyślnie top wg kapitalizacji). Brak kursów (błąd yfinance) -> wiek
+    ze sprawozdań: przychody sprzed 5 lat w SEC."""
+    kand = set(kandydaci) if kandydaci is not None else {r["ticker"] for r in wybierz(fv, top)}
+    lista = [r for r in wybierz(fv, len(fv)) if r["ticker"] in kand]
+    rows, pominiete = [], []
+    for r in lista:
+        if len(rows) >= top:
+            break
         t = r["ticker"]
         m, hist = ocena.metryki(ex.get(t) or {}, r, splity=(px.get(t) or (None, None, []))[2] if px.get(t) and len(px[t]) > 2 else [])
+        wiek_ok = notowana_5_lat(px.get(t)) if px.get(t) else m.get("rev_cagr5") is not None and m.get("zrodlo_wzrostu") != "Finviz"
+        if not wiek_ok:
+            pominiete.append(t)
+            continue
+        rank = len(rows) + 1
         sc = ocena.dcf_scenariusze(m, hist, r.get("sector"))
         m["dcf"] = sc["base"]["wartosc"] if sc else None
         m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None
         rows.append(dict(t=t, n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
                          rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t))))
+    log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     ocena.oceny(rows)
     for r in rows:
         r["typy"] = ocena.typy(r["m"], r["sector"])
@@ -219,7 +238,7 @@ def main(argv=None):
     if len(fv) < 400:
         print(f"Finviz zwrócił {len(fv)} spółek — za mało, nic nie zapisuję.")
         return 1
-    top = [r["ticker"] for r in wybierz(fv, a.top)]
+    top = [r["ticker"] for r in wybierz(fv, a.top + 200)]       # zapas: część spółek odpada (krócej niż 5 lat na rynku)
     if a.cache:
         os.makedirs(a.cache, exist_ok=True)
     ex = sec_wyciagi(top, a.cache)
@@ -227,7 +246,7 @@ def main(argv=None):
         print("Za mało danych SEC — nic nie zapisuję.")
         return 1
     px = ceny(top)
-    rows = buduj(fv, ex, px, a.top)
+    rows = buduj(fv, ex, px, a.top, kandydaci=top)
     zapisz(rows, a.out)
     print(f"Zapisano {len(rows)} spółek; z danymi SEC {sum(1 for v in ex.values() if v.get('rev'))}, z cenami {len(px)}.")
     return 0
