@@ -11,6 +11,7 @@
     const oc = (x) => `<span class="ocena ${W.klasaOceny(x)}">${W.ok(x) ? W.fmtNum(x, 1) : "–"}</span>`;
     const stl = (v) => v ? `${v[0]}/${v[1]}` : "–";
 
+    let MIEJSCA = {};
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
         const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs };
@@ -18,8 +19,10 @@
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
+            <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
             <td class="firma"><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
-            <td class="n">${oc(r.o.wzrost)}</td><td class="n">${oc(r.o.sila)}</td><td class="n">${oc(r.o.wycena)}</td><td class="n">${oc(r.o.ogolna)}</td>
+            <td class="n ogolna">${r.kp && r.kp[2] ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
+            <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td>${esc(r.typ || "–")}</td>
             <td class="n">${W.ok(r.peg) && r.peg > 0 ? W.fmtNum(r.peg, 2) : "–"}</td>
             <td class="n ${r.dcf_pot > 0 ? "plus" : r.dcf_pot < 0 ? "minus" : ""}">${W.fmtPct(r.dcf_pot, 0, true)}</td>
@@ -43,6 +46,7 @@
     }
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
         D = d;
+        W.sortuj(d.rows, "ogolna", -1).filter((r) => r.o && W.ok(r.o.ogolna)).forEach((r, i) => { MIEJSCA[r.t] = i + 1; });
         const [y, m, dd] = d.generated_at.split("-"); $("asof").textContent = `${dd}.${m}.${y}`;
         opcje("sektor", d.sektory);
         opcje("typ", [...new Set(d.rows.map((r) => r.typ).filter(Boolean))].sort());

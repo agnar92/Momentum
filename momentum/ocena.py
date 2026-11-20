@@ -1,5 +1,5 @@
 """Ocena spółki: wskaźniki wzrostu / siły finansowej / wyceny, oceny 0-10 względem sektora, typ spółki (kategorie Lyncha),
-dopasowanie do strategii z badania oraz wycena PEG i DCF (te same wzory co docs/js/wycena-dcf.js). Czyste funkcje, bez sieci."""
+dopasowanie do strategii z badania oraz wycena PEG i DCF (te same wzory co docs/js/wspolne.js). Czyste funkcje, bez sieci."""
 import datetime as dt
 import math
 from . import fundamenty as F
@@ -185,7 +185,9 @@ def oceny(rows):
         for pole, kier in pola:
             for r, p in zip(rows, percentyle(rows, pole, kier)):
                 r["pct"][pole] = p
+    wszystkie = sum(len(p) for p in GRUPY.values())
     for r in rows:
+        n = sum(1 for g, pola in GRUPY.items() for p, _ in pola if r["pct"].get(p) is not None)
         o = {}
         for g, pola in GRUPY.items():
             v = [r["pct"][p] for p, _ in pola if r["pct"].get(p) is not None]
@@ -193,6 +195,9 @@ def oceny(rows):
         w = [(o[g], wg) for g, wg in (("wzrost", 0.4), ("sila", 0.35), ("wycena", 0.25)) if o[g] is not None]
         o["ogolna"] = round(sum(a * b for a, b in w) / sum(b for _, b in w), 1) if len(w) == 3 or (len(w) == 2 and o["wzrost"] is not None) else None
         r["oceny"] = o
+        # niepełne dane (młoda spółka, emitent zagraniczny bez raportów us-gaap): < 75 % wskaźników albo w którejś kategorii < 60 % jej wskaźników
+        slabe = [g for g, pola in GRUPY.items() if sum(1 for p, _ in pola if r["pct"].get(p) is not None) < 0.6 * len(pola)]
+        r["kompletnosc"] = dict(liczone=n, wszystkie=wszystkie, niepelne=n < 0.75 * wszystkie or bool(slabe), kategorie=slabe)
 
 
 # --- typ spółki (kategorie Petera Lyncha, reguły własne) -------------------------------------------------------------
