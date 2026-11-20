@@ -2,7 +2,7 @@
 -> docs/data/lista.json (tabela) i docs/data/spolki/<TICKER>.json (karta spółki).
 
 Uruchamiany co tydzień przez workflow „Dane spółek” (i ręcznie). Kolejność: sito Finviz cap_largeover (widoki 111 / 121 / 161, wszystkie strony),
-500 największych wg kapitalizacji; CIK z listy SEC; companyfacts każdej spółki (4 wątki); ceny tygodniowe 5 lat; wskaźniki i oceny (momentum/ocena.py)."""
+500 największych wg kapitalizacji bez sektorów: finanse, surowce, energia, użyteczność publiczna, nieruchomości; CIK z listy SEC; companyfacts każdej spółki (4 wątki); ceny tygodniowe 5 lat; wskaźniki i oceny (momentum/ocena.py)."""
 import argparse
 import datetime as dt
 import json
@@ -124,8 +124,13 @@ def zwroty(c):
     return {"1t": f(1), "1m": f(4), "1r": f(52), "5l": v[-1] / v[0] - 1 if v[0] > 0 else None}
 
 
+def wybierz(fv, top=500):
+    """500 największych wg kapitalizacji BEZ sektorów trudnych do przewidzenia (finanse, surowce, energia, użyteczność publiczna, nieruchomości)."""
+    return sorted((r for r in fv.values() if r.get("marketCap") and r.get("sector") not in ocena.SEKTORY_WYKL), key=lambda r: -r["marketCap"])[:top]
+
+
 def buduj(fv, ex, px, top=500):
-    lista = sorted((r for r in fv.values() if r.get("marketCap")), key=lambda r: -r["marketCap"])[:top]
+    lista = wybierz(fv, top)
     rows = []
     for rank, r in enumerate(lista, 1):
         t = r["ticker"]
@@ -185,7 +190,7 @@ def main(argv=None):
     if len(fv) < 400:
         print(f"Finviz zwrócił {len(fv)} spółek — za mało, nic nie zapisuję.")
         return 1
-    top = [r["ticker"] for r in sorted(fv.values(), key=lambda r: -(r.get("marketCap") or 0))[:a.top]]
+    top = [r["ticker"] for r in wybierz(fv, a.top)]
     if a.cache:
         os.makedirs(a.cache, exist_ok=True)
     ex = sec_wyciagi(top, a.cache)

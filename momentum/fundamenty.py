@@ -35,7 +35,8 @@ def _okres(r):
 
 
 def kwartalne(rows):
-    """[[start, end, val, filed], ...] -> {end: val} kwartały (80-100 dni) z wartości 3-mies. i różnic narastających w roku obrotowym."""
+    """[[start, end, val, filed], ...] -> {end: val} kwartały (80-120 dni: także 16-tygodniowe kwartały COST / PEP / KR) z wartości kwartalnych
+    i różnic narastających w roku obrotowym."""
     pierwsze = {}
     for s, e, v, f in rows:
         k = (s, e)
@@ -43,7 +44,7 @@ def kwartalne(rows):
             pierwsze[k] = (v, f)
     q = {}
     for (s, e), (v, _) in pierwsze.items():
-        if 80 <= (D(e) - D(s)).days <= 100:
+        if 80 <= (D(e) - D(s)).days <= 120:
             q.setdefault(e, v)
     grupy = {}
     for (s, e), (v, _) in pierwsze.items():
@@ -53,18 +54,18 @@ def kwartalne(rows):
     for s, lst in grupy.items():
         lst.sort()
         for (e0, n0, v0), (e1, n1, v1) in zip(lst, lst[1:]):
-            if 80 <= n1 - n0 <= 100 and e1 not in q:
+            if 80 <= n1 - n0 <= 120 and e1 not in q:
                 q[e1] = v1 - v0
     return dict(sorted(q.items()))
 
 
 def ttm(q):
-    """{end: val} kwartały -> [(end, suma 4 kolejnych)] (odstępy 75-110 dni)."""
+    """{end: val} kwartały -> [(end, suma 4 kolejnych)] (odstępy 75-125 dni, razem 350-380 dni)."""
     e = sorted(q)
     out = []
     for i in range(3, len(e)):
         z = e[i - 3:i + 1]
-        if all(75 <= (D(z[k + 1]) - D(z[k])).days <= 110 for k in range(3)):
+        if all(75 <= (D(z[k + 1]) - D(z[k])).days <= 125 for k in range(3)) and 250 <= (D(z[-1]) - D(z[0])).days <= 300:
             out.append((z[-1], sum(q[x] for x in z)))
     return out
 
@@ -119,15 +120,16 @@ def wyciag(facts):
     return out
 
 
-def polacz(d, fn):
-    """{tag: wiersze} -> {data: wartość}: fn(wiersze) każdego tagu, dla każdej daty pierwszy tag (wg kolejności listy), który ją ma.
-    Przyjmuje też starszy format (sama lista wierszy)."""
+def polacz(d, fn, najwieksza=False):
+    """{tag: wiersze} -> {data: wartość}: fn(wiersze) każdego tagu, dla każdej daty pierwszy tag (wg kolejności listy), który ją ma;
+    `najwieksza` = największa wartość spośród tagów (przychody: inne tagi bywają częścią przychodów, np. segment). Przyjmuje też samą listę wierszy."""
     if isinstance(d, list):
         return fn(d)
     out = {}
     for rows in d.values():
         for e, v in fn(rows).items():
-            out.setdefault(e, v)
+            if e not in out or (najwieksza and v is not None and v > out[e]):
+                out[e] = v
     return dict(sorted(out.items()))
 
 
