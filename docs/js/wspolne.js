@@ -134,7 +134,8 @@
             ["ni_5y", "Zysk netto 5 lat"], ["eps_next5", "Prognoza EPS 5 lat"], ["rev_lata_10", "Lata z przychodami > 10 %"], ["zysk_lata", "Lata ze wzrostem zysku"]],
         sila: [["gm", "Marża brutto"], ["om", "Marża operacyjna"], ["nm", "Marża netto"], ["roe", "ROE"], ["roa", "ROA"], ["roce", "ROCE"], ["fcf_margin", "Marża FCF"],
             ["de", "Dług / kapitał (mniej = lepiej)"], ["qr", "Quick ratio"], ["net_cash_mc", "Gotówka netto / kapitalizacja"],
-            ["akcje_3l", "Zmiana liczby akcji 3 lata (mniej = lepiej)"]],
+            ["akcje_3l", "Zmiana liczby akcji 3 lata (mniej = lepiej)"], ["capex_przych", "Capex / przychody (mniej = lepiej)"],
+            ["kapital_3l", "Wzrost kapitału własnego 3 lata (mniej = lepiej)"]],
         wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
             ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
     };
@@ -149,7 +150,7 @@
     }
     // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością
     // kierunek wskaźnika (jak GRUPY w ocena.py): 1 = więcej lepiej, -1 = mniej lepiej
-    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1 };
+    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1, capex_przych: -1, kapital_3l: -1 };
     const DODATNIE = ["pe", "peg", "pfcf", "ps"];
     // percentyl wartości v wśród wartości wszystkich spółek (etap 77) (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
     function percentyl(lst, v, pole) {
@@ -171,7 +172,7 @@
         ["ni_1y", "Zysk netto 1 rok", "%"], ["ni_5y", "Zysk netto 5 lat, łącznie", "%"], ["eps_next5", "Prognoza EPS 5 lat, rocznie", "%"],
         ["rev_lata_10", "Lata z przychodami > 10 % (z 5)", ""], ["zysk_lata", "Lata ze wzrostem zysku (z 5)", ""], ["gm", "Marża brutto", "%"], ["om", "Marża operacyjna", "%"], ["nm", "Marża netto", "%"],
         ["roe", "ROE", "%"], ["roa", "ROA", "%"], ["roce", "ROCE", "%"], ["fcf_margin", "Marża FCF", "%"], ["de", "Dług / kapitał", ""], ["qr", "Quick ratio", ""],
-        ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
+        ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["capex_przych", "Capex / przychody", "%"], ["kapital_3l", "Wzrost kapitału własnego 3 lata, rocznie", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
 
     function miejsce(rows, t, f) {
         const z = rows.filter((r) => ok(f(r))).sort((a, b) => f(b) - f(a));
