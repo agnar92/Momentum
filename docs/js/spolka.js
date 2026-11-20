@@ -1,4 +1,4 @@
-// Karta spółki: podsumowanie, typ spółki, oceny, wskaźniki na tle 500 spółek (mediana sektora jako odniesienie), strategie, wycena PEG i DCF (edytowalna), sprawozdania.
+// Karta spółki: podsumowanie, typ spółki, oceny, wskaźniki na tle 500 spółek (mediana 500 spółek jako odniesienie), strategie, wycena PEG i DCF (edytowalna), sprawozdania.
 "use strict";
 (function () {
     const $ = (id) => document.getElementById(id);
@@ -9,44 +9,27 @@
     const oc = (x) => `<span class="ocena ${W.klasaOceny(x)}">${W.ok(x) ? W.fmtNum(x, 1) : "–"}</span>`;
     const usdOs = (v) => W.fmtUsd(v, 0);
 
-    let TW = "peg";      // wycena na górze karty: najpierw PEG, przełącznik na DCF
     function top() {
-        const m = M, dcfB = K.dcf && K.dcf.base ? K.dcf.base.wartosc : null, pot = m.dcf_pot;
-        const poz = W.pozycjaWyceny(pot);
+        const m = M;
         const fakty = [];
         if (W.ok(m.rev_1y)) fakty.push(`przychody ${W.fmtPct(m.rev_1y, 0, true)} r/r`);
         if (W.ok(m.nm)) fakty.push(`marża netto ${W.fmtPct(m.nm, 0)}`);
         if (W.ok(m.roe)) fakty.push(`ROE ${W.fmtPct(m.roe, 0)}`);
         if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} USD)` : `dług netto ${W.fmtUsd(-m.net_cash)} USD`);
         const typ = K.typy && K.typy[0];
+        const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">szczegóły PEG / DCF ↓</a></div>` : "";
         $("top").innerHTML = `
           <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span></h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div></div>
-          <div class="siatka3">
+          <div class="siatka2">
             <div class="pole"><div class="mut male">W skrócie</div><p style="font-size:15px;margin:6px 0">${esc(fakty.join(", ") || "Brak danych z raportów.")}.</p>
-              <div class="mut male">Miejsce #${K.rank} wg kapitalizacji · dane z ${esc(K.generated_at)}</div></div>
-            <div class="pole"><div style="display:flex;justify-content:space-between;align-items:center"><span class="mut male">Wycena (${TW === "peg" ? "PEG" : "DCF, scenariusz bazowy"})</span>
-              <span class="zakladki male"><button data-tw="peg" class="${TW === "peg" ? "akt" : ""}">PEG</button><button data-tw="dcf" class="${TW === "dcf" ? "akt" : ""}">DCF</button></span></div>
-              ${TW === "peg" ? (W.ok(m.peg) && m.peg > 0 ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><b style="font-size:22px">PEG ${W.fmtNum(m.peg)}</b>
-                <span class="pill p-${slug(W.etykietaPeg(m.peg))}">${esc(W.etykietaPeg(m.peg))}</span></div>
-                <div class="mut male">P/E ${W.fmtNum(m.pe)} ÷ prognoza wzrostu EPS ${W.fmtPct(m.eps_next5, 1)} rocznie · cena przy PEG 1: ${W.fmtCena(m.price / m.peg)}, przy PEG 2: ${W.fmtCena(2 * m.price / m.peg)}</div>
-                <div class="pasek-wyceny"><span class="znak" style="left:${(100 * W.pozycjaPeg(m.peg)).toFixed(1)}%"></span></div>
-                <div class="skala mut"><span>PEG 0</span><span>1 tanio</span><span>2 uczciwie</span><span>3 drogo</span><span>4+</span></div>`
-                : `<p class="mut">Brak PEG (ujemny zysk albo brak prognozy wzrostu EPS). Sprawdź wycenę DCF.</p>`)
-              : (poz !== null ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><b style="font-size:22px">${W.fmtCena(dcfB)}</b>
-                <span class="pill p-${slug(W.etykieta(pot))}">${esc(W.etykieta(pot) || "")}</span></div>
-                <div class="mut male">${W.fmtPct(pot, 1, true)} względem ceny ${W.fmtCena(m.price)}</div>
-                <div class="pasek-wyceny"><span class="znak" style="left:${(100 * poz).toFixed(1)}%"></span></div>
-                <div class="skala mut"><span>Bardzo tania</span><span>Niedowartościowana</span><span>Uczciwie</span><span>Droga</span><span>Bardzo droga</span></div>`
-                : `<p class="mut">${K.sector === "Financial" ? "DCF nie ma sensu dla banków i ubezpieczycieli (przepływy to depozyty i rezerwy)." : "Brak danych do DCF (np. ujemny FCF)."}</p>`)}
-            </div>
+              <div class="mut male">Miejsce #${K.rank} wg kapitalizacji · dane z ${esc(K.generated_at)}</div>${wyc}</div>
             <div class="pole"><div class="mut male">Typ spółki</div>
               ${typ ? `<div style="display:flex;justify-content:space-between;margin-top:6px"><b style="font-size:17px">${esc(typ[0])}</b><span class="mut male">dopasowanie ${typ[1]} %</span></div>
               <div class="dopas"><i style="width:${typ[1]}%"></i></div><div class="mut male">${esc(typ[2])}</div>
               <details style="margin-top:8px"><summary class="mut male">Wszystkie typy</summary>${K.typy.map((x) => `<div class="male" style="display:flex;justify-content:space-between"><span>${esc(x[0])}</span><span>${x[1]} %</span></div>`).join("")}</details>` : '<p class="mut">–</p>'}
             </div>
           </div>`;
-        $("top").querySelectorAll("button[data-tw]").forEach((x) => x.addEventListener("click", () => { TW = x.dataset.tw; top(); }));
     }
 
     // --- własne dane użytkownika (brakujące wskaźniki, np. młoda spółka): localStorage, ocena przeliczana w przeglądarce ---
@@ -68,9 +51,9 @@
     function wlasne() {
         const brak = W.POLA_WLASNE.filter(([p]) => !W.ok(ORIG.pct[p]) || p in WL);
         if (!brak.length) return "";
-        const S = K.sektor_med || {};
+        const S = K.med500 || {};
         const wart = (p, j) => { const v = WL[p]; return W.ok(v) ? String(Math.round((j === "%" ? 100 * v : v) * 100) / 100).replace(".", ",") : ""; };
-        const med = (p, j) => W.ok(S[p]) ? `mediana sektora ${j === "%" ? W.fmtPct(S[p], 1) : W.fmtNum(S[p])}` : "";
+        const med = (p, j) => W.ok(S[p]) ? `mediana 500 spółek ${j === "%" ? W.fmtPct(S[p], 1) : W.fmtNum(S[p])}` : "";
         const n = Object.keys(WL).length;
         return `<details class="wlasne"${n ? " open" : ""}><summary>✎ ${n ? `Ocena uwzględnia Twoje dane (${n})` : "Uzupełnij brakujące dane samodzielnie"}</summary>
           <div class="mut male" style="margin:6px 0">Wpisz wartości, których brakuje (np. z raportu spółki). Ocena przeliczy się na tle wszystkich 500 spółek; dane zostają tylko w tej przeglądarce i widać je też na liście (✎).</div>
@@ -133,11 +116,11 @@
 
     function metryki() {
         const m = M, p = K.pct || {};
-        const S = K.sektor_med || {};
+        const S = K.med500 || {};
         // n: nazwa, v: wartość (tekst), pole: percentyl (ocena), med: [pole mediany, formatowanie, dopisek]
         const w = (n, v, pole, med) => {
             const d = pole ? W.opisPercentyla(p[pole]) : null;
-            const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana sektora: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
+            const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana 500 spółek: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
             const moje = pole && pole in WL ? ' <span class="moje" title="Twoje dane">✎</span>' : "";
             return `<div class="wiersz"><span>${n}: <b>${v}</b>${moje}<br>${mtxt}</span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
         };
@@ -149,7 +132,7 @@
               ${s.el.map((x) => `<div class="pkt ${x.pkt === null ? "nie-liczy" : ""}"><span>${esc(x.nazwa)}</span><span class="pas"><i style="width:${x.pkt || 0}%"></i></span><b title="${x.pkt === null ? "brak danych — liczone jako 50 pkt (środek stawki)" : ""}">${x.pkt === null ? "50*" : x.pkt}</b></div>`).join("")}
               <div class="mut" style="margin-top:6px">Punkty = percentyl wśród 500 spółek (100 = najlepsza). Ocena = średnia punktów ÷ 10; 50* = brak danych, liczone neutralnie jako środek stawki (żeby brak danych nie zawyżał ani nie zaniżał oceny).</div></details>`;
         };
-        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie ze wszystkimi 500 spółkami (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej). Pod wartością: mediana sektora ${esc(K.sector || "")} jako punkt odniesienia, np. typowe P/E w tej branży.</div>
+        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie ze wszystkimi 500 spółkami (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej). Pod wartością: mediana wszystkich 500 spółek jako punkt odniesienia.</div>
           <div class="kol3">
             <div class="kol k-wzrost"><div class="naglowek-kol">📈 Wzrost</div>
               ${w("Przychody 1 rok (12 mies.)", pz(m.rev_1y), "rev_1y", ["rev_1y", pz])}${w("Przychody kwartał r/r", pz(m.rev_q_yoy))}${w("Zysk netto 1 rok", pz(m.ni_1y), "ni_1y", ["ni_1y", pz])}
@@ -163,6 +146,7 @@
               ${w("ROE", pr(m.roe), "roe", ["roe", pr])}${w("ROA", pr(m.roa), "roa", ["roa", pr])}${w("ROIC", pr(m.roic), null, ["roic", pr])}${w("ROCE", pr(m.roce), "roce", ["roce", pr])}
               ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD · marża " + pr(m.fcf_margin), "fcf_margin", ["fcf_margin", pr, "(marża FCF)"])}${w("Dług / kapitał", W.fmtNum(m.de), "de", ["de", nm2])}
               ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}${w("Liczba akcji, zmiana 3 lata", W.ok(m.akcje_3l) ? pz(m.akcje_3l) + (m.akcje_3l < -0.005 ? " (skup akcji)" : m.akcje_3l > 0.005 ? " (nowe akcje)" : "") : "–", "akcje_3l", ["akcje_3l", pz])}
+              ${w("Capex / przychody (inwestycje w majątek)", pr(m.capex_przych), "capex_przych", ["capex_przych", pr])}${w("Wzrost kapitału własnego 3 lata (rocznie)", pz(m.kapital_3l), "kapital_3l", ["kapital_3l", pz])}
               <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
               ${w("P/E", W.fmtNum(m.pe), "pe", ["pe", nm2])}${w("Forward P/E", W.fmtNum(m.fpe), null, ["fpe", nm2])}${w("P/S", W.fmtNum(m.ps), "ps", ["ps", nm2])}${w("P/B", W.fmtNum(m.pb), null, ["pb", nm2])}
@@ -207,7 +191,7 @@
     }
     function wycena() {
         const el = $("wycena");
-        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Wycena</h2><div class="pod">Dwa sposoby: PEG (cena do wzrostu zysku) i DCF (zdyskontowane wolne przepływy). Zmieniaj założenia.</div></div>
+        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Wycena</h2><div class="pod">Najpierw PEG (cena do wzrostu zysku — moment zakupu dobrej spółki), przełącz na DCF (zdyskontowane wolne przepływy). Zmieniaj założenia.</div></div>
           <div class="zakladki"><button data-tab="peg" class="${S.tab === "peg" ? "akt" : ""}">PEG</button><button data-tab="dcf" class="${S.tab === "dcf" ? "akt" : ""}">DCF</button></div></div><div id="wyc-tresc"></div>`;
         el.querySelectorAll("button[data-tab]").forEach((b) => b.addEventListener("click", () => { S.tab = b.dataset.tab; wycena(); }));
         if (S.tab === "peg") peg(); else dcfWidok();
@@ -226,7 +210,8 @@
           </div>
           <div class="karta ciemna" style="margin:0">
             <div style="display:flex;gap:14px;align-items:center"><div><div class="mut male">PEG</div><div class="peg-duzy">${W.ok(base) ? W.fmtNum(base) : "–"}</div></div>
-              <span class="pill p-${slug(W.etykieta(null, base) || "")}">${W.pegEtykieta(base)}</span></div>
+              <span class="pill p-${slug(W.etykietaPeg(base) || "")}">${esc(W.etykietaPeg(base) || "–")}</span></div>
+            ${W.ok(base) && base > 0 ? `<div class="male" style="margin-top:6px">Cena dziś ${W.fmtCena(M.price)} · przy PEG 1: <b>${W.fmtCena(M.price / base)}</b> · przy PEG 2: <b>${W.fmtCena(2 * M.price / base)}</b></div>` : ""}
             ${sc ? `<div class="scen">${["bear", "base", "bull"].map((k) => `<div class="${k}"><div class="t">${{ bear: "Pesymistycznie", base: "Bazowo", bull: "Optymistycznie" }[k]}</div><b style="font-size:20px">${W.fmtPct(sc[k].g, 1)}</b><div class="mut male">wzrost EPS</div><div>PEG ${W.fmtNum(sc[k].peg)}</div></div>`).join("")}</div>` : ""}
             ${poz !== null ? `<div class="peg-skala"><span class="znak" style="left:${poz}%"></span></div><div class="skala mut"><span>0</span><span>1 · nisko</span><span>2 · uczciwie</span><span>3 · drogo</span><span>4+</span></div>` : ""}
             <p class="mut male">PEG = P/E ÷ (oczekiwany wzrost EPS w %). Poniżej 1 — tanio względem wzrostu, 1–2 — uczciwie, powyżej 3 — drogo.</p>

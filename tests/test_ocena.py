@@ -51,7 +51,7 @@ def test_oceny_percentyle_w_sektorze():
     assert rows[9]["pct"]["rev_1y"] > rows[0]["pct"]["rev_1y"]
     assert rows[0]["pct"]["pe"] > rows[9]["pct"]["pe"]          # niższe P/E = lepiej
     assert rows[0]["oceny"]["ogolna"] is None                     # za mało wskaźników
-    assert rows[0]["kompletnosc"]["niepelne"] and rows[0]["kompletnosc"]["wszystkie"] == 25
+    assert rows[0]["kompletnosc"]["niepelne"] and rows[0]["kompletnosc"]["wszystkie"] == 27
 
 
 def test_strategie_i_typy():
@@ -84,7 +84,7 @@ def test_brak_danych_neutralnie_i_mediany():
     o = rows[9]["oceny"]["wzrost"]
     pr = rows[9]["pct"]["rev_1y"] + rows[9]["pct"]["ni_1y"]
     assert abs(o - round(10 * (pr + 6 * O.BRAK) / 8, 1)) < 1e-9     # brakujące wskaźniki liczone jako 50 pkt
-    assert rows[0]["sektor_med"]["pe"] == 14.5
+    assert rows[0]["med500"]["pe"] == 14.5
 
 
 def test_mssf_i_przeliczenie_walut():

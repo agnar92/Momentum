@@ -106,6 +106,14 @@ def metryki(ex, fv, dzis=None, splity=()):
     if ft:
         m["fcf_ttm"] = ft[-1][1]
         m["fcf_margin"] = ft[-1][1] / m["rev_ttm"] if m.get("rev_ttm") else None
+    # etap 79: capex / przychody (12 mies.; mniej = lżejszy kapitałowo model) — zapas: ostatni rok obrotowy
+    ct = F.ttm(q["capex"]) if "capex" in q else []
+    if ct and m.get("rev_ttm") and abs((F.D(ct[-1][0]) - F.D(rt[-1][0])).days) <= 100:
+        m["capex_przych"] = ct[-1][1] / m["rev_ttm"]
+    elif ex.get("capex") and m.get("rev_ttm"):
+        ca_ = F.polacz(ex["capex"], F.roczne)
+        if ca_ and rt and abs((F.D(list(ca_)[-1]) - F.D(rt[-1][0])).days) <= 200:
+            m["capex_przych"] = list(ca_.values())[-1] / m["rev_ttm"]
     # bilans: ostatni znany i sprzed 5 lat
     ch = {k: F.polacz(ex[k], F.chwilowe) for k in ("cash", "sti", "eq", "assets", "lc") if ex.get(k)}
     if ch.get("eq"):
@@ -115,6 +123,8 @@ def metryki(ex, fv, dzis=None, splity=()):
         if not m["cash"]:
             m["cash"] = None
         m["equity"] = ch["eq"][e]
+        e3 = F.wartosc_lata_temu(list(ch["eq"].items()), e, 3)       # etap 79: szybki wzrost kapitału (emisje, przejęcia) = gorzej
+        m["kapital_3l"] = (m["equity"] / e3) ** (1 / 3) - 1 if e3 and e3 > 0 and m["equity"] > 0 else None
         m["net_cash"] = m["cash"] - m["debt"] if m["cash"] is not None else None
         a, lc = ch.get("assets", {}).get(e), ch.get("lc", {}).get(e)
         if ot and a and lc is not None and a - lc > 0:
@@ -261,7 +271,7 @@ def _pct(x):
 GRUPY = {
     "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1)],
     "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1),
-             ("akcje_3l", -1)],
+             ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
 
@@ -294,19 +304,16 @@ POLA_MEDIAN = [p for pola in GRUPY.values() for p, _ in pola] + ["fpe", "pb", "d
 
 
 def mediany(rows):
-    """{sektor: {pole: mediana}} — punkt odniesienia przy każdym wskaźniku na karcie spółki (np. typowe P/E w sektorze)."""
+    """{pole: mediana wszystkich spółek} — punkt odniesienia przy każdym wskaźniku na karcie (użytkownik: odniesienie do innych akcji, nie do sektorów)."""
     out = {}
-    for s in {r["sector"] for r in rows}:
-        g = [r["m"] for r in rows if r["sector"] == s]
-        out[s] = {}
-        for p in POLA_MEDIAN:
-            v = sorted(x[p] for x in g if x.get(p) is not None and not (p in ("pe", "fpe", "peg", "pfcf", "ps", "pb") and x[p] <= 0))
-            out[s][p] = (v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2) if len(v) >= 5 else None
+    for p in POLA_MEDIAN:
+        v = sorted(r["m"][p] for r in rows if r["m"].get(p) is not None and not (p in ("pe", "fpe", "peg", "pfcf", "ps", "pb") and r["m"][p] <= 0))
+        out[p] = (v[len(v) // 2] if len(v) % 2 else (v[len(v) // 2 - 1] + v[len(v) // 2]) / 2) if len(v) >= 5 else None
     return out
 
 
 def oceny(rows):
-    """Uzupełnia r['pct'] (percentyle wskaźników), r['oceny'] (wzrost, siła, wycena, ogólna; 0-10) i r['sektor_med'] (mediany sektora)."""
+    """Uzupełnia r['pct'] (percentyle wskaźników), r['oceny'] (wzrost, siła, wycena, ogólna; 0-10) i r['med500'] (mediany wszystkich spółek)."""
     for r in rows:
         m = r["m"]
         m["net_cash_mc"] = m["net_cash"] / m["mcap"] if m.get("net_cash") is not None and m.get("mcap") else None
@@ -332,7 +339,7 @@ def oceny(rows):
         r["kompletnosc"] = dict(liczone=n, wszystkie=wszystkie, niepelne=n < 0.75 * wszystkie or bool(slabe), kategorie=slabe)
     med = mediany(rows)
     for r in rows:
-        r["sektor_med"] = med.get(r["sector"], {})
+        r["med500"] = med
 
 
 # --- typ spółki (kategorie Petera Lyncha, reguły własne) -------------------------------------------------------------
