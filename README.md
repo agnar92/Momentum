@@ -1,7 +1,7 @@
 # Momentum — jakość vs wycena
 
 Statyczna strona (GitHub Pages, `docs/`) do szukania **jakościowych spółek wzrostowych**, które na tle rynku są wyraźnie lepsze, i do sprawdzania,
-czy ich cena jest rozsądna (PEG i DCF). Obejmuje 500 największych spółek notowanych w USA, dane odświeżane co tydzień.
+czy ich cena jest rozsądna (PEG i DCF). Obejmuje 500 największych spółek notowanych w USA (bez finansów, surowców, energii, użyteczności publicznej i nieruchomości), dane odświeżane co tydzień.
 
 - **Lista spółek** (`index.html`): oceny 0–10 na tle sektora — wzrost, siła finansowa, wycena i ocena ogólna; typ spółki (kategorie Petera Lyncha);
   PEG, potencjał DCF i etykieta wyceny; dopasowanie do strategii z badania (7/7, Jakość, Konsekwentny wzrost); zwrot 1 rok; filtry, sortowanie, obserwowane ★.

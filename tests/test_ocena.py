@@ -58,3 +58,17 @@ def test_strategie_i_typy():
     assert all(ok for _, _, ok in s["7/7 (niskie ryzyko)"]) and all(ok for _, _, ok in s["Jakość (7 kryteriów)"])
     assert "7/7 (niskie ryzyko)" not in O.strategie(m, "Financial")
     assert O.typy(m, "Technology")[0][0] == "Stabilnie rosnąca"
+
+
+def test_wybor_bez_wykluczonych_sektorow():
+    import spolki
+    fv = {f"T{i}": dict(ticker=f"T{i}", marketCap=1000 - i, sector="Energy" if i % 2 else "Technology") for i in range(10)}
+    w = spolki.wybierz(fv, 3)
+    assert [r["ticker"] for r in w] == ["T0", "T2", "T4"]
+
+
+def test_kwartaly_52_tygodniowe_z_16_tygodniowym_q4():
+    rows = [["2025-09-01", "2025-11-23", 100, "2025-12-20"], ["2025-09-01", "2026-02-15", 200, "2026-03-10"],
+            ["2025-09-01", "2026-05-10", 300, "2026-06-01"], ["2025-09-01", "2026-08-30", 440, "2026-10-01"]]
+    q = F.kwartalne(rows)
+    assert q["2026-08-30"] == 140 and F.ttm(q) == [("2026-08-30", 440)]

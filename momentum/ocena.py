@@ -1,9 +1,10 @@
 """Ocena spółki: wskaźniki wzrostu / siły finansowej / wyceny, oceny 0-10 względem sektora, typ spółki (kategorie Lyncha),
 dopasowanie do strategii z badania oraz wycena PEG i DCF (te same wzory co docs/js/wycena-dcf.js). Czyste funkcje, bez sieci."""
+import datetime as dt
 import math
 from . import fundamenty as F
 
-SEKTORY_WYKL = {"Financial", "Basic Materials", "Energy", "Utilities", "Real Estate"}
+SEKTORY_WYKL = {"Financial", "Basic Materials", "Energy", "Utilities", "Real Estate"}   # trudne do przewidzenia — poza listą (spolki.wybierz)
 DCF = dict(r=0.10, tg=0.03, lata=5, wygaszanie=5)
 
 
@@ -31,9 +32,15 @@ def metryki(ex, fv):
              de=_f(fv.get("debtEq")), eps=p / pe if p and pe and pe > 0 else None)
     m["peg"] = pe / (100 * m["eps_next5"]) if pe and pe > 0 and m["eps_next5"] and m["eps_next5"] > 0 else None
     hist = dict(q=[], y=[])
-    q = {k: F.polacz(ex[k], F.kwartalne) for k in ("rev", "ni", "op", "ocf", "capex") if ex.get(k)}
+    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex") if ex.get(k)}
     rt = F.ttm(q["rev"]) if "rev" in q else []
     nt = F.ttm(q["ni"]) if "ni" in q else []
+    # emitenci zagraniczni (20-F) raportują tylko rocznie: punkty roczne zamiast TTM, jeśli są świeże (<= 15 mies.)
+    ra = list(F.polacz(ex["rev"], F.roczne, True).items()) if ex.get("rev") else []
+    if (not rt or (ra and F.D(ra[-1][0]) > F.D(rt[-1][0]) + dt.timedelta(days=200))) and len(ra) >= 2:
+        rt = ra
+        na = list(F.polacz(ex["ni"], F.roczne).items()) if ex.get("ni") else []
+        nt = na if len(na) >= 2 else nt
     ot = F.ttm(q["op"]) if "op" in q else []
     fq = {e: q["ocf"][e] - q.get("capex", {}).get(e, 0.0) for e in q.get("ocf", {})}
     ft = F.ttm(fq) if fq else []
@@ -103,8 +110,12 @@ def metryki(ex, fv):
             m["cash"] = c_fv
             if m.get("debt") is not None:
                 m["net_cash"] = m["cash"] - m["debt"]
-    if m.get("debt") is None and m.get("mcap") and m.get("pb") and m.get("de") is not None:
-        m["debt"] = m["de"] * m["mcap"] / m["pb"]
+    if m.get("mcap") and m.get("pb") and m.get("pb") > 0 and m.get("de") is not None:   # dług wg Finviz, gdy SEC go nie ma / zaniża (np. Ford: dług w spółce finansowej)
+        d_fv = m["de"] * m["mcap"] / m["pb"]
+        if m.get("debt") is None or m["debt"] < 0.5 * d_fv:
+            m["debt"] = d_fv
+            if m.get("cash") is not None:
+                m["net_cash"] = m["cash"] - m["debt"]
     if m.get("net_cash") is None and m.get("cash") is not None and m.get("debt") is not None:
         m["net_cash"] = m["cash"] - m["debt"] if m["cash"] is not None else None
     if m.get("rev_ttm") is None and m.get("mcap") and m.get("ps"):
@@ -112,14 +123,17 @@ def metryki(ex, fv):
     if m.get("fcf_margin") is None and m.get("fcf_ttm") and m.get("rev_ttm"):
         m["fcf_margin"] = m["fcf_ttm"] / m["rev_ttm"]
     sh = F.chwilowe(ex.get("shares", [])) if ex.get("shares") else {}
-    m["shares"] = list(sh.values())[-1] if sh else (m["mcap"] / p if m.get("mcap") and p else None)
+    s_fv = m["mcap"] / p if m.get("mcap") and p else None
+    m["shares"] = list(sh.values())[-1] if sh else s_fv
+    if s_fv and (not m["shares"] or abs(m["shares"] / s_fv - 1) > 0.35):   # akcje kilku klas / błędny dei (np. FOX = 1) -> kapitalizacja ÷ cena
+        m["shares"] = s_fv
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
         hist["q"].append([e, _r(q.get("rev", {}).get(e), 0), _r(q.get("ni", {}).get(e), 0), _r(fq.get(e), 0),
                           _r((ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0) if ch.get("cash", {}).get(e) is not None else None, 0),
                           _r(F.dlug(ex.get("debt", {}), e) if ch.get("eq", {}).get(e) is not None else None, 0)])
-    yr = {k: F.polacz(ex[k], F.roczne) for k in ("rev", "ni", "ocf", "capex") if ex.get(k)}
+    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex") if ex.get(k)}
     for e in list(yr.get("rev", {}))[-12:]:
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
         hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0)])
@@ -276,8 +290,9 @@ def dcf_domyslne(m, hist=None):
     gs = [x for x in (m.get("rev_cagr3") if m.get("rev_cagr3") is not None else m.get("rev_cagr5"), m.get("eps_next5")) if x is not None]
     g = max(0.0, min(0.25, min(gs))) if gs else None
     mz = [m["fcf_margin"]] if m.get("fcf_margin") is not None else []
+    rt = m.get("rev_ttm")
     for _, rev, _, fcf in (hist or {}).get("y", [])[-5:]:
-        if rev and fcf is not None and rev > 0:
+        if rev and fcf is not None and rev > 0 and (not rt or 0.3 < rev / rt < 2):   # pomijamy lata z nieporównywalnymi przychodami
             mz.append(fcf / rev)
     mz = sorted(mz)
     mz = max(0.0, min(0.60, mz[len(mz) // 2])) if mz else None
