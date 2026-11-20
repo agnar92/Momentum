@@ -1011,3 +1011,23 @@ Wynik etapu 80 (2026-11-20): kupno top 10 % oceny + PEG 0–2, N = 20, 2013-01..
 2020–2026 S0 14,9 %, S2 17,7 %, S3 22,1 %, S4 24,3 % (SPY 15,5 %, QQQ 20,8 %). PEG 0–1 + S0 30,9 % i N = 30 + S0 29,3 % to efekt NVDA (63–78 % portfela).
 Hipoteza: K + S0/S2 ≈ SPY + 0–4 pp — tak (+1,4 / +5,5 pp, bez NVDA +1,4 / +1,8 pp); S1 gorzej niż S0 — nie (podobnie); S3 obcina zwycięzców — w całości ≈ S0,
 w 2020–2026 lepiej; S2 ≈ S0 ± 1 pp — nie, S2 +4 pp (głównie NVDA i 2020–2026; w 2013–2019 −1,3 pp).
+
+## Etap 81: strategia użytkownika — trzymaj dobre firmy, dokupuj przy korzystnym PEG, sprzedaj, gdy fundamenty się psują (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „jak firma rośnie, to trzymasz i dokupujesz, kiedy PEG pokaże korzystną cenę … trzymasz, aż wszystko się zgadza, ale jak zaczyna się psuć
+i pogarszać, to rozważamy sprzedaż”. Zbiór, ocena, PEG (historyczny) jak w etapie 80; 2013-01..2026-09, koszt 0,1 %, wolna gotówka w SPY.
+Wejście: ocena w top 10 % i PEG 0–2 → pierwsza transza 4 % konta (max 4 nowe spółki / mies., kolejność od najwyższej oceny).
+Dokupowanie (D): trzymana spółka z PEG 0–1 („korzystna cena”) i bez pogorszenia → transza 2 % konta, max 1 transza / spółkę / mies., limit pozycji 15 %
+konta przy dokupowaniu (warianty: bez dokupowania; PEG 0–1,5; limit 10 % / 20 %). Sprzedaż (P = pogorszenie): P1 fundamenty słabną 2 lata z rzędu
+(przychody lub zysk r/r < 0 teraz i rok wcześniej); P2 = P1 lub ocena spada poniżej mediany zbioru (pogorszenie jakości); P3 = P1 lub 2 z 3: przychody r/r < 0,
+zysk r/r < 0, ocena siły finansowej spadła o ≥ 2 pkt w 12 mies. Bez sprzedaży z powodu samej wysokiej wyceny.
+Miary: CAGR, maks. obsunięcie, średnia liczba spółek, odsetek w spółkach, największe pozycje; vs SPY, QQQ, etap 80 (S2: 20,1 %); połowy 2013–2019 / 2020–2026
+(start od zera); bez NVDA. Hipoteza: dokupowanie przy PEG 0–1 dodaje 0–2 pp/rok vs bez dokupowania; P1 ≈ P3, P2 gorzej (sprzedaje za wcześnie);
+całość ≈ etap 80 S2 ± 2 pp; bez NVDA SPY + 0–3 pp.
+
+Wynik etapu 81 (2026-11-20): 2013-01..2026-09 (SPY 14,6 %, QQQ 20,2 %): P1 (sprzedaż, gdy fundamenty słabną 2 lata) z dokupowaniem przy PEG 0–1 18,2 %/rok
+(DD −37 %, średnio 10 spółek), bez dokupowania 18,4 % (DD −34 %, 23 spółki); dokupowanie przy PEG 0–1,5 20,4 %, limit 10 % 19,8 %, 20 % 19,3 %; P2 (P1 lub ocena
+poniżej mediany) 17,2–17,3 %; P3 (P1 lub 2 z 3 pogorszeń) 13,5–15,0 %. Bez NVDA: P1 z dokupowaniem 16,2 %, bez dokupowania 17,0 %. Połowy: 2013–2019 P1 bez
+dokupowania 15,0 % (SPY 14,0 %), z dokupowaniem 11,4 % (dokupowanie tanich SBUX, LUV); 2020–2026 bez 21,4 %, z 22,6 % (SPY 15,5 %, QQQ 20,8 %).
+Hipoteza: dokupowanie +0–2 pp — nie (≈ 0 w całości, −3,6 pp w 2013–2019, +1,2 pp w 2020–2026; koncentruje portfel); P1 ≈ P3 — nie (P3 −3…−5 pp, sprzedaje
+za wcześnie); P2 gorzej — tak (−1 pp); ≈ etap 80 S2 ± 2 pp — tak; bez NVDA SPY + 0–3 pp — tak (+1,6…+2,4 pp).
