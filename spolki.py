@@ -200,6 +200,7 @@ def zapisz(rows, out=OUT, today=None):
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF
         json.dump(_czysc(karta), open(os.path.join(out, "spolki", f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
+    json.dump(_czysc(ocena.rozklady(rows)), open(os.path.join(out, "sektory.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     json.dump(_czysc(dict(generated_at=today.isoformat(), n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
               open(os.path.join(out, "lista.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 

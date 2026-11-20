@@ -40,10 +40,57 @@
           </div>`;
     }
 
+    // --- własne dane użytkownika (brakujące wskaźniki, np. młoda spółka): localStorage, ocena przeliczana w przeglądarce ---
+    const WL_KLUCZ = "fundamenta_wlasne";
+    const czytajWl = () => { try { return JSON.parse(localStorage.getItem(WL_KLUCZ)) || {}; } catch (e) { return {}; } };
+    const zapiszWl = (v) => { try { localStorage.setItem(WL_KLUCZ, JSON.stringify(v)); } catch (e) { /* tryb prywatny */ } };
+    let ORIG = null, ROZ = null, WL = {};
+    function zastosuj() {
+        K.pct = { ...ORIG.pct }; K.oceny = { ...ORIG.oceny }; M = { ...ORIG.m }; K.m = M;
+        const roz = (ROZ && ROZ[K.sector]) || {};
+        Object.entries(WL).forEach(([p, v]) => { M[p] = v; K.pct[p] = W.percentyl(roz[p], v, p); });
+        if (Object.keys(WL).length) {
+            K.oceny = W.ocenyZ(K.pct);
+            const wsz = czytajWl();
+            wsz[K.t] = { w: WL, o: K.oceny, d: K.generated_at };
+            zapiszWl(wsz);
+        }
+    }
+    function wlasne() {
+        const brak = W.POLA_WLASNE.filter(([p]) => !W.ok(ORIG.pct[p]) || p in WL);
+        if (!brak.length) return "";
+        const S = K.sektor_med || {};
+        const wart = (p, j) => { const v = WL[p]; return W.ok(v) ? String(Math.round((j === "%" ? 100 * v : v) * 100) / 100).replace(".", ",") : ""; };
+        const med = (p, j) => W.ok(S[p]) ? `mediana sektora ${j === "%" ? W.fmtPct(S[p], 1) : W.fmtNum(S[p])}` : "";
+        const n = Object.keys(WL).length;
+        return `<details class="wlasne"${n ? " open" : ""}><summary>✎ ${n ? `Ocena uwzględnia Twoje dane (${n})` : "Uzupełnij brakujące dane samodzielnie"}</summary>
+          <div class="mut male" style="margin:6px 0">Wpisz wartości, których brakuje (np. z raportu spółki). Ocena przeliczy się na tle sektora ${esc(K.sector || "")}; dane zostają tylko w tej przeglądarce i widać je też na liście (✎).</div>
+          <div class="pola-wlasne">${brak.map(([p, nz, j]) => `<label><span>${esc(nz)}${j ? " (%)" : ""}</span><input data-wl="${p}" data-j="${j}" inputmode="decimal" value="${wart(p, j)}" placeholder="${med(p, j)}"></label>`).join("")}</div>
+          <div style="display:flex;gap:8px;margin-top:8px"><button id="wl-zapisz">Przelicz ocenę</button>${n ? '<button id="wl-usun" class="drugi">Usuń moje dane</button>' : ""}</div></details>`;
+    }
+    function podlaczWlasne() {
+        const z = $("wl-zapisz"), u = $("wl-usun");
+        if (z) z.addEventListener("click", () => {
+            WL = {};
+            document.querySelectorAll("[data-wl]").forEach((el) => {
+                const s = el.value.trim().replace(/\s/g, "").replace(",", ".").replace("%", "");
+                if (s === "" || isNaN(+s)) return;
+                WL[el.dataset.wl] = el.dataset.j === "%" ? +s / 100 : +s;
+            });
+            if (!Object.keys(WL).length) { const wsz = czytajWl(); delete wsz[K.t]; zapiszWl(wsz); }
+            zastosuj(); odswiez();
+        });
+        if (u) u.addEventListener("click", () => { WL = {}; const wsz = czytajWl(); delete wsz[K.t]; zapiszWl(wsz); zastosuj(); odswiez(); });
+    }
+    function odswiez() { top(); liczby(); metryki(); strategieOk(); }
+    const strategieOk = () => { /* kryteria strategii liczone w danych (bez własnych wpisów) */ };
+
     let LISTA = null;
     function miejsceTxt(k) {
         if (!LISTA) return "";
-        const r = W.miejsce(LISTA, K.t, (x) => x.o && x.o[k]);
+        const wl = czytajWl();      // miejsca z uwzględnieniem własnych danych (tej i innych spółek)
+        const o = (x) => x.t === K.t ? K.oceny : (wl[x.t] && wl[x.t].o) || x.o;
+        const r = W.miejsce(LISTA, K.t, (x) => o(x) && o(x)[k]);
         return r ? ` · <span class="mut male">miejsce ${r.miejsce} z ${r.z}</span>` : "";
     }
     function liczby() {
@@ -51,7 +98,7 @@
         const zw = (x, n) => `<div><small>${n}</small><b class="${x > 0 ? "plus" : x < 0 ? "minus" : ""}">${W.fmtPct(x, 1, true)}</b></div>`;
         const kp = K.kompletnosc;
         const ostrz = kp && kp.niepelne ? `<div class="ostrzezenie">⚠ <b>Niepełne dane:</b> ${kp.liczone} z ${kp.wszystkie} wskaźników${kp.kategorie && kp.kategorie.length ? ` (za mało w kategorii: ${kp.kategorie.map((g) => ({ wzrost: "Wzrost", sila: "Siła finansowa", wycena: "Wycena" })[g]).join(", ")})` : ""} — ocena może być zaburzona (np. młoda spółka bez historii albo spółka zagraniczna bez raportów w SEC). Sprawdź „Jak powstała ocena” przy wskaźnikach.</div>` : "";
-        $("liczby").innerHTML = ostrz + `
+        $("liczby").innerHTML = ostrz + wlasne() + `
           <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle sektora ${esc(K.sector || "")}</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
           <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} · <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a></div>
@@ -60,6 +107,7 @@
             <div><small>Kapitalizacja</small><b>${W.fmtUsd(m.mcap)}</b></div><div><small>Wielkość (kapit.)</small><b>#${K.rank}</b></div>
             ${zw(z["1t"], "1 tydzień")}${zw(z["1m"], "1 miesiąc")}${zw(z["1r"], "1 rok")}${zw(z["5l"], "5 lat")}
           </div>`;
+        podlaczWlasne();
     }
 
     function wykresCeny(okres) {
@@ -80,8 +128,10 @@
         const w = (n, v, pole, med) => {
             const d = pole ? W.opisPercentyla(p[pole]) : null;
             const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana sektora: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
-            return `<div class="wiersz"><span>${n}: <b>${v}</b><br>${mtxt}</span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
+            const moje = pole && pole in WL ? ' <span class="moje" title="Twoje dane">✎</span>' : "";
+            return `<div class="wiersz"><span>${n}: <b>${v}</b>${moje}<br>${mtxt}</span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
         };
+        const zl = W.ok(m.hist_lat) ? ` (z ${W.fmtNum(m.hist_lat, 1)} lat — młoda spółka)` : "";
         const pr = (x) => W.fmtPct(x, 1), pz = (x) => W.fmtPct(x, 1, true), nm2 = (x) => W.fmtNum(x), cal = (x) => W.fmtNum(x, 0);
         const sklad = (g) => {
             const s = W.skladOceny(p, g);
@@ -93,9 +143,9 @@
           <div class="kol3">
             <div class="kol k-wzrost"><div class="naglowek-kol">📈 Wzrost</div>
               ${w("Przychody 1 rok (12 mies.)", pz(m.rev_1y), "rev_1y", ["rev_1y", pz])}${w("Przychody kwartał r/r", pz(m.rev_q_yoy))}${w("Zysk netto 1 rok", pz(m.ni_1y), "ni_1y", ["ni_1y", pz])}
-              ${w("Przychody 3 lata (łącznie)", pz(m.rev_3y) + " · rocznie " + pr(m.rev_cagr3), "rev_cagr3", ["rev_cagr3", pr, "rocznie"])}${w("Zysk netto 3 lata", pz(m.ni_3y))}
-              ${w("Przychody 5 lat (łącznie)", pz(m.rev_5y) + " · rocznie " + pr(m.rev_cagr5), "rev_cagr5", ["rev_cagr5", pr, "rocznie"])}${w("Zysk netto 5 lat", pz(m.ni_5y), "ni_5y", ["ni_5y", pz])}
-              ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5", ["eps_next5", pr])}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? m.rev_lata_10 : "–", "rev_lata_10", ["rev_lata_10", cal])}
+              ${w("Przychody 3 lata (łącznie)" + (m.hist_lat < 3 ? zl : ""), pz(m.rev_3y) + " · rocznie " + pr(m.rev_cagr3), "rev_cagr3", ["rev_cagr3", pr, "rocznie"])}${w("Zysk netto 3 lata", pz(m.ni_3y))}
+              ${w("Przychody 5 lat (łącznie)" + zl, pz(m.rev_5y) + " · rocznie " + pr(m.rev_cagr5), "rev_cagr5", ["rev_cagr5", pr, "rocznie"])}${w("Zysk netto 5 lat" + (zl && W.ok(m.ni_5y) ? " (przeliczony na 5 lat)" : ""), pz(m.ni_5y), "ni_5y", ["ni_5y", pz])}
+              ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5", ["eps_next5", pr])}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? W.fmtNum(m.rev_lata_10, Number.isInteger(m.rev_lata_10) ? 0 : 1) + (m.rev_lata_n ? ` (przeliczone z ${m.rev_lata_n} lat)` : "") : "–", "rev_lata_10", ["rev_lata_10", cal])}
               <div class="wiersz"><span>Ocena wzrostu</span>${oc(K.oceny.wzrost)}</div>${sklad("wzrost")}</div>
             <div class="kol k-sila"><div class="naglowek-kol">🛡️ Siła finansowa</div>
               ${w("Marża brutto", pr(m.gm), "gm", ["gm", pr])}${w("Marża operacyjna", pr(m.om), "om", ["om", pr])}${w("Marża netto", pr(m.nm), "nm", ["nm", pr])}
@@ -256,6 +306,10 @@
     szukaj();
     fetch(`data/spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((k) => {
         K = k; M = k.m; document.title = `${k.n} (${k.t}) · Fundamenta`;
+        ORIG = { pct: { ...k.pct }, oceny: { ...k.oceny }, m: { ...k.m } };
+        WL = (czytajWl()[k.t] || {}).w || {};
+        if (Object.keys(WL).length) zastosuj();
+        fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
         domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); sprawozdania("q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
 })();

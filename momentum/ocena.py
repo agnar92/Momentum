@@ -82,6 +82,7 @@ def metryki(ex, fv, dzis=None):
         for lat, k in ((1, "ni_1y"), (3, "ni_3y"), (5, "ni_5y")):
             a = F.wartosc_lata_temu(nt, e, lat)
             m[k] = n0 / a - 1 if a and a > 0 and n0 > 0 else None
+    mlode(m, rt, nt)
     if ft:
         m["fcf_ttm"] = ft[-1][1]
         m["fcf_margin"] = ft[-1][1] / m["rev_ttm"] if m.get("rev_ttm") else None
@@ -150,6 +151,56 @@ def metryki(ex, fv, dzis=None):
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
         hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0)])
     return m, hist
+
+
+def mlode(m, rt, nt):
+    """Młoda spółka (debiut / wydzielenie, historia < 5 lat): wzrost z tylu lat, ile jest (min. 2). Przychody 3 / 5 lat = średnioroczny wzrost
+    z dostępnych lat (`hist_lat`), łączny wzrost przychodów = rzeczywisty z tych lat; zysk netto 5 lat w przeliczeniu na 5 lat (porównywalny
+    z innymi spółkami); lata z przychodami > 10 % przeskalowane do 5 (np. 2 z 2 = 5)."""
+    if not rt or m.get("rev_cagr5") is not None:
+        return
+    e, r0 = rt[-1]
+    pierwszy = next(((d, v) for d, v in rt if v and v > 0), None)
+    if not pierwszy:
+        return
+    lat = (F.D(e) - F.D(pierwszy[0])).days / 365.25
+    if lat < 1.9 or not r0 or r0 <= 0:
+        return
+    m["hist_lat"] = round(lat, 1)
+    g = (r0 / pierwszy[1]) ** (1 / lat) - 1
+    m["rev_cagr5"] = g
+    m["rev_5y"] = r0 / pierwszy[1] - 1
+    if m.get("rev_cagr3") is None:
+        m["rev_cagr3"] = g
+        m["rev_3y"] = m["rev_5y"] if lat < 3 else m.get("rev_3y")
+    if m.get("rev_lata_10") is None:
+        lata = []
+        for k in range(int(lat + 0.1)):
+            a, b = F.wartosc_lata_temu(rt, e, k + 1), F.wartosc_lata_temu(rt, e, k) if k else r0
+            if a and b and a > 0:
+                lata.append(b / a - 1)
+        if len(lata) >= 2:
+            m["rev_lata_10"] = round(5 * sum(x > 0.10 for x in lata) / len(lata), 1)
+            m["rev_lata"] = [_r(x) for x in lata]
+            m["rev_lata_n"] = len(lata)
+    if m.get("ni_5y") is None and nt:
+        n0 = nt[-1][1]
+        p = next(((d, v) for d, v in nt if (F.D(nt[-1][0]) - F.D(d)).days / 365.25 >= 1.9), None)
+        if p and p[1] and p[1] > 0 and n0 and n0 > 0:
+            ln = (F.D(nt[-1][0]) - F.D(p[0])).days / 365.25
+            m["ni_5y"] = (n0 / p[1]) ** (5 / ln) - 1
+
+
+def rozklady(rows):
+    """{sektor: {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
+    out = {}
+    for g, pola in GRUPY.items():
+        for p, _ in pola:
+            for r in rows:
+                v = r["m"].get(p)
+                if v is not None and not (p in ("pe", "peg", "pfcf", "ps") and v <= 0):
+                    out.setdefault(r["sector"], {}).setdefault(p, []).append(round(v, 4))
+    return {s: {p: sorted(v) for p, v in d.items() if len(v) >= 5} for s, d in out.items()}
 
 
 def _pct(x):
@@ -267,25 +318,30 @@ def _clip(x):
     return round(max(0.0, min(100.0, x)), 0)
 
 
+def W_LAT(m):
+    return f"{m['hist_lat']:.1f}".replace(".", ",")
+
+
 # --- strategie z badania -----------------------------------------------------------------------------------------
 def strategie(m, sektor):
     """{nazwa: [(kryterium, wartość, spełnione)]}."""
     wykl = sektor in SEKTORY_WYKL
-    lr = [("Przychody 5 lat > +50 %", m.get("rev_5y"), _gt(m.get("rev_5y"), 0.5)),
+    zl = f" (z {W_LAT(m)} lat)" if m.get("hist_lat") else ""     # młoda spółka: z dostępnych lat
+    lr = [("Przychody 5 lat > +50 %" + zl, m.get("rev_5y"), _gt(m.get("rev_5y"), 0.5)),
           ("Przychody 1 rok > 5 %", m.get("rev_1y"), _gt(m.get("rev_1y"), 0.05)),
           ("Zysk 1 rok > 5 %", m.get("ni_1y"), _gt(m.get("ni_1y"), 0.05)),
           ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
           ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
           ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
           ("PEG 0–1", m.get("peg"), m.get("peg") is not None and 0 < m["peg"] < 1)]
-    jak = [("Przychody 5 lat > 8 %/rok", m.get("rev_cagr5"), _gt(m.get("rev_cagr5"), 0.08)),
+    jak = [("Przychody 5 lat > 8 %/rok" + zl, m.get("rev_cagr5"), _gt(m.get("rev_cagr5"), 0.08)),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
            ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
            ("ROA > 10 %", m.get("roa"), _gt(m.get("roa"), 0.10)),
            ("ROE wyższe niż 5 lat temu", m.get("roe_5l"), m.get("roe_sec") is not None and m.get("roe_5l") is not None and m["roe_sec"] > m["roe_5l"]),
            ("ROCE > 15 %", m.get("roce"), _gt(m.get("roce"), 0.15))]
-    kon = [("Przychody > 10 % w ≥ 3 z 5 lat", m.get("rev_lata_10"), m.get("rev_lata_10") is not None and m["rev_lata_10"] >= 3),
+    kon = [("Przychody > 10 % w ≥ 3 z 5 lat" + (f" (przeliczone z {m['rev_lata_n']} lat)" if m.get("rev_lata_n") else ""), m.get("rev_lata_10"), m.get("rev_lata_10") is not None and m["rev_lata_10"] >= 3),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0))]
     out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon}

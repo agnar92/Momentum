@@ -21,7 +21,7 @@
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
             <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
             <td class="firma"><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
-            <td class="n ogolna">${r.kp && r.kp[2] ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
+            <td class="n ogolna">${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td>${esc(r.typ || "–")}</td>
             <td class="n">${W.ok(r.peg) && r.peg > 0 ? W.fmtNum(r.peg, 2) : "–"}</td>
@@ -46,6 +46,8 @@
     }
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
         D = d;
+        const wl = czytaj("fundamenta_wlasne", {});     // własne dane z karty spółki: ocena przeliczona w przeglądarce
+        d.rows.forEach((r) => { if (wl[r.t] && wl[r.t].o) { r.o = wl[r.t].o; r.moje = Object.keys(wl[r.t].w || {}).length; } });
         W.sortuj(d.rows, "ogolna", -1).filter((r) => r.o && W.ok(r.o.ogolna)).forEach((r, i) => { MIEJSCA[r.t] = i + 1; });
         const [y, m, dd] = d.generated_at.split("-"); $("asof").textContent = `${dd}.${m}.${y}`;
         opcje("sektor", d.sektory);
