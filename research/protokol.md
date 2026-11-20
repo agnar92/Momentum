@@ -1054,3 +1054,21 @@ ale średnio bez gorszego zwrotu (odbicia). Portfel (P1 18,4 %/rok): każdy doda
 spadek wzrostu przychodów: 13,2 %, spadek oceny: 14,3 %, kurs −30 % od szczytu: 14,4 %, kurs poniżej średniej 10 mies.: 15,3 % (DD −30 %), PEG > 3: 16,9 %;
 emisja akcji > 3 % r/r 19,5 % i FCF < 0 19,0 % (poprawa po fakcie, bez sprawdzenia w połowach). Hipoteza: sygnały cenowe nie poprawiają portfela — tak; Z1 / Z3
 ostrzegawcze — nie (Z1 −5 pp w portfelu); wycena słaba — tak (w wyborze wysokie P/E wręcz lepiej).
+
+## Etap 83: sprzedaż, gdy 2 z 7 kryteriów listy kontrolnej przestają być spełnione (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „tam jest ta ocena przez 7 parametrów — jak dwa będą niespełnione, to sprzedaj; sprawdź takie coś”. Zbiór, portfel i PEG (historyczny) jak w etapach 80–81
+(transza 4 % konta, bez dokupowania, gotówka w SPY, koszt 0,1 %, 2013-01..2026-09). Listy: L7 „7/7 niskie ryzyko” — przychody 5 l. > +50 %, przychody 1 r. > 5 %,
+zysk 1 r. > 5 %, ROE > 15 %, dług/kapitał 0–1, FCF > 0, PEG 0–1; J7 „Jakość” — CAGR przychodów 5 l. > 8 %, dług/kapitał 0–1, FCF > 0, ROE > 15 %, ROA > 10 %,
+ROE wyższe niż 3 lata temu, ROCE > 15 %. Przy sprzedaży brak danych = kryterium spełnione (nie sprzedajemy przez lukę w danych); przy kupnie brak = niespełnione.
+Warianty: wejście E1 = ocena top 10 % + PEG 0–2 (jak etap 81); E2 = 7/7 danej listy (kolejność od najwyższej oceny). Sprzedaż: ≤ 5/7 (2 niespełnione) danej listy;
+≤ 4/7 (3 niespełnione); ≤ 5/7 lub P1 (fundamenty słabną 2 lata); odniesienie P1. Miary: CAGR, DD, liczba spółek, mediana trzymania, połowy 2013–2019 / 2020–2026,
+bez NVDA. Hipoteza: E1 + sprzedaż ≤ 5/7 L7 gorzej niż P1 (kryterium PEG 0–1 i przychody 1 r. sprzedają zwycięzców przy przejściowych wahaniach), J7 ≈ P1 ± 2 pp;
+E2 L7 ≈ etap 68 (18–21 %).
+
+Wynik etapu 83 (2026-11-20): 2013-01..2026-09 (SPY 14,6 %, QQQ 20,2 %; odniesienie E1 + P1 18,4 %): wejście E1 (ocena + PEG) i sprzedaż ≤ 5/7: lista 7/7 16,6 %,
+Jakość 16,3 % (≤ 5/7 lub P1: 16,5 / 15,6 %); ≤ 4/7: 16,5 / 19,9 %. Wejście 7/7: lista 7/7 — sprzedaż ≤ 5/7 14,4 % (średnio 49 % kapitału w spółkach, mało
+spółek spełnia 7/7), P1 16,4 %; Jakość 7/7 — ≤ 5/7 16,9 % (DD −30 %), ≤ 4/7 21,0 %, P1 20,7 % (NVDA 43–45 % portfela). Połowy: 2013–2019 wszystkie warianty
+≤ 5/7 12,3–13,6 % (SPY 14,0 %, E1 + P1 15,0 %); 2020–2026 17,1–22,2 % (SPY 15,5 %, E1 + P1 21,4 %). Bez NVDA: E1 + P1 17,0 %, Jakość 7/7 + ≤ 5/7 16,6 %,
+E1 + ≤ 5/7 7/7 16,0 %, 7/7 + ≤ 5/7 14,4 %. Hipoteza: lista 7/7 ≤ 5/7 gorzej niż P1 — tak (−1,8 pp); Jakość ≈ P1 ± 2 pp — tak (−2,1 pp z E1, −1,5 pp z
+wejściem 7/7); wejście 7/7 ≈ etap 68 (18–21 %) — nie (14,4 %; tu PEG historyczny zamiast prognoz analityków, transza 4 %, inny zbiór).
