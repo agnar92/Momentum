@@ -24,6 +24,9 @@ test("PEG, etykiety, percentyle", () => {
     assert.strictEqual(W.etykieta(0.5), "Bardzo tania");
     assert.strictEqual(W.etykieta(-0.5), "Bardzo droga");
     assert.strictEqual(W.etykieta(null, 0.8), "Niedowartościowana");
+    assert.strictEqual(W.etykieta(0.5, 3.3), "Bardzo droga");          // PEG ma pierwszeństwo przed DCF
+    assert.strictEqual(W.etykieta(-0.5, 1.5), "Wyceniona uczciwie");
+    assert.strictEqual(W.pozycjaPeg(2), 0.5);
     assert.strictEqual(W.opisPercentyla(0.93).k, "b-dobrze");
     assert.strictEqual(W.pozycjaWyceny(0), 0.5);
 });

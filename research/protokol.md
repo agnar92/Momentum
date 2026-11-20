@@ -926,3 +926,21 @@ IC 5 lat 0,058 (t 2,9) vs 0,001 w sektorze, gotówka netto / kapitalizacja 0,123
 technologiczny +66 pp nadwyżki 5 lat (pozostałe −36…−3 pp) — porównanie tylko w sektorze usuwa znaczną część sygnału. Hipoteza: (A) słabiej niż zakładano,
 siła > wycena — tak, wzrost > wycena — nie; (B) przesunięcie do siły — tak, zysk poza próbą 0,003–0,025 IC; (C) C1 tak, C2 nie, C3 silniej niż zakładano,
 C4 słaby — tak, C5b i momentum — nie.
+
+## Etap 77: ocena z odniesieniem do wszystkich spółek zbioru (decyzja użytkownika) i reguła „fundamenty spadają 2 lata z rzędu” (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „zamień odniesienie do wszystkich tych 500 spółek, nie zmieniaj reszty … jeżeli fundamenty zaczynają upadać dwa lata z rzędu, to coś jest nie tak
+i trzeba sprzedać … silnie stabilne firmy rosnące rok do roku w perspektywie 5 lat dadzą duże zyski”. Zmiana na stronie jest decyzją użytkownika (nie zależy od wyniku);
+test tylko opisuje skutek. Dane i miary jak w etapie 76 (cechy z r101). (A) Ocena z percentylami w całym zbiorze (zamiast w sektorze), z cechami dodanymi w etapie 76
+(lata ze wzrostem zysku — wzrost, zmiana liczby akcji — siła), wagi strony 0,4 / 0,35 / 0,25; porównanie z tą samą oceną w sektorze: IC 1 / 3 / 5 lat, połowy,
+top 10 % (średnia, mediana, odsetek pobić). (B) Flaga SPADEK = przychody TTM r/r < 0 teraz i 12 mies. temu ALBO zysk netto TTM r/r < 0 teraz i 12 mies. temu:
+nadwyżka 1 / 3 / 5 lat spółek z flagą vs bez (średnia, mediana, pobicia), połowy; (C) spółki „silne i stabilne”: przychody > 10 % r/r w ≥ 4 z 5 lat i zysk
+rósł w ≥ 4 z 5 lat, bez flagi SPADEK: nadwyżka 3 / 5 lat (średnia, mediana, pobicia), połowy.
+Hipoteza: (A) IC 5 lat wyższy niż w sektorze (0,02) — ok. 0,05; (B) SPADEK: nadwyżka 3–5 lat ujemna (−5…−15 pp); (C) dodatnia średnia i mediana w 5 lat (+5…+20 pp).
+
+Wynik etapu 77 (2026-11-20): (A) ocena na tle całego zbioru przewiduje wyraźnie lepiej niż w sektorze: IC 5 lat 0,066 (t 5,5; połowy 0,055 / 0,076) vs 0,039;
+top 10 % wg oceny: średnio +33 pp w 5 lat (2012–2016 +16, 2017+ +49 pp), w sektorze +23 pp; siła na tle całego zbioru IC 5 lat 0,135 (t 6,2) — najsilniejsza;
+wzrost ~0, wycena ~0. (B) flaga SPADEK (przychody lub zysk r/r < 0 dwa lata z rzędu; mediana 36 spółek): nadwyżka średnio −4,1 pp w 3 lata i −4,3 pp w 5 lat
+(bez flagi +1,3 / +1,9 pp), odsetek pobić średniej 38 % vs 40 % (5 lat); efekt stały w połowach dla 5 lat, słaby. (C) spółki silne i stabilne (przychody > 10 %
+w ≥ 4 z 5 lat, zysk rósł w ≥ 4 z 5, bez SPADKU; mediana 18): średnio +17 pp w 5 lat (2017+ +24 pp, 2012–2016 −5 pp), mediana −27 pp (jak cały zbiór −24) —
+wynik średni ciągną najlepsze spółki. Hipoteza: (A) tak (0,066); (B) słabiej niż zakładano (−4 pp); (C) średnia tak, mediana nie, w 2012–2016 ujemna.

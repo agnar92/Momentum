@@ -83,6 +83,20 @@ def metryki(ex, fv, dzis=None, splity=()):
             a = F.wartosc_lata_temu(nt, e, lat)
             m[k] = n0 / a - 1 if a and a > 0 and n0 > 0 else None
     mlode(m, rt, nt)
+    # reguła użytkownika: fundamenty słabną 2 lata z rzędu (przychody lub zysk TTM r/r < 0 teraz i rok wcześniej) — etap 77: −4 pp w 5 lat
+    def _rr(seria, lat):
+        if not seria:
+            return None
+        e, v = seria[-1]
+        a = F.wartosc_lata_temu(seria, e, lat) if lat else v
+        b = F.wartosc_lata_temu(seria, e, lat + 1)
+        return a / b - 1 if a is not None and b and b > 0 else None
+    spadki = []
+    for nazwa, s in (("przychody", rt), ("zysk netto", nt)):
+        r0, r1 = _rr(s, 0), _rr(s, 1)
+        if r0 is not None and r1 is not None and r0 < 0 and r1 < 0:
+            spadki.append(nazwa)
+    m["spadek_2l"] = spadki or None
     # etap 76: lata ze wzrostem zysku netto (z 5) — zysk TTM wyższy niż rok wcześniej
     if nt:
         e, n0 = nt[-1]
@@ -227,14 +241,14 @@ def mlode(m, rt, nt):
 
 
 def rozklady(rows):
-    """{sektor: {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
+    """{"wszystkie": {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
     out = {}
     for g, pola in GRUPY.items():
         for p, _ in pola:
             for r in rows:
                 v = r["m"].get(p)
                 if v is not None and not (p in ("pe", "peg", "pfcf", "ps") and v <= 0):
-                    out.setdefault(r["sector"], {}).setdefault(p, []).append(round(v, 4))
+                    out.setdefault("wszystkie", {}).setdefault(p, []).append(round(v, 4))
     return {s: {p: sorted(v) for p, v in d.items() if len(v) >= 5} for s, d in out.items()}
 
 
@@ -252,17 +266,19 @@ GRUPY = {
 }
 
 
-def percentyle(rows, pole, kier, grupa="sector"):
-    """Dla każdego wiersza: percentyl wartości `pole` w jego sektorze (0..1, 1 = najlepiej wg kierunku), None gdy brak."""
+def percentyle(rows, pole, kier, grupa=None):
+    """Dla każdego wiersza: percentyl wartości `pole` wśród wszystkich spółek (grupa=None; etap 77, decyzja użytkownika: odniesienie do całej 500)
+    albo w jego grupie (np. grupa="sector"); 0..1, 1 = najlepiej wg kierunku, None gdy brak."""
+    klucz = (lambda r: r[grupa]) if grupa else (lambda r: "wszystkie")
     od_sek = {}
     for r in rows:
         v = r["m"].get(pole)
         if v is not None and not (pole in ("pe", "peg", "pfcf", "ps") and v <= 0):
-            od_sek.setdefault(r[grupa], []).append(v)
+            od_sek.setdefault(klucz(r), []).append(v)
     out = []
     for r in rows:
         v = r["m"].get(pole)
-        lst = od_sek.get(r[grupa], [])
+        lst = od_sek.get(klucz(r), [])
         if v is None or len(lst) < 5 or (pole in ("pe", "peg", "pfcf", "ps") and v <= 0):
             out.append(None)
             continue
@@ -454,10 +470,13 @@ def dcf_scenariusze(m, hist=None, sektor=None):
 ETYKIETY = [(0.40, "Bardzo tania"), (0.15, "Niedowartościowana"), (-0.15, "Wyceniona uczciwie"), (-0.40, "Droga"), (-9, "Bardzo droga")]
 
 
+PEG_PROGI = [(0.5, "Bardzo tania"), (1, "Niedowartościowana"), (2, "Wyceniona uczciwie"), (3, "Droga")]
+
+
 def etykieta(pot, peg=None):
-    """Etykieta wyceny z potencjału DCF (wartość / cena − 1), zapas: PEG."""
+    """Etykieta wyceny: najpierw PEG (użytkownik: „na pierwszym planie PEG”; < 0,5 / < 1 / < 2 / < 3 / ≥ 3), zapas: potencjał DCF."""
+    if peg is not None and peg > 0:
+        return next((t for p, t in PEG_PROGI if peg < p), "Bardzo droga")
     if pot is not None:
         return next(t for p, t in ETYKIETY if pot >= p)
-    if peg is not None and peg > 0:
-        return "Niedowartościowana" if peg < 1 else "Wyceniona uczciwie" if peg < 2 else "Droga" if peg < 3 else "Bardzo droga"
     return None

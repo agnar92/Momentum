@@ -21,7 +21,7 @@
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
             <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
             <td class="firma"><b>${esc(r.n)}</b><small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
-            <td class="n ogolna">${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
+            <td class="n ogolna">${r.sp ? `<span class="spadek" title="Fundamenty słabną 2 lata z rzędu: ${esc(r.sp.join(" i "))}">⬇</span> ` : ""}${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td>${esc(r.typ || "–")}</td>
             <td class="n">${W.ok(r.peg) && r.peg > 0 ? W.fmtNum(r.peg, 2) : "–"}</td>

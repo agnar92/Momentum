@@ -60,10 +60,22 @@
         return peg < 1 ? "Nisko" : peg < 2 ? "Uczciwie" : peg < 3 ? "Drogo" : "Bardzo drogo";
     }
     const ETYKIETY = [[0.40, "Bardzo tania"], [0.15, "Niedowartościowana"], [-0.15, "Wyceniona uczciwie"], [-0.40, "Droga"], [-9, "Bardzo droga"]];
+    // etykieta jak ocena.etykieta: najpierw PEG (< 0,5 / < 1 / < 2 / < 3 / ≥ 3), zapas: potencjał DCF
+    const PEG_PROGI = [[0.5, "Bardzo tania"], [1, "Niedowartościowana"], [2, "Wyceniona uczciwie"], [3, "Droga"]];
+    function etykietaPeg(peg) {
+        if (!ok(peg) || peg <= 0) return null;
+        const z = PEG_PROGI.find(([p]) => peg < p);
+        return z ? z[1] : "Bardzo droga";
+    }
     function etykieta(pot, peg) {
+        if (ok(peg) && peg > 0) return etykietaPeg(peg);
         if (ok(pot)) return ETYKIETY.find(([p]) => pot >= p)[1];
-        if (ok(peg) && peg > 0) return peg < 1 ? "Niedowartościowana" : peg < 2 ? "Wyceniona uczciwie" : peg < 3 ? "Droga" : "Bardzo droga";
         return null;
+    }
+    // pozycja na pasku dla PEG (0 = bardzo tania, 1 = bardzo droga): skala 0–4
+    function pozycjaPeg(peg) {
+        if (!ok(peg) || peg <= 0) return null;
+        return Math.min(1, peg / 4);
     }
     // pozycja na pasku wyceny (0 = bardzo tania, 1 = bardzo droga) z potencjału
     function pozycjaWyceny(pot) {
@@ -126,7 +138,7 @@
         wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
             ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
     };
-    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze); brak danych = neutralne 50 pkt; ocena = średnia / 10
+    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl wśród 500 spółek); brak danych = neutralne 50 pkt; ocena = średnia / 10
     const BRAK = 0.5;
     function skladOceny(pct, grupa) {
         const el = GRUPY[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
@@ -139,7 +151,7 @@
     // kierunek wskaźnika (jak GRUPY w ocena.py): 1 = więcej lepiej, -1 = mniej lepiej
     const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1 };
     const DODATNIE = ["pe", "peg", "pfcf", "ps"];
-    // percentyl wartości v wśród wartości sektora (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
+    // percentyl wartości v wśród wartości wszystkich spółek (etap 77) (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
     function percentyl(lst, v, pole) {
         if (!ok(v) || !lst || lst.length < 5 || (DODATNIE.includes(pole) && v <= 0)) return null;
         const mn = lst.filter((x) => x < v).length, rw = lst.filter((x) => x === v).length;
@@ -167,7 +179,7 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

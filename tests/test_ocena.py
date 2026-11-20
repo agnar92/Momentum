@@ -32,6 +32,7 @@ def test_dcf_i_peg():
     s = O.peg_scenariusze(30.0, 0.25)
     assert round(s["base"]["peg"], 3) == 1.2 and s["bear"]["peg"] > s["base"]["peg"] > s["bull"]["peg"]
     assert O.etykieta(0.5) == "Bardzo tania" and O.etykieta(0.0) == "Wyceniona uczciwie" and O.etykieta(None, 2.5) == "Droga"
+    assert O.etykieta(0.5, 3.3) == "Bardzo droga" and O.etykieta(-0.5, 0.4) == "Bardzo tania"   # PEG przed DCF
 
 
 def _dcf_reczny():
@@ -122,3 +123,13 @@ def test_zmiana_liczby_akcji_ze_splitem():
     assert abs(O.zmiana_akcji(sh, [("2024-06-10", 10.0)]) - (-0.1)) < 1e-9
     assert O.zmiana_akcji(sh, []) is None          # bez splitu 9x więcej = poza zakresem (błąd danych)
     assert O.zmiana_akcji({"2025-06-30": 5.0}, []) is None
+
+
+def test_spadek_dwa_lata_z_rzedu():
+    def fy(y, v):
+        return {"start": f"{y}-01-01", "end": f"{y}-12-31", "val": v, "filed": f"{y + 1}-03-01"}
+    rev = [100, 110, 120, 115, 105]          # dwa ostatnie lata spadek
+    facts = {"us-gaap": {"Revenues": {"units": {"USD": [fy(2021 + i, v) for i, v in enumerate(rev)]}},
+                         "NetIncomeLoss": {"units": {"USD": [fy(2021 + i, v) for i, v in enumerate([10, 11, 12, 13, 14])]}}}}
+    m, _ = O.metryki(F.wyciag(facts), {}, dzis=dt.date(2026, 6, 1))
+    assert m["spadek_2l"] == ["przychody"]
