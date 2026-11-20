@@ -40,12 +40,19 @@
           </div>`;
     }
 
+    let LISTA = null;
+    function miejsceTxt(k) {
+        if (!LISTA) return "";
+        const r = W.miejsce(LISTA, K.t, (x) => x.o && x.o[k]);
+        return r ? ` · <span class="mut male">miejsce ${r.miejsce} z ${r.z}</span>` : "";
+    }
     function liczby() {
         const m = M, z = K.zw || {}, o = K.oceny || {};
         const zw = (x, n) => `<div><small>${n}</small><b class="${x > 0 ? "plus" : x < 0 ? "minus" : ""}">${W.fmtPct(x, 1, true)}</b></div>`;
         $("liczby").innerHTML = `
           <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle sektora ${esc(K.sector || "")}</div></div>${oc(o.ogolna)}</div>
-          ${[["Wzrost", o.wzrost], ["Siła finansowa", o.sila], ["Wycena (im wyżej, tym taniej)", o.wycena]].map(([n, v]) => `<div class="wiersz-oceny"><span>${n}</span>${oc(v)}</div>`).join("")}
+          ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
+          <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} · <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a></div>
           <div class="liczby" style="margin-top:12px">
             <div><small>Cena</small><b>${W.fmtCena(m.price)}</b></div><div><small>EPS (12 mies.)</small><b>${W.fmtNum(m.eps)}</b></div>
             <div><small>Kapitalizacja</small><b>${W.fmtUsd(m.mcap)}</b></div><div><small>Miejsce</small><b>#${K.rank}</b></div>
@@ -71,6 +78,12 @@
             return `<div class="wiersz"><span>${n}: <b>${v}</b></span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
         };
         const pr = (x) => W.fmtPct(x, 1), pz = (x) => W.fmtPct(x, 1, true);
+        const sklad = (g) => {
+            const s = W.skladOceny(p, g);
+            return `<details class="sklad"><summary>Jak powstała ocena ${W.fmtNum(K.oceny[g], 1)} (${s.liczone} wskaźników)</summary>
+              ${s.el.map((x) => `<div class="pkt ${x.pkt === null ? "nie-liczy" : ""}"><span>${esc(x.nazwa)}</span><span class="pas"><i style="width:${x.pkt || 0}%"></i></span><b>${x.pkt === null ? "–" : x.pkt}</b></div>`).join("")}
+              <div class="mut" style="margin-top:6px">Punkty = percentyl w sektorze ${esc(K.sector || "")} (100 = najlepsza spółka sektora). Ocena = średnia punktów ÷ 10; „–” = brak danych, nie liczy się.</div></details>`;
+        };
         $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie z innymi spółkami sektora ${esc(K.sector || "")} w 500 największych (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej).</div>
           <div class="kol3">
             <div class="kol k-wzrost"><div class="naglowek-kol">📈 Wzrost</div>
@@ -78,18 +91,18 @@
               ${w("Przychody 3 lata (łącznie)", pz(m.rev_3y), "rev_cagr3")}${w("Zysk netto 3 lata", pz(m.ni_3y))}
               ${w("Przychody 5 lat (łącznie)", pz(m.rev_5y), "rev_cagr5")}${w("Zysk netto 5 lat", pz(m.ni_5y), "ni_5y")}
               ${w("Prognoza EPS (5 lat, rocznie)", pr(m.eps_next5), "eps_next5")}${w("Lata z przychodami > 10 % (z 5)", W.ok(m.rev_lata_10) ? m.rev_lata_10 : "–", "rev_lata_10")}
-              <div class="wiersz"><span>Ocena wzrostu</span>${oc(K.oceny.wzrost)}</div></div>
+              <div class="wiersz"><span>Ocena wzrostu</span>${oc(K.oceny.wzrost)}</div>${sklad("wzrost")}</div>
             <div class="kol k-sila"><div class="naglowek-kol">🛡️ Siła finansowa</div>
               ${w("Marża brutto", pr(m.gm), "gm")}${w("Marża operacyjna", pr(m.om), "om")}${w("Marża netto", pr(m.nm), "nm")}
               ${w("ROE", pr(m.roe), "roe")}${w("ROA", pr(m.roa), "roa")}${w("ROIC", pr(m.roic))}${w("ROCE", pr(m.roce), "roce")}
               ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD", "fcf_margin")}${w("Dług / kapitał", W.fmtNum(m.de), "de")}
               ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD", "net_cash_mc")}${w("Quick ratio", W.fmtNum(m.qr), "qr")}
-              <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div></div>
+              <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
               ${w("P/E", W.fmtNum(m.pe), "pe")}${w("Forward P/E", W.fmtNum(m.fpe))}${w("P/S", W.fmtNum(m.ps), "ps")}${w("P/B", W.fmtNum(m.pb))}
               ${w("PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg")}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf")}
               ${w("Stopa FCF", pr(m.fcf_yield), "fcf_yield")}${w("Stopa dywidendy", pr(m.div))}${w("Potencjał DCF", pz(m.dcf_pot), "dcf_pot")}
-              <div class="wiersz"><span>Ocena wyceny</span>${oc(K.oceny.wycena)}</div></div>
+              <div class="wiersz"><span>Ocena wyceny</span>${oc(K.oceny.wycena)}</div>${sklad("wycena")}</div>
           </div>`;
     }
 
@@ -227,7 +240,11 @@
     }
 
     function szukaj() {
-        fetch("data/lista.json").then((r) => r.json()).then((d) => { $("tickery").innerHTML = d.rows.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join(""); }).catch(() => {});
+        fetch("data/lista.json").then((r) => r.json()).then((d) => {
+            LISTA = d.rows;
+            $("tickery").innerHTML = d.rows.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join("");
+            if (K) liczby();
+        }).catch(() => {});
         $("q").addEventListener("change", (e) => { const v = e.target.value.trim().toUpperCase(); if (v) location.href = "spolka.html?t=" + encodeURIComponent(v); });
     }
 

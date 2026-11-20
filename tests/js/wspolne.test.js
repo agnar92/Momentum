@@ -52,3 +52,12 @@ test("TTM z kwartałów", () => {
     const q = [["q1", 1], ["q2", 2], ["q3", 3], ["q4", 4], ["q5", null]];
     assert.deepStrictEqual(W.ttmSeria(q, 1), [["q4", 10], ["q5", null]]);
 });
+
+test("skład oceny = średnia percentyli / 10 (jak Python), miejsce w rankingu", () => {
+    const s = W.skladOceny({ rev_1y: 0.9, rev_cagr3: 0.7, ni_1y: null }, "wzrost");
+    assert.strictEqual(s.ocena, 8);
+    assert.strictEqual(s.liczone, 2);
+    assert.strictEqual(s.el.find((x) => x.pole === "rev_1y").pkt, 90);
+    const rows = [{ t: "A", o: 5 }, { t: "B", o: 9 }, { t: "C", o: null }];
+    assert.deepStrictEqual(W.miejsce(rows, "A", (r) => r.o), { miejsce: 2, z: 2 });
+});

@@ -92,3 +92,32 @@ svg text { font: 11px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(-
 .blad { background: var(--czerwony-tlo); color: #991b1b; padding: 12px; border-radius: 10px; }
 .stopka { color: var(--tekst2); font-size: 12px; text-align: center; padding: 20px; }
 .tooltip { position: fixed; pointer-events: none; background: #111827; color: #fff; padding: 6px 9px; border-radius: 8px; font-size: 12px; z-index: 50; white-space: nowrap; }
+/* telefony: elementy siatek mogą się zwężać (bez tego wykres / pola rozpychały stronę) */
+.siatka2 > *, .siatka3 > *, .kol3 > *, .wej > *, .scen > * { min-width: 0; }
+.wej input { min-width: 0; }
+@media (max-width: 600px) {
+  .main { padding: 10px; }
+  .karta { padding: 12px; }
+  .liczby { grid-template-columns: repeat(2, 1fr); }
+  .wej { grid-template-columns: 1fr; }
+  .scen { gap: 6px; }
+  .scen > div { padding: 8px 4px; }
+  .scen b { font-size: 16px !important; }
+  .scen .t { font-size: 9px; letter-spacing: 0; }
+  .peg-duzy { font-size: 38px; }
+  .szukaj { margin-left: 0; width: 100%; }
+  .szukaj input { width: 100%; max-width: none; }
+  .metryki .wiersz { flex-direction: column; gap: 2px; }
+}
+/* skład oceny i porównanie */
+.sklad { padding: 8px 10px; border-top: 1px solid var(--linia); font-size: 12px; }
+.sklad summary { cursor: pointer; color: var(--tekst2); font-weight: 600; }
+.pkt { display: grid; grid-template-columns: 1fr 90px 34px; gap: 8px; align-items: center; padding: 3px 0; }
+.pkt .pas { height: 7px; border-radius: 99px; background: #e5e7eb; overflow: hidden; }
+.pkt .pas i { display: block; height: 100%; background: var(--akcent); }
+.pkt.nie-liczy { color: var(--tekst2); }
+.porownanie td, .porownanie th { white-space: normal; }
+.porownanie td.naj { background: #dcfce7; font-weight: 700; }
+.porownanie .sekcja td { background: #f1f5f9; font-weight: 700; }
+.tag { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--linia); border-radius: 999px; padding: 3px 10px; margin: 2px; }
+.tag button { border: 0; padding: 0 2px; background: none; }

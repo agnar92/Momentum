@@ -116,7 +116,30 @@
         return out;
     }
 
-    const W = { fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
+    const GRUPY = {
+        wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
+            ["ni_5y", "Zysk netto 5 lat"], ["eps_next5", "Prognoza EPS 5 lat"], ["rev_lata_10", "Lata z przychodami > 10 %"]],
+        sila: [["gm", "Marża brutto"], ["om", "Marża operacyjna"], ["nm", "Marża netto"], ["roe", "ROE"], ["roa", "ROA"], ["roce", "ROCE"], ["fcf_margin", "Marża FCF"],
+            ["de", "Dług / kapitał (mniej = lepiej)"], ["qr", "Quick ratio"], ["net_cash_mc", "Gotówka netto / kapitalizacja"]],
+        wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
+            ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
+    };
+    // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl w sektorze) i ocena = średnia / 10
+    function skladOceny(pct, grupa) {
+        const el = GRUPY[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
+        const z = el.filter((x) => x.pkt !== null);
+        const ocena = z.length >= 2 ? Math.round(10 * z.reduce((a, x) => a + pct[x.pole], 0) / z.length * 10) / 10 : null;
+        return { el, ocena, liczone: z.length };
+    }
+    // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością
+    function miejsce(rows, t, f) {
+        const z = rows.filter((r) => ok(f(r))).sort((a, b) => f(b) - f(a));
+        const i = z.findIndex((r) => r.t === t);
+        return i < 0 ? null : { miejsce: i + 1, z: z.length };
+    }
+
+    const W = { GRUPY, skladOceny, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

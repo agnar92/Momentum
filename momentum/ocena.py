@@ -1,5 +1,5 @@
 """Ocena spółki: wskaźniki wzrostu / siły finansowej / wyceny, oceny 0-10 względem sektora, typ spółki (kategorie Lyncha),
-dopasowanie do strategii z badania oraz wycena PEG i DCF (te same wzory co docs/js/wycena-dcf.js). Czyste funkcje, bez sieci."""
+dopasowanie do strategii z badania oraz wycena PEG i DCF (te same wzory co docs/js/wspolne.js). Czyste funkcje, bez sieci."""
 import datetime as dt
 import math
 from . import fundamenty as F

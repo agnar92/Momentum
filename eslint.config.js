@@ -3,7 +3,7 @@
 
 const browserGlobals = {
     window: "readonly", document: "readonly", localStorage: "readonly", fetch: "readonly", console: "readonly", location: "readonly",
-    URLSearchParams: "readonly", module: "readonly",
+    URLSearchParams: "readonly", module: "readonly", history: "readonly",
     W: "readonly", WY: "readonly",   // docs/js/wspolne.js i wykresy.js (ładowane przed lista.js / spolka.js)
 };
 const nodeGlobals = { require: "readonly", module: "readonly", process: "readonly", console: "readonly" };
