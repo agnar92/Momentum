@@ -2,16 +2,9 @@
 "use strict";
 
 const browserGlobals = {
-    window: "readonly", document: "readonly", navigator: "readonly", localStorage: "readonly", fetch: "readonly",
-    console: "readonly", location: "readonly", setTimeout: "readonly", clearTimeout: "readonly", CSS: "readonly",
-    URL: "readonly", setInterval: "readonly", clearInterval: "readonly", TextDecoder: "readonly", Blob: "readonly", caches: "readonly", Notification: "readonly", requestAnimationFrame: "readonly", self: "readonly", module: "readonly",
-    require: "readonly",   // tylko w testach (chart.js sprawdza typeof require)
-    // docs/js/lines.js i chart.js (ładowane PRZED app.js)
-    dateIndex: "readonly", lineAt: "readonly", hitLine: "readonly", snapPrice: "readonly", snapHorizontal: "readonly", evalAlerts: "readonly", snapshot: "readonly", positionPlan: "readonly", positionStatus: "readonly", MAX_POSITIONS: "readonly", rulerText: "readonly",
-    chartSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
-    sliderMode: "readonly", sliderDrag: "readonly", sliderJump: "readonly", zoomWindow: "readonly", windowRange: "readonly",
-    FUTURE_STEPS: "readonly", FUTURE_DEFAULT: "readonly", DEFAULT_WEEKS: "readonly", monthlyWithOpen: "readonly", extendData: "readonly", fmt: "readonly", sharesText: "readonly",
-    positionSize: "readonly", earningsIndices: "readonly", rwbStarts: "readonly", glbPeak: "readonly", blueDots: "readonly",
+    window: "readonly", document: "readonly", localStorage: "readonly", fetch: "readonly", console: "readonly", location: "readonly",
+    URLSearchParams: "readonly", module: "readonly",
+    W: "readonly", WY: "readonly",   // docs/js/wspolne.js i wykresy.js (ładowane przed lista.js / spolka.js)
 };
 const nodeGlobals = { require: "readonly", module: "readonly", process: "readonly", console: "readonly" };
 

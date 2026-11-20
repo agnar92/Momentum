@@ -351,3 +351,541 @@ forward PEG jak etap 29. Sprawdziany: (1) IC g z faktyczną zmianą EPS TTM za 4
 (2) portfele jak etap 29c: kandydaci PEG <= 1 i IV > cena, ranking po potencjale, N = 10 i 20, decyzje co miesiąc / kwartał / rok,
 trzymanie dopóki tania (R1) albo w top 2N (R3), bez przycinania. Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium jak etap 29c.
 Wynik etapu 30 (2026-11-16): ważony wzrost przychodów najlepiej z historycznych prognoz przewiduje wzrost EPS (IC 0,133, t 11,8), ale potencjał IV z nim nie przewiduje ceny (IC -0,04); portfele 10,8-15,8 % (najlepszy N=10 co miesiąc 14,6 % ważona / 15,8 % arytm.), żaden nie spełnia kryteriów; wynik w całości z 2019-2026 (2011-18: 2,7-6,4 %).
+
+## Etap 31: EPS 5 lat > 15 % i niskie forward P/E (zapisane 2026-11-16 PRZED uruchomieniem)
+Strategia użytkownika: kandydaci = CAGR EPS TTM z 5 lat > 15 % (oba końce > 0, znane na datę decyzji); ranking rosnąco po forward P/E =
+cena / (EPS TTM x (1 + g)), tylko forward EPS > 0. g (estymata wzrostu EPS): (A) ważona średnia kwartalnych zmian przychodów r/r (etap 30,
+metoda użytkownika), (B) g = 0 (zwykłe trailing P/E, kontrola: czy estymata coś dodaje), (C) faktyczny wzrost + błąd 10 pp (jak analityk, nierealne).
+N = 10 i 20; decyzje co miesiąc / kwartał / rok; trzymanie (R1) dopóki spełnia warunek EPS 5 lat > 15 %, (R3) dopóki w top 2N.
+Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium "lepszy" jak etap 29c. 36 wariantów, rozpoznawcze.
+Poprawka etapu 31 (2026-11-16, PRZED wynikami; pierwsze uruchomienie przerwane bez wyników): użytkownik doprecyzował regułę: zamiast progu
+EPS 5 lat > 15 % -> co decyzję 40 spółek z najwyższym CAGR EPS z 5 lat (wśród członków S&P 500 z dodatnim EPS), z nich 10 z najniższym
+forward P/E. N = 10 (dodatkowo 20 dla porównania). Trzymanie: (R1) dopóki spółka jest w top 40 po EPS 5 lat, (R3) dopóki w top 2N rankingu forward P/E
+wśród tej czterdziestki. Reszta bez zmian.
+Wynik etapu 31 (2026-11-16): top 40 po EPS 5 lat + najniższe forward P/E: 5,9-10,9 % rocznie, wszystkie poniżej równych wag (12,8 %); 2011-2018 ok. 0 %; estymata z przychodów dodaje ok. +1 pp względem trailing P/E.
+
+## Etap 32: GARP (wzrost w rozsądnej cenie, wersja Lyncha) (zapisane 2026-11-16 PRZED uruchomieniem)
+Reguły (z literatury, bez dopasowania do wyników): (1) umiarkowany wzrost: CAGR EPS TTM z 5 lat w przedziale 10-30 % (wyklucza odbicia
+z niskiej bazy i spółki cykliczne na szczycie), (2) stabilność: EPS TTM > 0 w każdym z 6 punktów rocznych i wzrost r/r w co najmniej 4 z 5 lat,
+(3) wzrost trwa: ważona średnia kwartalnych zmian przychodów r/r (etap 30) > 5 %, (4) cena: PEG = P/E / (100 g) <= 1, gdzie g = mniejsza z
+(CAGR EPS 5 lat, ważony wzrost przychodów) - konserwatywnie. Ranking rosnąco po PEG, N = 10 i 20, decyzje co miesiąc i co kwartał,
+trzymanie dopóki spełnia warunki (R1). Warianty: G1 pełny GARP; G2 bez warunku stabilności; G3 pełny GARP + zamknięcie miesiąca nad SMA 10
+(trend, jak w CEM10). Uniwersum, okres 2011-2026, koszty, odniesienia i kryterium "lepszy" jak etap 29c. Rozpoznawcze (12 wariantów).
+Wynik etapu 32 (2026-11-16): reguły zbyt ostre - kandydatów w miesiącu mediana 1-4,5, portfel głównie w gotówce, CAGR 0,1-4,2 %; test nieinformacyjny.
+Odstępstwo 10 / etap 32b (zapisane PO wyniku etapu 32, PRZED uruchomieniem 32b; wynik 32 znany tylko co do liczby kandydatów i zwrotu):
+g = CAGR EPS z 5 lat (jak u Lyncha, bez minimum z przychodami), filtry (1) EPS 5 lat 10-30 %, (2) stabilność >= 4 z 5 lat, (3) ważony wzrost przychodów > 5 %;
+ranking rosnąco po PEG = P/E / (100 g); warianty progu: bez progu (zawsze top N) i PEG <= 1,5; G3 jak wyżej + nad SMA 10. Reszta jak etap 32.
+Diagnostyka etapów 31 i 32b (2026-11-16): CAGR EPS 5 lat wymaga TTM sprzed 5 lat, a dane SEC zaczynają się ok. 2009-2010 -> w 2011-2014 mogło brakować kandydatów (portfel w gotówce). Ponowne uruchomienie z liczbą kandydatów wg lat i CAGR od 2015-03 (porównanie z równymi wagami od tej samej daty).
+Wynik etapu 32b (2026-11-16): dane EPS 5 lat dostępne od 2015 (2011-2014 bez kandydatów). Od 2015-03: GARP 4,2-11,9 % vs równe wagi 11,4 %; etap 31 od 2015-03: metoda użytkownika 9,8-12,6 %, trailing P/E 8,4-13,1 %, jak analityk 11,4-15,5 %.
+
+## Etap 33: strategia użytkownika - szybki wzrost EPS i przychodów, PEG z estymaty, przycinanie, cena docelowa (zapisane 2026-11-16 PRZED uruchomieniem)
+Decyzje co miesiąc, 10 miejsc (nowa pozycja = kapitał / 10). g = ważona średnia kwartalnych zmian przychodów r/r (etap 30, estymata użytkownika).
+Kandydaci: EPS TTM > 0, wzrost EPS TTM r/r >= 25 % i g >= 25 %; ranking malejąco po wzroście EPS TTM r/r (najszybciej rosnące);
+kupno tylko przy PEG = P/E / (100 g) <= 1. Trzymane pozycje: PEG > 1 i udział > 7 % -> przycięcie do 7 % (gotówka czeka na kolejne zakupy).
+Sprzedaż całości, gdy: (a) pogorszenie: wzrost EPS TTM r/r albo g niższe niż 3 miesiące wcześniej (wariant P) / spadek: EPS TTM r/r < 0 albo
+ostatni kwartał przychodów r/r < 0 (wariant S); (b) cena docelowa = mediana P/E z ostatnich 36 mies. (tylko P/E > 0, min. 12 mies.) x EPS TTM x (1 + g)
+niższa niż 3 miesiące wcześniej. Warianty: P i S, każdy z regułą (b) i bez niej, z przycinaniem i bez (8 wariantów). Koszt 0,1 %/stronę.
+Uniwersum: członkowie S&P 500 z danymi SEC, 2011-2026 (połowy 2011-2018 / 2019-2026) i od 2015-03. Odniesienia: równe wagi, SPY, CEM10 (etap 27).
+"Lepszy": wyższy CAGR w obu połowach i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze.
+Wynik etapu 33 (2026-11-16): 6,7-11,4 % rocznie (od 2015: 6,4-12,8 % vs równe wagi 11,4 %, CEM10 25,9 %); najlepsze: sprzedaż tylko przy spadku r/r, bez ceny docelowej i bez przycinania (11,4 %); wariant 'pogorszenie' istotnie gorszy od równych wag.
+
+## Etap 34: screener użytkownika (Scrab) - mały indeks top 10 po potencjale ceny docelowej (zapisane 2026-11-16 PRZED uruchomieniem)
+Kryteria ze screenshotu i ich odtworzenie z danych dostępnych na datę decyzji (prognoz analityków i ich cen docelowych brak w historii):
+forward PEG <= 1,5 (cena / (EPS TTM x (1 + g)) / (100 g)); wzrost EPS na 2 lata >= 10 % -> g >= 10 % (g = ważona średnia kwartalnych zmian
+przychodów r/r, estymata użytkownika); P/E (TTM) <= 40 i > 0; ROE >= 15 % (zysk netto TTM / ostatni kapitał własny > 0, SEC); dług / kapitał <= 1
+(dług = LongTermDebt albo część długoterminowa + bieżąca, + krótkoterminowe pożyczki i commercial paper; brak tagów długu = 0);
+potencjał ceny docelowej >= 50 %, cena docelowa = mediana P/E z 36 mies. x EPS TTM x (1 + g) (definicja użytkownika z etapu 33).
+Co miesiąc ranking malejąco po potencjale, portfel = top 10 (równe kwoty dla nowych; wypadnięcie z top 10 = sprzedaż, wolne miejsce = kolejna
+z rankingu). Warianty: Z1 pełny screener; Z2 bez progu potencjału 50 % (sam ranking); Z3 jak Z1, decyzje co kwartał; Z4 jak Z1 z g jak analityk
+(faktyczny wzrost EPS + błąd 10 pp, nierealne). Uniwersum S&P 500 PIT z danymi SEC, 2011-2026 i od 2015-03; koszty, odniesienia, kryterium jak etap 33.
+Wynik etapu 34 (2026-11-16): z estymatą użytkownika (przychody ważone) 6,7-12,8 % (równe wagi 12,8 %, od 2015 9,7-12,9 % vs 11,4 %); z prognozą jak analityk (nierealne) 25,2 % (od 2015 30,3 %, CEM10 25,9 %). Ograniczenia: cena docelowa = formuła użytkownika, nie analityków; brak tagów długu w SEC = D/E 0.
+
+## Etap 35: co w fundamentach 5 lat wcześniej wskazywało największych wygranych (zapisane 2026-11-17 PRZED uruchomieniem, opisowe)
+Kohorty: koniec marca 2011 ... 2021 (11 lat); spółki = członkowie S&P 500 point-in-time z danymi SEC. Wynik: maksymalny zwrot w 5 lat =
+max(zamknięcie miesiąca w t+1 ... t+60) / zamknięcie w t - 1 (ceny skorygowane), dodatkowo zwrot po 5 latach. "Wielki wygrany" = górne 10 % maks. zwrotu w kohorcie.
+Cechy (znane na t, wg dat złożenia raportów): EPS TTM (baza ceny skorygowanej): wzrost r/r 1 rok, CAGR 2 / 3 / 5 lat, przyspieszenie (wzrost 1 r. teraz - rok
+wcześniej), liczba lat wzrostu z 5; przychody TTM: wzrost 1 rok, CAGR 2 / 3 / 5 lat, ostatni kwartał r/r, ważona średnia kwartałów (estymata użytkownika),
+przyspieszenie; marża operacyjna TTM, zmiana 1 i 3 lata; wycena: E/P (zysk netto TTM / kapitalizacja), P/E (dodatnie), S/P (przychody / kapitalizacja),
+PEG (P/E / CAGR EPS 3 lata), forward P/E i potencjał ceny docelowej użytkownika (mediana P/E 36 mies. x EPS x (1 + estymata)); jakość: ROE, dług / kapitał;
+wielkość: log kapitalizacji; kontrole cenowe: zwrot 6 i 12 mies.
+Miary: korelacja rang (Spearman) cechy z maks. zwrotem w każdej kohorcie, średnia i t (kohorty jako niezależne obserwacje, n = 11, dla cech 5-letnich mniej);
+zgodność znaku w kohortach 2011-2015 i 2016-2021; odsetek wielkich wygranych w kwintylach cechy; mediany cech wielkich wygranych vs reszty.
+Wielokrotne testy: ~30 cech -> próg Bonferroniego |t| > 3,3 (5 % / 30). Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność),
+kohorty nakładają się w czasie (okna 5-letnie).
+Wynik etapu 35 (2026-11-17): próg Bonferroniego przechodzą tylko CAGR przychodów 5 lat i liczba lat wzrostu EPS (oba tylko 7 kohort 2015-2021); żadna miara wyceny nie wskazywała przyszłych wielkich wygranych; korelacje <= 0,10.
+
+## Etap 36: wybór po wzroście przychodów 5 lat (vs EPS 5 lat), dług / kapitał < 1, PEG tylko jako moment wejścia (zapisane 2026-11-17 PRZED uruchomieniem)
+Pomysł użytkownika po etapie 35. Co roku na koniec marca lista docelowa = top N członków S&P 500 (z danymi SEC) po rankingu: (R) CAGR przychodów TTM z 5 lat
+albo (E) CAGR EPS TTM z 5 lat; filtr dług / kapitał < 1 (wariant z filtrem i bez). Sprzedaż w marcu, gdy spółka wypadła z top 2N listy.
+Wejście (sprawdzane co miesiąc dla spółek z listy, których nie mamy, przy wolnym miejscu): (W0) od razu; (W1) PEG <= 1; (W2) PEG <= 1,5;
+PEG = P/E TTM / (100 x CAGR EPS 5 lat) (EPS > 0, CAGR > 0); niespełnione = gotówka (0 %) czeka. N = 10 i 20; kwota = kapitał / N. Koszt 0,1 %/stronę.
+Okres 2015-03 ... 2026-09 (dane 5-letnie od 2015). Odniesienia od 2015-03: równe wagi uniwersum, SPY, CEM10 na tym samym uniwersum.
+"Lepszy": wyższy CAGR w obu połowach (2015-03 ... 2020-12, 2021-01 ... 2026-09) i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze (24 warianty).
+Wynik etapu 36 (2026-11-17): ranking po przychodach 5 lat + dług < 1, kupno od razu, N = 20: 18,9 % rocznie (równe wagi 11,4 %, SPY 13,9 %, CEM10 25,9 %), lepszy w obu połowach, przedział różnicy obejmuje 0; PEG jako moment wejścia obniża wynik; EPS 5 lat zamiast przychodów ~ rynek.
+
+## Etap 37: przychody 5 lat > +50 %, FCF > 0, PEG z wykładniczej projekcji EPS (zapisane 2026-11-17 PRZED uruchomieniem)
+Doprecyzowanie użytkownika po etapie 36. Filtry na koniec marca: łączny wzrost przychodów TTM w 5 lat > +50 % (CAGR > 8,45 %); FCF z ostatniego
+rocznego raportu (przepływy operacyjne - capex, SEC, znane na datę) > 0; dług / kapitał < 1 (jak etap 36). PEG = P/E TTM / (100 g), g = CAGR EPS z 5 lat
+(projekcja wykładnicza EPS x (1 + g)^n na kolejne 5 lat ma to samo roczne tempo). Warianty (N = 10 i 20, lista co marzec, sprzedaż po wypadnięciu z top 2N):
+F1 ranking po CAGR przychodów, kupno od razu; F2 jak F1, wejście przy PEG <= 1; F3 jak F1, wejście przy PEG <= 1,5; F4 ranking rosnąco po PEG (PEG jako wybór),
+kupno od razu; F5 jak F1 bez filtra długu; F6 CAGR przychodów > 50 % rocznie (dosłowne odczytanie), FCF > 0, dług < 1, od razu.
+Okres, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (12 wariantów).
+Wynik etapu 37 (2026-11-17): F1 (przychody 5 l. > +50 %, FCF > 0, dług < 1, ranking po przychodach, od razu) N = 20: 19,1 % rocznie, N = 10: 16,8 %; filtr FCF ~ bez zmian vs etap 36; PEG jako wejście i jako ranking obniża wynik; >50 % rocznie - za mało spółek.
+
+## Etap 38: Lynch PEG = P/E / PRZYSZŁY wzrost EPS, PEG < 2, ROE > 15 %, dług < 1, przychody 5 lat > +50 %, 10 spółek co rok (zapisane 2026-11-17 PRZED uruchomieniem)
+Uwaga użytkownika: PEG Lyncha używa przyszłego wzrostu EPS (w etapach 36-37 g = przeszły CAGR EPS 5 lat). Historii prognoz brak, więc g (przyszły wzrost EPS)
+w trzech wersjach: (A) estymata użytkownika - ważona średnia kwartalnych zmian przychodów r/r; (B) przeszły CAGR EPS 5 lat (projekcja); (C) faktyczny wzrost
+EPS TTM za 4 kwartały + błąd N(+5 pp, 10 pp) (jak analityk, nierealne). PEG = P/E TTM / (100 g), tylko EPS > 0 i g > 0.
+Na koniec marca: filtry łączny wzrost przychodów 5 lat > +50 %, ROE > 15 %, dług / kapitał < 1, PEG < 2; z przechodzących 10 spółek wg rankingu
+(R) CAGR przychodów 5 lat malejąco albo (P) PEG rosnąco; portfel = dokładnie ta dziesiątka do następnego marca (wymiana spółek spoza nowej dziesiątki).
+Wariant kontrolny bez filtra PEG (ranking R). Okres 2015-03 ... 2026-09, koszty, odniesienia i kryterium jak etap 36. Rozpoznawcze (7 wariantów).
+Technicznie: macierze wskaźników zapisywane do /home/user/ndx/wskazniki_cache.npz (kolejne etapy bez ponownego liczenia).
+Uzupełnienie etapu 38 (2026-11-17, PRZED wynikami): użytkownik dodał filtr kapitalizacji > 10 mld USD (large cap; kapitalizacja point-in-time
+/home/user/ndx/pit_cap2.npy na koniec marca). Warianty etapu 38 liczone dodatkowo z tym filtrem (skrypt r59b z cache wskaźników); wyniki obu wersji raportowane.
+Wynik etapu 38/38b (2026-11-17): filtr > 10 mld podnosi wynik (kontrola bez PEG: 16,1 -> 20,9 %); PEG < 2 z realną estymatą obniża (> 10 mld: 15,2-16,8 %); tylko PEG z wiedzą o przyszłości (C) daje istotną przewagę (18,1-20,1 %).
+
+## Etap 39: przychody rosną co roku o >= 10 % przez 5 lat ("słupki rosną") + ROE, dług, > 10 mld, PEG < 2; miary ryzyka (zapisane 2026-11-17 PRZED uruchomieniem)
+Doprecyzowanie użytkownika: zamiast łącznego wzrostu przychodów 5 lat > +50 % - każda z 5 zmian rocznych przychodów TTM (t vs t-1 rok, ..., t-4 vs t-5)
+>= +10 % (łącznie wtedy >= +61 %). Reszta jak etap 38b z filtrem > 10 mld: ROE > 15 %, dług / kapitał < 1; warianty: bez PEG (ranking po CAGR przychodów 5 lat),
+PEG Lyncha < 2 z estymatą użytkownika (ranking po przychodach / po najniższym PEG), PEG < 2 z przeszłym CAGR EPS 5 lat (ranking po przychodach);
+dla porównania te same warianty z warunkiem łącznym (etap 38b). Dodatkowe miary: maks. spadek, Sharpe (miesięczny, bez stopy wolnej), Calmar = CAGR / |maxDD|,
+średni udział w akcjach. 10 spółek co marzec, 2015-03 ... 2026-09. Rozpoznawcze.
+Wynik etapu 39 (2026-11-17): warunek "co roku >= +10 %" przy > 10 mld daje 0-13 kandydatów w marcu (portfel 27-60 % w akcjach), CAGR 4,5-6,8 % - test nieinformacyjny.
+Etap 39b (zapisane PO wyniku 39, PRZED uruchomieniem, odstępstwo 11): łagodniejsze wersje "słupków": (S2) >= +10 % w co najmniej 4 z 5 lat i łącznie > +50 %;
+(S3) przychody nie spadają w żadnym roku (każda zmiana roczna > 0 %) i łącznie > +50 %. Reszta jak etap 39.
+Wynik etapu 39b (2026-11-17): ostrzejsze warunki stabilności przychodów zmniejszają liczbę spółek i wynik (S1 4,5-6,8 %, S2 11-16 %, S3 8,8-12,4 % vs łącznie > +50 %: 15,2-20,9 %); PEG < 2 obniża maks. spadek o 7-20 pp kosztem 4-5 pp CAGR, Calmar podobny lub nieco lepszy.
+
+## Etap 40: po prostu top 10 po CAGR przychodów 5 lat (zapisane 2026-11-17 PRZED uruchomieniem)
+Ranking malejąco po CAGR przychodów TTM z 5 lat wśród członków S&P 500 z danymi SEC; 10 równych pozycji; dokładnie top 10 (wymiana spoza dziesiątki).
+Warianty filtrów: (a) bez filtrów, (b) kapitalizacja > 10 mld, (c) > 10 mld + dług / kapitał < 1, (d) > 10 mld + dług < 1 + ROE > 15 % (= kontrola etapu 38b).
+Przebudowa: raz w roku (marzec) i co miesiąc. Okres 2015-03 ... 2026-09; miary: CAGR, połowy, maxDD, Sharpe, Calmar, różnica vs równe wagi spółek > 10 mld. 8 wariantów.
+Wynik etapu 40 (2026-11-17): sam ranking po przychodach 5 lat bez filtrów 3,4-8,2 % (poniżej rynku); każdy filtr jakości dodaje (> 10 mld, dług < 1, ROE > 15 %) - pełny zestaw roczny 20,9 %.
+
+## Etap 41: kiedy sprzedać - które pogorszenie fundamentów zapowiada koniec wzrostu ceny (zapisane 2026-11-18 PRZED uruchomieniem, opisowe)
+Obserwacje: spółka x koniec miesiąca, członkowie S&P 500 z danymi SEC, 2012-01 ... 2025-09 (12 mies. naprzód). Podzbiór "liderzy" = zwrot 6 mies. > +30 %
+i zamknięcie nad SMA 10 (spółki, które się trzyma). Wyniki: nadwyżka zwrotu 6 i 12 mies. nad równymi wagami uniwersum; P(spadek >= 25 % od ceny w t
+w ciągu 6 mies.); P(zwrot 12 mies. < 0).
+Sygnały (znane na t): przychody - ostatni kwartał r/r < 0; spadek wzrostu r/r o >= 10 pp vs 3 mies. wcześniej (hamowanie); ważona estymata użytkownika
+niższa niż 3 mies. wcześniej; EPS TTM r/r < 0; spadek wzrostu EPS r/r o >= 10 pp vs 3 mies.; marża operacyjna TTM niższa o >= 2 pp r/r; ROE niższe o
+>= 5 pp r/r; dług / kapitał wyższy o >= 0,2 r/r; FCF niższy niż rok wcześniej; FCF < 0; P/E > 1,5 x mediana P/E z 36 mies.; technicznie: zamknięcie pod SMA 10.
+Miary: średnia nadwyżka przy sygnale vs bez, różnica z 95 % bootstrapem blokowym po miesiącach; korelacja rang wielkości ciągłych (zmiany) z nadwyżką 12 mies.
+(średnia po miesiącach, t Newey-West, lag 12); macierz korelacji rang sygnałów ciągłych między sobą. Wielokrotne testy: ~13 sygnałów x 2 grupy -> |t| > 3.
+Wynik etapu 41 (2026-11-18): pogorszenie fundamentów nie przewiduje słabszego zwrotu (cena już to wyceniła); hamowanie przychodów, FCF < 0 i cena pod SMA 10 ok. podwajają ryzyko spadku >= 25 % w 6 mies.; najlepszy moment wyjścia nadal cenowy.
+
+## Etap 42: ROE jako warunek trzymania / sygnał sprzedaży (zapisane 2026-11-18 PRZED uruchomieniem)
+Pomysł użytkownika: trzymaj, dopóki ROE >= 10 % i nie spada r/r. Sygnały (ROE = zysk netto TTM / kapitał, znane na t): R1 ROE < 10 %; R2 przejście poniżej 10 %
+(rok wcześniej >= 10 %); R3 ROE niższe niż rok wcześniej (o > 1 pp); R4 = R1 lub R3 (warunek trzymania niespełniony); R5 ROE niższe r/r o > 1 pp i < 15 %.
+(a) Opis jak etap 41 (nadwyżka 12 mies., P(spadek >= 25 % w 6 mies.), wszyscy i liderzy). (b) Reguła wyjścia w strategii etapu 38b (d): co marzec 10 spółek > 10 mld,
+dług < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; wyjście co miesiąc: brak (trzymaj do marca) / sygnał R1..R5 / zamknięcie pod SMA 10 / R4 lub SMA 10;
+sprzedane miejsce czeka w gotówce do marca. 2015-03 ... 2026-09; CAGR, maxDD, Sharpe, Calmar. Rozpoznawcze.
+Wynik etapu 42 (2026-11-18): wyjście przy ROE spadającym r/r i < 15 % (R5) lub ROE < 10 % (R1) lekko poprawia strategię (21,4-21,9 % vs 20,9 %, DD -35..-38 % vs -41 %, Sharpe 1,03-1,04 vs 0,96); wyjście przy każdym spadku ROE r/r (R3) za częste (6,1 %); u liderów R5 -4,6 pp/12 mies. (95 %, nie Bonferroni).
+
+## Etap 43: inwestowanie długoterminowe - trzymaj, dopóki fundamenty się zgadzają; sprzedaż przy załamaniu fundamentów lub przewartościowaniu (zapisane 2026-11-18 PRZED uruchomieniem)
+Podejście użytkownika: kupno spółek dobrych fundamentalnie i trzymanie latami (bez patrzenia na wykres), sprzedaż tylko, gdy fundamenty się łamią albo spółka jest przewartościowana.
+Wybór i kupno: jak etap 38b (d) - > 10 mld, dług / kapitał < 1, ROE > 15 %, ranking po CAGR przychodów 5 lat; maks. 10 pozycji; wolne miejsca uzupełniane
+w terminach kontroli kolejnymi z bieżącego rankingu (których nie mamy i które nie mają aktywnego sygnału sprzedaży). BRAK corocznej wymiany - pozycja trwa do sygnału.
+Kontrola sygnałów raz na kwartał po sezonie raportów (luty, maj, sierpień, listopad). Sygnały sprzedaży (wszystkie znane na datę kontroli):
+X1 P/E > 1,5 x mediana P/E z 5 lat (60 mies., min. 36); X2 P/E > 2 x mediana P/E z 5 lat; X3 PEG z mediany wzrostu = P/E / (100 x mediana 5 rocznych zmian EPS TTM r/r) > 2
+(lub mediana <= 0); X4 PEG bieżący = P/E / (100 x wzrost EPS TTM r/r) > 2 (wzrost <= 0 -> sygnał X5); X5 EPS TTM r/r < 0; X6 dług / kapitał > 1;
+X7 przychody (ostatni kwartał r/r) < 0 przy medianie 5 rocznych zmian > 0 (spadek wbrew normie); X8 załamanie = X5 lub X6 lub X7; X9 załamanie lub przewartościowanie = X8 lub X2;
+X10 X5 przez 2 kolejne kontrole (potwierdzony spadek EPS). Odniesienia: kupno bez sprzedaży (trzymaj zawsze, wolne miejsca tylko po zniknięciu spółki),
+coroczna wymiana (etap 38b), równe wagi spółek > 10 mld, SPY. 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni czas trzymania, liczba sprzedaży.
+Ograniczenie: 11,5 roku danych - kilka pełnych 5-letnich cykli trzymania. Rozpoznawcze.
+Etap 43 - dodatek rozpoznawczy PO wynikach (nie rejestrowany wcześniej): X5 lub X6 (EPS r/r < 0 lub dług / kapitał > 1) - kombinacja dwóch najlepszych pojedynczych reguł; wynik traktować jako dopasowany do danych.
+Wynik dodatku (po wynikach): X5 lub X6 -> 18,9 % rocznie, DD -29 %, Sharpe 0,99, Calmar 0,65, mediana trzymania 1 rok, 61 sprzedaży.
+
+## Etap 44: CEM10 z filtrem zadłużenia (zapisane 2026-11-18 PRZED uruchomieniem)
+CEM10 (co miesiąc: zamknięcie > SMA 10 i zwrot 6M > +30 %, ranking po 6M, 10 pozycji, wyjście < SMA 10, brak zakupów przy SPY < SMA 12, koszt 0,1 %)
+na członkach S&P 500 z danymi SEC (cache r59). Warianty: bez filtra; przy zakupie dług / kapitał < 1; < 0,5 (brak danych o długu = odrzucona);
+dodatkowo wariant "< 0,5 lub brak danych" (brak danych przepuszczony) i wyjście także przy dług / kapitał > 1. Okres 2011-01 ... 2026-09 i od 2015-03;
+CAGR, połowy (2011-2018 / 2019-2026), maxDD, Sharpe, Calmar, różnica vs CEM10 bez filtra (bootstrap blokowy). Rozpoznawcze.
+Wynik etapu 44 (2026-11-18): filtr długu w CEM10 obniża maks. spadek o 2-5 pp; CAGR 2011-26 lekko niższy (< 1: 20,5 vs 21,7 %), 2015-26 wyższy (25,7 vs 22,8 %); wariant przepuszczający brak danych najlepszy (24,1 / 29,4 %), ale to po części efekt doboru spółek bez danych SEC.
+Etap 44b (2026-11-18, po wynikach 44, kontrola): CEM10 tylko na spółkach z danymi dług / kapitał, bez progu - rozdziela efekt dostępności danych od progu.
+Wynik etapu 44b: CEM10 tylko na spółkach z danymi o długu, bez progu: 2011-26 21,2 % / DD -30 %, 2015-26 28,4 % / -30 %; próg < 1 przy tych samych spółkach obniża do 20,5 / 25,7 %, < 0,5 do 19,8 / 24,1 % - sam próg długu nie pomaga, poprawa w 44 wynikała z doboru spółek z danymi.
+
+## Etap 45: screener "low risk, high reward" ze zrzutu użytkownika (zapisane 2026-11-18 PRZED uruchomieniem)
+Kupno (wszystkie warunki, znane na datę): łączny wzrost przychodów TTM 5 lat > +50 %; przychody TTM r/r > +5 %; EPS TTM r/r > +5 %; ROE > 15 %; 0 <= dług / kapitał < 1;
+FCF (ostatni rok) > 0; PEG (5Y exp-base) = P/E / (100 x CAGR EPS 5 lat) w (0, 1); bez sektorów Financials, Materials, Energy, Utilities, Real Estate
+(GICS z /home/user/eodhd-data/gics.csv dla obecnych członków, dla pozostałych SIC z SEC submissions: 6000-6799, 1000-1499, 2900-2999, 4900-4949, 4960-4999,
+2600-2699, 2800-2829, 2840-2899, 3300-3399, 2400-2499, 3200-3299). Ranking po najniższym PEG, maks. N = 10 (dodatkowo 20) pozycji, kontrola co miesiąc
+(wariant: co kwartał luty/maj/sierpień/listopad), wolne miejsca uzupełniane kolejnymi przechodzącymi screener.
+Sprzedaż (użytkownik): gdy co najmniej 2 z 3: PEG > 3 (lub CAGR EPS 5 lat <= 0), wzrost przychodów 5 lat < +50 %, dług / kapitał > 1. Warianty sprzedaży: (S2) 2 z 3;
+(Sb) PEG > 3 i przychody 5 lat < 50 % (oba najważniejsze); (S1) którykolwiek z 3; (S0) nigdy. Kontrola: bez wykluczenia sektorów.
+Okres 2015-03 ... 2026-09; CAGR, połowy, maxDD, Sharpe, Calmar, średni udział w akcjach, mediana czasu trzymania, liczba kandydatów. Rozpoznawcze.
+Wynik etapu 45 (2026-11-18): screener przepuszcza zwykle 6 spółek; reguła 2 z 3 daje 9-15 %, sprzedaż przy którymkolwiek z 3 13,8-15,7 % (najlepszy Calmar 0,69 bez wykluczania sektorów); trzymanie bez sprzedaży 6-12 %.
+Etap 45b (2026-11-18, po wynikach 45, prośba użytkownika): ten sam screener i reguły sprzedaży z maks. 5 pozycjami (kontrola co miesiąc), z i bez wykluczenia sektorów.
+Wynik etapu 45b: maks. 5 spółek - sprzedaż 2 z 3: 12,6 % (co miesiąc, DD -29 %), którykolwiek z 3: 15,9 % (DD -28 %, Calmar 0,57), nigdy 5,6 %.
+Etap 45c (2026-11-18, PRZED uruchomieniem, prośba użytkownika): jak 45b (maks. 5, kontrola co miesiąc, wykluczenie sektorów) + wymiana pojedyncza: jeśli spółka nr 1 rankingu
+(najniższy PEG wśród przechodzących screener) nie jest w portfelu, a portfel jest pełny, sprzedaj JEDNĄ posiadaną spółkę, która nie jest w top 5 bieżącego rankingu
+(najgorszą: nieprzechodzącą screenera albo z najwyższym PEG) i kup nr 1; jeśli wszystkie posiadane są w top 5 - bez zmian. Reguły sprzedaży: S2 (2 z 3), S1 (którykolwiek), S0 (nigdy).
+Wynik etapu 45c: wymiana pojedyncza na nr 1 - z regułą 2 z 3: 9,4 % (bez wymiany 12,6 %); z którymkolwiek z 3: 14,9 % (bez 15,9 %); bez reguły sprzedaży: 10,7 % (bez wymiany 5,6 %); maks. spadek głębszy o 5-6 pp.
+
+## Etap 46: usprawnienie screenera low risk / high reward - przegląd czynnikowy z próbą wyboru i sprawdzianem (zapisane 2026-11-18 PRZED uruchomieniem)
+Baza: etap 45b (screener, wykluczenie sektorów, sprzedaż przy którymkolwiek z 3: PEG > 3 / przychody 5 l. < 50 % / dług > 1, kontrola co miesiąc).
+Czynniki (pełna siatka 2 x 3 x 2 x 2 x 2 x 2 = 96 wariantów): ranking {najniższy PEG, najwyższy CAGR przychodów 5 l.}; próg PEG przy zakupie {< 1, < 1,5, < 2};
+trend przy zakupie {brak, zamknięcie nad SMA 10}; kapitalizacja {brak, > 10 mld}; filtr rynku {brak, bez zakupów przy SPY < SMA 12}; N {5, 10}.
+Procedura: symulacje osobno od zera w okresie wyboru 2015-03 ... 2020-12 i w sprawdzianie 2021-01 ... 2026-09; wybór 5 najlepszych wariantów wg Calmar
+(CAGR / |maxDD|) w okresie wyboru; raport ich wyniku w sprawdzianie, korelacja rang Calmar między okresami, średni efekt każdego czynnika (różnica średnich CAGR
+po wariantach z / bez) w obu okresach osobno. Wnioski tylko z czynników o zgodnym kierunku w obu okresach. Rozpoznawcze; dane od 2015 (krótka historia).
+Wynik etapu 46 (2026-11-18): ranking wariantów niestabilny między okresami (rho ~0), ale wszystkie 5 wybranych w 2015-2020 bije SPY w 2021-2026 (19,7-22,9 % vs 15,2 %); zgodne usprawnienia: kapitalizacja > 10 mld, PEG < 2 zamiast < 1, 10 spółek zamiast 5.
+
+## Etap 47: parametry Finviz a zwroty długoterminowe - pełne badanie (zapisane 2026-11-18 PRZED uruchomieniem)
+Panel: członkowie S&P 500 z danymi SEC, koniec każdego miesiąca 2012-01 ... 2026-09, parametry znane na datę (SEC wg dat złożenia, ceny skorygowane, kapitalizacja PIT).
+Parametry (odpowiedniki Finviz możliwe do odtworzenia): wycena - P/E, E/P, forward P/E (estymata użytkownika: EPS x (1 + ważony wzrost przychodów)), PEG (EPS 5 lat),
+PEG (estymata), P/S, P/B, cena / gotówka, P/FCF, FCF yield, EV/Sales, EV/EBITDA, stopa dywidendy; wzrost - EPS TTM r/r, EPS 3 i 5 lat (CAGR), przychody kwartał r/r, TTM r/r,
+3 i 5 lat (CAGR), estymata użytkownika, wzrost dywidendy r/r; rentowność - ROA, ROE, ROIC (przybliżenie: zysk oper. x 0,79 / (kapitał + dług - gotówka)), marża brutto,
+operacyjna, netto, wypłata dywidendy / zysk; kondycja - current ratio, quick ratio, dług / kapitał, dług długoterminowy / kapitał; cenowe - zwrot 3 / 6 / 12 mies.,
+odległość od maks. 12 mies., od SMA 10 mies., zmienność 12 mies., log kapitalizacji. Niedostępne historycznie (pominięte): prognozy analityków (forward P/E, EPS next Y / 5Y),
+niespodzianki wyników, własność insiderów i instytucji, transakcje.
+Wyniki: zwrot (skorygowany) po 1, 3, 6, 12, 24, 36, 60 mies. minus średnia uniwersum (nadwyżka); dodatkowo maks. zwrot w 60 mies.
+Analizy: (1) każdy parametr osobno na całym przekroju (nie tylko top N): korelacja rang z nadwyżką dla każdego horyzontu (średnia po miesiącach startu, t Newey-West
+z lagiem = horyzont), spread kwintyli Q5 - Q1 (roczny), monotoniczność; próg istotności Bonferroniego dla ~40 parametrów x horyzont 60 mies.: |t| > 3,2;
+(2) progi Finviz dla parametrów strategii (PEG < 1 / 2 / 3, sprzedaż 5 lat > 10 / 20 / 30 %, ROE > 10 / 15 / 20 %, dług / kapitał < 0,5 / 1) - średnia nadwyżka 5-letnia
+przechodzących vs reszty; (3) pary i komplet składników strategii (PEG < 2, sprzedaż 5 lat > 30 %, ROE > 15 %, dług / kapitał < 0,5): nadwyżka par, interakcja = efekt pary - suma
+efektów pojedynczych; (4) częstotliwość przebudowy: portfel 20 % najlepszych wg wyniku modelu i wg kompletu strategii, przebudowa co 1 / 3 / 6 / 12 / 24 / 60 mies.;
+(5) model: rangi parametrów w przekroju, (a) regresja Fama-MacBeth na nadwyżce 12 i 60 mies., (b) LightGBM z treningiem kroczącym (trening do roku Y-1 z wynikiem znanym
+przed startem testu, test w roku Y) na nadwyżce 12 mies.; ocena poza próbą: IC i nadwyżka górnego kwintyla; ważność SHAP. Strona-raport z wynikami.
+Ograniczenia: lista spółek SEC to głównie obecni członkowie indeksów (przeżywalność); 5-letnie okna od startów 2012-2021 nakładają się (efektywnie ~2 niezależne okresy).
+Wynik etapu 47 (2026-11-18): patrz R071; dywidendy (stopa, wzrost) i EV/EBITDA niewiarygodne (kwartalne przepływy SEC są narastające - TTM rzadko z kompletu).
+
+## Etap 48: kombinacje parametrów (pary, trójki, czwórki) a nadwyżka 5 lat (zapisane 2026-11-18 PRZED uruchomieniem)
+Filtry z etapu 47, które pojedynczo działały lub są w strategii użytkownika: A przychody 5 l. łącznie > +50 % (CAGR > 8,45 %); B przychody 5 l. CAGR > 20 %;
+C EPS 5 l. CAGR > 10 %; D dług / kapitał 0-0,5; E marża operacyjna > 25 %; F quick ratio > 1,5; G ROE > 15 %; H PEG (EPS 5 l.) 0-2; I zwrot 3 mies. > 0; J current ratio > 1,5.
+Dla każdej pary (45) i trójki (120) oraz czwórek budowanych z 10 najlepszych trójek: średnia nadwyżka 5 lat spółek spełniających kombinację (vs średnia wszystkich spółek),
+t Newey-West (lag 60), średnia liczba spółek w miesiącu; osobno w dwóch połowach startów (2012-01 ... 2016-09 i 2016-10 ... 2021-09). Kombinacja "stabilna", jeśli
+nadwyżka > 0 w obu połowach i średnio >= 10 spółek. Próg Bonferroniego dla ~175 kombinacji: |t| > 3,6. Dodatkowo interakcja pary = nadwyżka pary - max(nadwyżki składników).
+Ograniczenia jak etap 47; wybór najlepszych kombinacji po fakcie zawyża ich wynik (stąd raport obu połów).
+Wynik etapu 48 (2026-11-18): najlepsze stabilne kombinacje łączą quick ratio > 1,5 z PEG < 2 / EPS 5 l. > 10 % / dług < 0,5 (+53..+69 pp nadwyżki w 5 lat, 14-28 spółek, zgodnie w obu połowach); przychody 5 l. > +50 % + dług < 0,5: +31 pp (35 spółek).
+
+## Etap 49: czy wzrost przychodów z 5 lat przewiduje wzrost EPS w kolejnych 5 latach (łańcuch przychody -> EPS -> cena) (zapisane 2026-11-18 PRZED uruchomieniem, opisowe)
+Pytanie użytkownika: sprzedaż z 5 lat napędza przyszły EPS. Panel etapu 47: dla startu t i spółki - przyszły CAGR EPS 5 lat = wartość "EPS 5 lat (CAGR)" w t + 60,
+przyszły CAGR przychodów 5 lat = "przychody 5 lat (CAGR)" w t + 60 (ta sama seria). Predyktory w t: CAGR przychodów 5 / 3 lata, CAGR EPS 5 / 3 lata, EPS TTM r/r,
+estymata ważona, marża operacyjna, ROE, quick ratio, dług / kapitał. Miary: korelacja rang w każdym miesiącu startu (2012-2021), średnia i t NW (lag 60);
+kwintyle predyktora -> mediana przyszłego CAGR EPS. Druga część: korelacja przyszłego CAGR EPS 5 lat z nadwyżką ceny w tych samych 5 latach (czy EPS napędza cenę)
+oraz korelacja z nadwyżką po kontroli P/E na starcie (czy wzrost był już w cenie).
+Wynik etapu 49 (2026-11-18): przychody 5 l. przewidują przyszły EPS 5 l. (IC +0,08) i przyszłe przychody (+0,31), przeszły EPS - odwrotnie (-0,22); przyszły EPS mocno napędza cenę (+0,42), ale najlepszym 'predyktorem' przyszłego EPS jest P/E (+0,37), więc rynek już go wycenia; efekt przychodów skupiony w górnym kwintylu.
+
+## Etap 50: teza użytkownika - jak często pobijamy rynek (zapisane 2026-11-18 PRZED uruchomieniem)
+Miara: nie wielkość zysku, lecz częstość pobicia rynku. Filtry (znane na start t, co miesiąc 2012-01 ... 2025-09): R przychody TTM rosną w KAŻDYM z ostatnich 5 lat o >= 8 %;
+D dług / kapitał 0-1; F FCF > 0; O ROE > 15 %; S ROE nie spada r/r (ROE_t >= ROE_t-12 - 1 pp); P PEG z przychodów = P/E / (100 x CAGR przychodów 5 lat) < 2 (i < 1);
+dla porównania PE PEG z EPS 5 lat < 2. Zestawy: S0 wszystkie spółki; S1 R; S2 R+D+F; S3 S2+O; S4 S3+S; S5 S4+P<2; S6 S4+P<1; S7 S4+PE<2; S8 R+D+F+P<2 (bez ROE).
+Wyniki dla każdego zestawu: (a) portfel równych wag spółek zestawu ze startu t: czy pobił (i) równe wagi wszystkich spółek, (ii) SPY, po 12 i po 60 mies.
+- odsetek startów, w których pobił, średnia przewaga; (b) pojedyncza spółka: odsetek spółek zestawu, które pobiły SPY po 60 mies.; (c) lata kalendarzowe 2012-2025:
+portfel ze stycznia trzymany rok - w ilu latach pobił SPY. Średnia liczba spółek w zestawie. Ograniczenia jak etap 47 (przeżywalność, nakładające się okna).
+Wynik etapu 50 (2026-11-18): przychody +8 % co rok + dług < 1 + FCF > 0 pobijają SPY w 54 % 5-letnich okresów (wszystkie spółki 31 %); warunki ROE nie pomagają; PEG z przychodów < 1 podnosi do 72 %, ale zestaw ma średnio 2 spółki; na rok częstość pobicia 35-59 %.
+
+## Etap 51: wejście PEG z przychodów < 1 (< 2) przy przychodach +8 % co rok, dług < 1, FCF > 0 - które WYJŚCIE i jaka przebudowa (zapisane 2026-11-18 PRZED uruchomieniem)
+Portfel maks. N = 10 równych miejsc (kwota = kapitał / N), wolna gotówka w SPY (wariant: gotówka 0 %), kontrola co miesiąc, koszt 0,1 %/stronę.
+Kupno: spółka spełnia rdzeń (przychody TTM +8 % w każdym z 5 lat, dług / kapitał 0-1, FCF > 0) i PEG_przych = P/E / (100 x CAGR przychodów 5 lat) < 1 (wariant < 2);
+kolejność po najniższym PEG_przych. Wyjścia: W0 trzymaj 60 mies.; W1 załamanie: przychody TTM r/r < 0 albo dług / kapitał > 1 albo FCF < 0; W2 przewartościowanie PEG_przych > 2;
+W3 PEG_przych > 3; W4 W1 lub W3; W5 coroczna przebudowa (styczeń: sprzedaj spółki niespełniające warunków kupna); W6 W1 lub W2; W7 nigdy (do zniknięcia z danych).
+Okres 2015-01 ... 2026-09 (warunek 5-letni). Miary: CAGR, maks. spadek, odsetek kroczących okien 12 i 60 mies. z wynikiem lepszym od SPY, średni udział spółek, mediana czasu trzymania.
+
+Wynik etapu 51 (2026-11-18): najlepsze wyjście = coroczna przebudowa w styczniu (sprzedaj, jeśli spółka nie spełnia już warunków wejścia): PEG < 1 15,9 %/rok vs SPY 14,1 %, DD −18,7 %, 86 % okien 5-letnich lepszych od SPY, ale średnio tylko 49 % kapitału w spółkach (mediana 4 kandydatów). Trzymanie 5 lat 11,0 %, bez sprzedaży 8,1 %.
+
+## Etap 52: portfel narastający do 30 spółek, pozycja max 10 % / 5 % / 1/30 konta (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „sprawdzaj co miesiąc i kupuj kolejne, nie przekraczaj max 30 spółek, zawsze inwestuję max 10 % konta na spółkę”.
+Co miesiąc dokupujemy nowe spółki spełniające rdzeń (przychody +8 % co rok 5 lat, dług/kapitał 0–1, FCF > 0) i PEG z przychodów < 1 (oraz < 2),
+od najniższego PEG, dopóki portfel ma < 30 spółek; kwota = min(s × wartość konta, wolna gotówka), s ∈ {10 %, 5 %, 1/30}; wolna gotówka w SPY.
+Wyjścia: W5 przebudowa w styczniu, W3 PEG > 3, W0 trzymaj 5 lat, W1 załamanie. Koszt 0,1 %/stronę, 2015-01..2026-09.
+Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średni udział w spółkach, średnia liczba spółek, mediana trzymania.
+Hipoteza: więcej miejsc nie zmieni wyniku istotnie, bo kandydatów jest mało (mediana 4 przy PEG < 1); różnice CAGR < 2 pp = szum.
+Dodatkowo: lista spółek kupionych w wariancie PEG < 1 + W5, s = 10 %, z wynikiem każdej pozycji.
+
+Wynik etapu 52 (2026-11-18): limit 30 spółek się nie zapełnia — przy PEG < 1 portfel ma średnio 5–11 spółek (max 17), bo co miesiąc warunki spełnia mediana 4 spółek. Wyniki w granicach szumu względem etapu 51 (14–16 %/rok vs SPY 14,1 %). Mniejsza pozycja (5 %) zostawia więcej w SPY i daje podobny CAGR. Hipoteza potwierdzona.
+
+## Etap 53: powtórka etapów 50–52 na pełnym składzie S&P 500 (ze spółkami usuniętymi z indeksu) (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „dlaczego masz tylko akcje, które są w indeksie, przecież mieliśmy dane pełne”. Sprawdzenie: ceny były pełne (1084 spółki kiedykolwiek w S&P 500,
+w tym usunięte), ale dane SEC pobrano tylko dla tickerów z dzisiejszej listy SEC (company_tickers.json) — 271 z 865 spółek z indeksu od 2008 r. nie miało
+fundamentów, więc nigdy nie mogły zostać wybrane (błąd przeżywalności w etapach 31–52). Naprawa (/home/user/ndx/delisted): nazwy usuniętych spółek z listy
+EODHD (delisted), CIK z SEC cik-lookup-data.txt (dopasowanie nazwy + sprawdzenie, że raporty CIK pokrywają okres notowań; kilka CIK ręcznie), pobrane
+companyfacts dla 238 spółek (216 nowych, 22 dopisane do ponownie użytych tickerów tylko do daty końca starej spółki); kapitalizacja spółek bez dzisiejszej
+liczby akcji = P/E × zysk netto TTM. Pokrycie członków S&P 500 danymi SEC 2015: 95 %. Panel: 728 spółek, 82 712 obserwacji (było 567 / 70 655).
+Plan: bez zmian reguł ponownie r72 (etap 50), r73 (51), r74 (52); poprzednie wyniki zachowane jako *_bez_usunietych.md.
+Hipoteza: wyniki spadną (usunięte spółki to częściej przegrane); jeśli przewaga nad SPY zniknie, poprzednie wnioski były skutkiem błędu przeżywalności.
+
+Wynik etapu 53 (2026-11-18): z usuniętymi spółkami średnia spółka wypada gorzej (pobija SPY w 5 lat w 19 % zamiast 31 % okresów), przewaga rdzenia (przychody + dług + FCF) maleje (41 % zamiast 54 %). Wariant PEG z przychodów < 1 + przebudowa w styczniu się utrzymał (16,4 %/rok vs SPY 14,1 %, DD −16 %, 94 % okien 5-letnich), bo nowe spółki w wyborze to głównie przejęte z premią (ABMD, ALXN, AGN). Warianty PEG < 2 i trzymanie 5 lat spadły o 1–2 pp i są poniżej SPY. Hipoteza częściowo potwierdzona.
+
+## Etap 54: nowa strategia użytkownika — przychody 5 lat > +50 %, dług/kapitał < 1, ROE > 15 %, FCF > 0, wagi wg PEG (max 10 %), przebudowa co rok / kwartał / miesiąc (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „weź przychody z 5 lat powyżej 50 %, debt/equity < 1, ROE > 15 %, FCF > 0 i rebalansuj raz w roku lub sprawdzaj co miesiąc czy fundamenty się
+zgadzają, pewnie najlepiej kwartalnie, ale dobieraj wagi do PEG — im mniejszy PEG, tym większy udział, ale nie przekraczaj 10 % konta”.
+Warunki (dane znane na koniec miesiąca, panel z etapu 53, ze spółkami usuniętymi): przychody TTM / przychody TTM 5 lat wcześniej > 1,5 (CAGR > 8,45 %/rok),
+0 ≤ dług/kapitał < 1, ROE > 15 %, FCF TTM > 0 (FCF yield > 0); PEG = P/E ÷ (100 × CAGR przychodów 5 lat), wymagany P/E > 0.
+Wagi: w ∝ 1/PEG, limit 10 % (nadwyżka rozdzielana na resztę proporcjonalnie do 1/PEG, iteracyjnie); gdy spółek < 10, reszta w SPY. Porównanie: równe wagi (limit 10 %).
+Przebudowa do wag docelowych: co 12 mies. (styczeń), co 3 mies. (sty/kwi/lip/paź), co miesiąc; między przebudowami opcjonalnie miesięczna kontrola:
+spółka, która nie spełnia już czterech warunków, sprzedana, pieniądze w SPY do następnej przebudowy. Koszt 0,1 % od obrotu. 2015-01..2026-09.
+Miary: CAGR, max DD, odsetek okien 12 / 60 mies. lepszych od SPY, średnia liczba spółek, średni udział w spółkach, obrót roczny; skład na 2026-09.
+Hipoteza: wagi wg PEG ≈ równe wagi (różnica < 2 pp = szum); częstsza przebudowa nie poprawia wyniku (koszty, powrót do średniej), a kontrola miesięczna zmniejsza DD.
+
+Wynik etapu 54 (2026-11-18): co miesiąc warunki spełnia mediana 39 spółek. Najlepszy wariant (wagi 1/PEG, przebudowa w styczniu, kontrola miesięczna) 14,1 %/rok = SPY 14,1 %, DD −24,5 % vs −23,9 %, 83 % okien 5-letnich lepszych od SPY. Przebudowa co kwartał gorsza (11,0–12,4 %), co miesiąc 13,1 %. Wagi wg PEG lepsze od równych o 0–1,4 pp i mniejszy DD o 3–5 pp. Hipoteza: wagi ≈ równe — potwierdzona co do CAGR; częstsza przebudowa nie pomaga — potwierdzona; kontrola miesięczna pomaga (+1,4–1,9 pp). Uwaga: wzrost przychodów 5 lat od dna COVID daje skrajnie niski PEG (RCL 0,09, UAL, DAL).
+
+## Etap 55: etap 54 + zastępowanie sprzedanej spółki (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „jeżeli sprzedam spółkę, to sprawdź aktualnie top 1 spółkę, którą mogę ją zastąpić, z tym kapitałem, nie w SP500”. Reguły etapu 54
+(przychody 5 lat > +50 %, dług/kapitał < 1, ROE > 15 %, FCF > 0, wagi 1/PEG lub równe, limit 10 %, przebudowa w styczniu / co kwartał, kontrola miesięczna);
+zmiana: przy sprzedaży w kontroli miesięcznej cały kapitał ze sprzedaży (max 10 % konta, nadwyżka w SPY) idzie od razu w spółkę spełniającą warunki
+z najniższym PEG, której nie mamy; brak takiej = SPY. Porównanie z etapem 54 (kapitał do SPY). Miary jak w etapie 54.
+Hipoteza: różnica < 1 pp (sprzedaży między przebudowami jest mało, a spółka z najniższym PEG nie jest lepsza od SPY).
+
+Wynik etapu 55 (2026-11-18): zastępowanie sprzedanej spółki tą z najniższym PEG nie zmienia wyniku (wagi PEG, styczeń: 14,1 % → 14,1 %, DD −24,5 → −25,7 %; co kwartał +0,3 pp; równe wagi −1,0 pp), ok. 19 zamian rocznie. Hipoteza potwierdzona.
+
+## Etap 56: sprzedaż dopiero, gdy padną 2 kryteria; PEG liczy się tylko przy P/E > 50 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „do sprzedaży liczy się, jeżeli dwa kryteria upadają z fundamentów; PEG tylko z wysokim P/E powyżej 50”.
+Kryteria sprzedaży (miesięcznie): K1 przychody 5 lat ≤ +50 %, K2 dług/kapitał ≥ 1 lub < 0, K3 ROE ≤ 15 %, K4 FCF ≤ 0, K5 P/E > 50 i PEG > 3
+(wariant K5' = samo P/E > 50); brak danych = kryterium nie pada. Sprzedaż, gdy padną ≥ 2 z 5. Wejście jak w etapie 54 (wszystkie 4 warunki), wagi 1/PEG
+lub równe, limit 10 %. Przebudowa (styczeń / co kwartał): spółki spełniające 4 warunki + trzymane, którym padło < 2 kryteria; wagi 1/PEG (trzymana bez PEG
+= najmniejsza waga z listy). Po sprzedaży: SPY albo spółka z najniższym PEG (etap 55). Porównanie z etapami 54–55 (sprzedaż przy 1 kryterium).
+Hipoteza: łagodniejsza sprzedaż = mniej transakcji, wynik w granicach ±1 pp.
+
+Wynik etapu 56 (2026-11-18): sprzedaż przy 2 z 5 kryteriów jest gorsza o 1–2 pp/rok od sprzedaży przy jednym (wagi PEG, styczeń: 12,2–12,4 % vs 14,1 %; SPY 14,1 %), DD mniejszy o ok. 1 pp, portfel puchnie do 51–60 spółek. K5 z PEG > 3 czy samo P/E > 50 — prawie bez różnicy (P/E > 50 ma 16 % spełniających warunki, ale K5 rzadko pada razem z innym kryterium). Hipoteza (±1 pp) odrzucona: łagodniejsza sprzedaż szkodzi.
+
+## Etap 57: etapy 54–56 tylko dla spółek > 10 mld USD (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „ogranicz kapitalizację do 10b” (jak wcześniej: tylko spółki powyżej 10 mld). Warunek wejścia (i wyboru przy przebudowie oraz przy zastępowaniu):
+kapitalizacja na koniec miesiąca > 10 mld USD, plus 4 warunki z etapu 54. Spadek kapitalizacji poniżej 10 mld NIE jest kryterium sprzedaży.
+Warianty jak w etapie 56 (sprzedaż 1 z 4 / 2 z 5, SPY / najniższy PEG, styczeń / kwartał, wagi PEG / równe). Hipoteza: mniej spółek, wynik w granicach ±2 pp
+(w etapie 46 filtr > 10 mld pomagał: +0,4 / +6,0 pp w dwóch okresach).
+
+Wynik etapu 57 (2026-11-18): w S&P 500 filtr > 10 mld prawie nic nie zmienia w składzie (mediana 38 zamiast 39 spółek), wynik niższy o ok. 1 pp (najlepszy wariant 13,2 % vs 14,1 % bez filtra, SPY 14,1 %). Hipoteza potwierdzona (w granicach ±2 pp).
+
+## Etap 58: które fundamenty wskazują spółki, które przez lata poprawiają wyniki i rosną (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „jakie fundamenty wskazują na przyszłe wzrosty … spółki świetne w wynikach, które poprawiają swoje wyniki rok do roku i dzięki temu cena rośnie;
+w długim terminie; dokupuję, gdy PEG < 2; sprzedaż dopiero, gdy fundamenty pogarszają się rok do roku”.
+Dane: panel z etapu 53 (S&P 500 PIT ze spółkami usuniętymi, 728 spółek), starty 2012-01..2021-09 dla 60 mies.
+Cechy (znane na t): (a) poziomy z panelu (wzrost, rentowność, wycena, dług, płynność); (b) poprawa r/r: Δ ROE, Δ ROIC, Δ marży oper. / brutto / netto,
+przyspieszenie przychodów TTM r/r i EPS TTM r/r (teraz minus rok wcześniej); (c) konsekwencja w 5 latach (punkty co 12 mies.): liczba lat z przychodami r/r > 0,
+> 10 %, z EPS r/r > 0, z rosnącą marżą oper., z ROE > 15 %, z ROIC > 15 %; zmienność wzrostu przychodów (odch. std 5 punktów).
+Cele: (1) nadwyżka ceny 36 i 60 mies. (względem średniej spółek); (2) PRZYSZŁY wzrost fundamentów: CAGR przychodów i EPS w kolejnych 5 latach (czy cecha
+przewiduje dalszą poprawę wyników). Miary: miesięczny IC Spearmana, t Neweya-Westa (lag = horyzont), znak w obu połowach startów (2012–16 / 2017–21),
+istotność po Bonferronim |t| > 3,2; kwintyle (K5 − K1). Wynik złożony: średnia rang cech wybranych w 1. połowie (|t| > 2, ten sam znak dla ceny 60 mies.),
+sprawdzony w 2. połowie (poza próbą). Hipoteza: konsekwencja wzrostu przychodów i ROIC przewiduje przyszły wzrost wyników; cena — słabiej, bo część jest w cenie.
+
+Wynik etapu 58 (2026-11-18): najmocniejsza i stabilna cecha = liczba lat (z 5) ze wzrostem przychodów > 10 % r/r: przewiduje nadwyżkę ceny 60 mies. (IC 0,12, t 7,5, obie połowy), przyszły wzrost przychodów (0,30) i jako jedyna z cech wzrostu także przyszły wzrost EPS (0,18, t 8,5). Dalej: lata z EPS r/r > 0, quick ratio, trwały ROIC > 15 %, niski dług. Chwilowa poprawa r/r (marże, ROIC, przyspieszenie) i wycena (P/E, PEG) ≈ 0. Wynik złożony poza próbą działa tylko w górnym kwintylu (+23 pp w 5 lat). Hipoteza potwierdzona dla przychodów; dla ROIC — cena tak, przyszły wzrost wyników nie.
+
+## Etap 59: portfel „świetnych spółek” — wybór po konsekwencji wzrostu, dokupowanie i kolejność kupna po PEG (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „przetestuj to, dokupowanie za pomocą PEG i hierarchia kupna też po PEG, bo to pokazuje fair value”.
+Spółka „świetna” (na koniec miesiąca, dane PIT): przychody TTM r/r > 10 % w ≥ 3 z ostatnich 5 lat (warianty ≥ 4, 5 z 5), 0 ≤ dług/kapitał < 1,
+ROIC > 15 % w ≥ 3 z 5 lat (wariant bez ROIC; wariant + quick ratio > 1). PEG = P/E ÷ (100 × CAGR przychodów 5 lat).
+Kupno co miesiąc: kandydaci = świetne z PEG < 2 (nowe i trzymane poniżej 10 % konta), kolejność od najniższego PEG; transza 2,5 % konta (wariant 5 %), najwyżej
+4 transze w miesiącu (wariant: bez limitu), pozycja max 10 % konta; pieniądze z rezerwy w SPY (start: 100 % w SPY), brak rezerwy = brak kupna.
+Sprzedaż (warianty): S1 przychody r/r < 10 % dwa lata z rzędu (TTM teraz i 12 mies. wcześniej), S2 spółka przestaje być świetna (< 3 lat z 5 z przychodami > 10 %),
+S3 przychody TTM r/r < 0, S4 nigdy. Pieniądze ze sprzedaży do SPY. Koszt 0,1 %. 2015-01..2026-09.
+Porównanie: te same świetne spółki, równe wagi, przebudowa w styczniu (bez PEG); SPY.
+Miary: CAGR, max DD, okna 12 / 60 mies. vs SPY, średnia liczba spółek, udział w spółkach, mediana trzymania.
+Hipoteza: wybór po konsekwencji wzrostu bije SPY o 1–3 pp; PEG jako kolejność/dokupowanie ≈ bez PEG (wycena miała IC ~0); S1 najlepsze z wyjść.
+Poprawka etapu 59 przed odczytem wniosków (2026-11-18): w 1. przebiegu kandydat do kupna mógł już spełniać warunek sprzedaży (np. S1: przychody < 10 % dwa lata z rzędu przy ≥ 3 z 5 lat > 10 %), co dawało kupno i sprzedaż w kolejnym miesiącu (mediana trzymania 2–7 mies.). Poprawione: kandydat nie może spełniać warunku sprzedaży danego wariantu. Dodane kontrole: bez progu PEG z kolejnością losową (z ROIC i bez). Wynik 1. przebiegu zachowany w wyniki/r81_swietne_peg_v1_blad_wejscia.md.
+
+Wynik etapu 59 (2026-11-18, po poprawce wejścia): świetne spółki kupowane bez progu PEG (kolejność od najniższego PEG, transze 2,5 %, wyjście S1) 19,4 %/rok vs SPY 14,1 %, DD −27 %, 100 % okien 5-letnich lepszych od SPY; kolejność losowa 20,0 % (12 losowań 18,6–21,1 %), DD −33 %. Próg kupna PEG < 2 obniża wynik do 13,4 % (kapitał czeka w SPY), PEG < 1 15,5 % z DD −18 %. Wyjścia: S2 (seria wzrostu przerwana) ≥ S1 > S4 > S3. Hipoteza: bije SPY — tak (o 5 pp bez progu PEG); PEG jako kolejność ≈ bez PEG dla zwrotu — tak, ale niższy DD. Uwaga: wiele wariantów na jednym okresie, ranking wariantów niepewny.
+Kontrola etapu 59 (2026-11-18): wynik 19,4 % zależy od NVDA (na koniec ok. 4,1 z kapitału startowego 1 w jednej spółce, bo limit 10 % dotyczy tylko kupna). Bez NVDA 12,4 % (< SPY 14,1 %), bez 5 największych pozycji 11,1 %. Wniosek z etapu 59 („bije SPY o 5 pp”) jest kruchy: to głównie jedna trafiona spółka.
+
+## Etap 60: kategorie Lyncha — stalwarts (przychody +8…+15 % r/r) i fast growers (≥ +20 % r/r), ROE stabilnie > 15 %, dług < 1, FCF > 0 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „daj ROE zamiast ROIC; stalwart: sprzedaż +8…+15 % r/r, stabilne spółki wzrostowe; fast growers: +20 % r/r; na tych dwóch grupach chcemy się skupić;
+dług/kapitał < 1, ROE > 15 % stabilnie rok do roku, FCF > 0”.
+Definicje (5 punktów rocznych TTM r/r: teraz, −12, −24, −36, −48 mies.): STALWART = przychody r/r w [8 %, 15 %] w ≥ 4 z 5 lat i wszystkie 5 > 0;
+FAST = przychody r/r ≥ 20 % w ≥ 3 z 5 lat i CAGR 5 lat ≥ 20 %; wspólne: 0 ≤ dług/kapitał < 1, ROE > 15 % we wszystkich 5 punktach, FCF yield > 0.
+Kupno jak w etapie 59 (kolejność od najniższego PEG, bez progu; wariant PEG < 2; transze 2,5 %, max 4 / mies., max 10 % przy kupnie, rezerwa w SPY).
+Sprzedaż: WA = przychody r/r < 8 % dwa lata z rzędu; WB = spółka nie należy już do żadnej grupy ani nie spełnia warunków wspólnych; WC = nigdy.
+Dodatkowo: przycinanie raz w roku (styczeń) pozycji > 15 % konta do 15 %; kontrola bez najlepszej spółki (wyłączona z wyboru).
+Grupy osobno i razem. Miary jak w etapie 59. Hipoteza: fast growers > SPY głównie dzięki pojedynczym spółkom (bez najlepszej przewaga znika); stalwarts ≈ SPY z mniejszym DD.
+
+Wynik etapu 60 (2026-11-18): definicje są bardzo rzadkie w S&P 500 — stalwarts mediana 0 spółek w miesiącu (0–6), fast growers 1 (0–4); portfel ma średnio 1–5 spółek, reszta w SPY. Fast growers (WA) 20,8 % (SPY 14,1 %), ale NVDA 43 % portfela na koniec; bez NVDA 15,5 %. Obie grupy 20,2 %, bez NVDA 13,9 %. Stalwarts 10,2–13,0 % (< SPY). Hipoteza potwierdzona: przewaga fast growers to głównie NVDA; stalwarts ≈/< SPY.
+
+## Etap 61: łagodniejsze definicje grup (średni wzrost 5 lat) (zapisane 2026-11-18 PRZED uruchomieniem)
+Powód: w etapie 60 za mało spółek (warunek „8–15 % w ≥ 4 z 5 lat” prawie nigdy nie jest spełniony: 2 spółki przed innymi filtrami).
+STALWART2 = CAGR przychodów 5 lat w [8 %, 15 %] i przychody r/r > 0 w każdym z 5 lat; FAST2 = CAGR 5 lat ≥ 20 % i r/r > 0 w każdym roku;
+wspólne: dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat (wariant 5 z 5). Reszta jak w etapie 60 (WA, WB, WC, PEG < 2, przycinanie, bez NVDA).
+Liczebność (mediana w miesiącu, przed uruchomieniem strategii): STALWART2 + warunki 5 (ROE 4/5) / 3 (ROE 5/5), FAST2 2 / 1.
+
+Wynik etapu 61 (2026-11-18): z łagodniejszymi definicjami (ROE 4 z 5): obie grupy, wyjście WA 14,0 %/rok = SPY 14,1 %, ale max DD −17 % vs −24 % i 84 % okien 5-letnich lepszych od SPY; stalwarts 14,1 % (DD −20 %), fast growers 15,1 % (DD −22 %, bez ANET 13,9 %). Próg PEG < 2 i wyjście WB / WC gorsze. ROE 5 z 5: 12,7–15,2 %. NVDA nie spełnia „każdy rok > 0” (spadek przychodów 2023), więc wynik nie zależy od NVDA. Wniosek: grupy Lyncha dają zwrot jak rynek przy mniejszym obsunięciu; przewagi zwrotu nie wykazano.
+
+## Etap 62: przychody 5 lat > +50 % i maks. obsunięcie przychodów w 5 lat ≥ −20 % (stabilny wzrost) + warunki z etapu 61 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „weź tylko ten pierwszy warunek: sprzedaż powyżej 50 % z 5 lat i maksymalne obsunięcie w ciągu 5 lat max −20 % z tych sprzedaży — będzie wiadomo,
+że rosły stabilnie; reszta bez zmian”. Wybór: przychody TTM / przychody TTM 5 lat wcześniej > 1,5 i największy spadek przychodów TTM od szczytu w ostatnich 60 mies.
+≥ −20 % (przychody TTM = kapitalizacja / P/S z panelu, wymagane ≥ 48 z 60 mies.); dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat; kupno co miesiąc
+od najniższego PEG (bez progu; wariant PEG < 2), transze 2,5 %, max 4 / mies., max 10 % przy kupnie, rezerwa w SPY; sprzedaż WA (przychody r/r < 8 % dwa lata),
+warianty WB (wypada z warunków), WC (nigdy). Dodatkowo (gdyby „obsunięcie” dotyczyło ceny): maks. obsunięcie ceny w 5 lat ≥ −20 % / ≥ −30 % zamiast przychodów.
+Kontrola: bez najlepszej spółki i bez NVDA. Miary jak w etapie 61. Hipoteza: więcej spółek niż w etapie 61, zwrot ≈ SPY ± 2 pp.
+
+Wynik etapu 62 (2026-11-18): mediana 4 spółki; 20,0 %/rok (SPY 14,1 %), ale NVDA = 63 % portfela na koniec; bez NVDA 12,2 %; z przycinaniem pozycji do 15 % w styczniu 16,9 % (DD −27 %). Obsunięcie ceny zamiast przychodów 8,4–10,5 %. Hipoteza (≈ SPY ± 2 pp) — z NVDA odrzucona, bez NVDA potwierdzona (−1,9 pp).
+
+## Etap 63: etap 62 + przycinanie do 10 % (raz w roku lub gdy PEG > 3) i dokupowanie po 2 % przy PEG < 2 (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „rebalansowanie raz do roku lub gdy PEG przekroczy 3 — wtedy ucinamy do 10 % konta; jak spadnie PEG znowu poniżej 2, dokupujemy o 2 % itd.”
+Wybór jak w etapie 62 (przychody 5 lat > +50 %, obsunięcie przychodów ≥ −20 %, dług < 1, FCF > 0, ROE > 15 % w ≥ 4 z 5), sprzedaż WA.
+Zmiany: transza 2 % konta (max 4 / mies.); nowa spółka — kolejność od najniższego PEG, bez progu (wariant: tylko PEG < 2); dokupienie trzymanej — tylko gdy PEG < 2,
+do 10 % konta; przycinanie do 10 %: (a) w styczniu, (b) gdy PEG > 3 (sprawdzane co miesiąc), (c) oba [wariant główny]; nadwyżka do SPY. Warianty: limit 15 %,
+bez NVDA. Hipoteza: z przycinaniem wynik bliżej SPY niż 20 % z etapu 62, ok. 15–17 %; bez NVDA < SPY.
+
+Wynik etapu 63 (2026-11-18): przycinanie do 10 % (styczeń / PEG > 3) + dokup 2 % przy PEG < 2: 15,2 %/rok vs SPY 14,1 %, DD −23 %, wszystkie okna 5-letnie lepsze od SPY, ale średnio tylko 41 % kapitału w spółkach (6 spółek). Bez NVDA 13,2 %. Rodzaj przycinania prawie bez znaczenia (15,2–15,6 %). Hipoteza potwierdzona (15–17 %; bez NVDA < SPY).
+
+## Etap 64: dlaczego „jakościowe” spółki dają mało + proste rankingi: top 10 po najniższym PEG / najniższym długu, przebudowa co miesiąc (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „czemu tak słabo? wybieramy jakościowe spółki z S&P 500 … nie dajemy im rosnąć? Sprawdź coś prostszego: ranking po PEG co miesiąc, kup top 10;
+potem to samo dla najmniejszego długu/kapitału, przebudowa co miesiąc”.
+Diagnoza (2015-01..2026-09): (a) SPY vs równe wagi wszystkich członków S&P 500 (miesięcznie, PIT); (b) równe wagi wszystkich spółek spełniających warunki etapu 63
+(przebudowa co miesiąc, 100 % w spółkach) — czy same spółki są lepsze od rynku; (c) udział SPY w etapie 63 i zwrot części „spółkowej”.
+Rankingi (co miesiąc, równe wagi, 10 spółek, koszt 0,1 % od obrotu): R1 najniższy PEG z przychodów (P/E ÷ 100 × CAGR przychodów 5 lat, tylko PEG > 0),
+R2 najniższy PEG z EPS 5 lat (jak Finviz „PEG” historyczny), R3 najniższy dług/kapitał (≥ 0), R3b najniższy dług przy ROE > 15 %; dodatkowo top 20 i przebudowa
+co kwartał. Miary: CAGR, DD, okna 12 / 60 mies. vs SPY i vs równe wagi S&P 500. Hipoteza: R1–R3 ≈ równe wagi S&P 500 (~11 %), poniżej SPY; „jakość” nie przegrywa
+z rynkiem przez złe spółki, tylko przez to, że SPY (ważony kapitalizacją) w tym okresie wygrywał dzięki największym spółkom.
+
+Wynik etapu 64 (2026-11-18): równe wagi S&P 500 11,1 %/rok vs SPY 14,1 % — w tym okresie największe spółki dały rynkowi 3 pp/rok przewagi, więc każdy portfel równych wag startuje z handicapem. Spółki z etapu 63 w równych wagach (100 % w spółkach) 15,9 %, ale bez NVDA 12,0 %. Proste rankingi: najniższy PEG z przychodów 11–12 % (≈ równe wagi), PEG z EPS 8–10 %, najniższy dług 9–12 %, najniższy dług przy ROE > 15 % 13,7–15,2 % (odporny na NVDA). Hipoteza potwierdzona (rankingi ≈ równe wagi, poniżej SPY), z wyjątkiem R3b (≈ SPY+1 pp; wiele wariantów — możliwy przypadek).
+
+## Etap 65: dług/kapitał < 1 vs ≥ 1 oraz portfel spółek o stabilnym lub parabolicznym wzroście z wagami 1/PEG (max 10 %) (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „według badań biorąc tylko spółki z debt/equity < 1 zwiększamy znacznie przychody z S&P 500 na rzecz tych odwrotnych; PEG to ranking, ale też dobór wag —
+im niższy PEG, tym większa pozycja, max 10 % konta; fundamenty muszą być spełnione: stabilny wzrost lub paraboliczny”.
+(A) Równe wagi co miesiąc: członkowie S&P 500 z dług/kapitał w [0, 1) vs ≥ 1 (lub ujemny kapitał) vs wszyscy; także kwintyle dług/kapitał (nadwyżka 60 mies., etap 58 dane).
+(B) Wszechświat: (STALWART2: CAGR przychodów 5 lat 8–15 %, każdy rok > 0) LUB (FAST2: CAGR ≥ 20 %, każdy rok > 0) LUB (przychody 5 lat > +50 % i obsunięcie
+przychodów ≥ −20 %); oraz dług/kapitał 0–1, FCF > 0, ROE > 15 % w ≥ 4 z 5 lat. Wagi ∝ 1/PEG (PEG z przychodów), limit 10 % (nadwyżka rozdzielana iteracyjnie),
+brakujące do 100 % w SPY (gdy < 10 spółek). Przebudowa co miesiąc / kwartał / rok (styczeń); porównanie: równe wagi; kontrola bez NVDA.
+Hipoteza: (A) dług < 1 > dług ≥ 1 o 1–3 pp/rok; (B) wagi 1/PEG ≈ równe wagi, wynik ≈ SPY ± 2 pp.
+
+Wynik etapu 65 (2026-11-18): (A) w kwintylach 5-letnich niski dług wygrywa (K1 +9,0 %, K5 −7,7 % nadwyżki), ale w portfelach równych wag przebudowywanych co miesiąc 2015–2026 dług 0–1 (10,6 %) ≈ dług ≥ 1 (11,3 %) — różnica wynika z miary (średnia 5-letnich zwrotów pojedynczych spółek vs składany zwrot portfela) i z innego okresu; hipoteza (A) potwierdzona tylko dla kwintyli. (B) wagi 1/PEG co miesiąc 15,5 % vs równe 14,3 % vs SPY 14,1 %; bez NVDA 14,1 %; limit 20 % 17,5 %. Hipoteza (B) potwierdzona (≈ SPY ± 2 pp).
+
+## Etap 66: bez przebudowy — kupno raz z wielkością wg PEG, sprzedaż przy wysokim P/E i PEG (zapisane 2026-11-18 PRZED uruchomieniem)
+
+Użytkownik: „nie rebalansuj, bo to zabija zyski; jeżeli akcja ma wysokie P/E i PEG — sprzedaj”.
+Wszechświat jak w etapie 65 (B). Co miesiąc spółka z wszechświata, której nie mamy, jest kupowana (kolejność od najniższego PEG) za min(5 % / PEG, 10 %) konta
+(min 1 %), z rezerwy w SPY (brak rezerwy = brak kupna). Bez przycinania, bez przebudowy, bez dokupowania. Sprzedaż (warianty): X1 P/E > 50 i PEG > 3;
+X2 P/E > 40 i PEG > 3; X3 P/E > 30 i PEG > 2; X4 = X1 lub przychody r/r < 8 % dwa lata z rzędu; X0 nigdy. Pieniądze ze sprzedaży do SPY. Ponowny zakup dozwolony.
+Kontrola: bez NVDA; wielkość stała 5 % zamiast 5 %/PEG. Hipoteza: bez przebudowy wynik zależy od 1–2 spółek; sprzedaż przy wysokim P/E i PEG ≈ trzymanie (wycena IC ~0).
+Poprawka etapu 66 przed odczytem wniosków (2026-11-18): w 1. przebiegu kupowano spółki, które już spełniały warunek sprzedaży (np. NVDA 2019-11..2020-02 kupiona i sprzedana co miesiąc przy P/E ~60, PEG ~3,5). Poprawione: nie kupujemy spółki z aktywnym sygnałem sprzedaży. Wynik 1. przebiegu: wyniki/r88_bez_przebudowy_v1_blad_wejscia.md.
+
+Wynik etapu 66 (2026-11-18, po poprawce): bez przebudowy 11,1–14,4 %/rok (SPY 14,1 %), gorzej niż wagi 1/PEG z przebudową co miesiąc (15,5 %, etap 65). Rezerwa wydana głównie w 2016 (17 kupień), później brak pieniędzy na nowe spółki. Sprzedaż przy P/E > 50 i PEG > 3 obniża wynik (11,1 % vs 13,5 % bez sprzedaży); łagodniejszy próg P/E > 30 i PEG > 2 13,9 %; z warunkiem przychodów 14,4 %. Hipoteza: wycena jako wyjście ≈ trzymanie — odrzucona (X1 szkodzi, X3 ≈).
+
+## Etap 66b: jak etap 66, ale kupno tylko przy PEG < 2 (zapisane 2026-11-18 PRZED uruchomieniem)
+Użytkownik: „jak NVDA mogła wejść z 3,3 — to za drogo, poniżej 2 to cena godziwa”. W etapie 66 nowe spółki nie miały progu PEG (wniosek z etapów 59–63).
+Teraz: kupno tylko przy PEG < 2 (warianty < 1,5 i < 1); reszta bez zmian (wielkość 5 %/PEG, bez przebudowy, wyjścia X0–X4, kontrola bez NVDA).
+Hipoteza: niższy wynik niż bez progu (więcej kapitału w SPY), mniejszy DD.
+
+Wynik etapu 66b (2026-11-18): z progiem PEG przy kupnie i wyjściem X4 (P/E > 50 i PEG > 3 lub przychody < 8 % dwa lata): PEG < 2 14,5 %, PEG < 1,5 15,1 %, PEG < 1 15,1 % (SPY 14,1 %); bez NVDA praktycznie bez zmian (14,2 / 15,0 / 14,9 %) — po raz pierwszy wynik nie zależy od NVDA. Większość kapitału w SPY (58–70 %). Bez sprzedaży lub sprzedaż tylko po wycenie gorsze (10,8–13,3 %). Hipoteza (niższy wynik niż bez progu) odrzucona: próg przy braku przebudowy pomaga.
+
+## Etap 67: strategia „Lower Risk (Hello Stocks)” — 7 kryteriów, kupno 7/7, trzymanie 6/7, sprzedaż ≤ 5/7 (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik (PDF z zestawieniem): „wyszukuje i kupuje spółki z 7/7, trzyma, gdy mają 6/7, a gdy 5/7 — sprzedaje; autor twierdzi, że od 2025 ma 140 % zysku.
+Nielimitowany kapitał … trzymamy wszystkie i mierzymy zysk procentowy; sprawdź na inne lata; sprawdź też portfel 15–30 spółek”.
+Kryteria (na koniec miesiąca, PIT): K1 przychody 5 lat > +50 %, K2 przychody TTM r/r > 5 %, K3 EPS TTM r/r > 5 %, K4 ROE > 15 %, K5 0 ≤ dług/kapitał < 1, K6 FCF TTM > 0,
+K7 0 < PEG < 1, gdzie PEG = P/E ÷ (100 × wzrost EPS 5 lat). Autor używa PEG z PROGNOZY 5-letniej („5Y Exp-Based”), której historycznie nie mamy — przybliżenie:
+(a) historyczny CAGR EPS 5 lat [główne], (b) CAGR przychodów 5 lat. Wykluczone sektory: finanse, materiały, energia, użyteczność publiczna, nieruchomości (GICS / SIC).
+Wszechświat: członkowie S&P 500 PIT ze spółkami usuniętymi (autor ma szerszy rynek USA — ograniczenie). Brak danych dla kryterium = niespełnione.
+(1) Nielimitowany kapitał: każda spółka, która osiąga 7/7 i nie jest trzymana, kupowana za 1 jednostkę; trzymana dopóki ma ≥ 6/7; sprzedaż przy ≤ 5/7
+(albo koniec notowań); ponowne wejście dozwolone. Wynik okresu startującego w miesiącu S i kończącego się w E: zysk % = (wartość pozycji otwartych + wpływy ze sprzedaży)
+/ suma zainwestowana − 1 (start z pustym portfelem: w S kupowane wszystkie 7/7); porównanie: te same przepływy w SPY (każda jednostka w SPY od kupna do sprzedaży lub E).
+Okresy: S = 2025-01, E = 2026-09 (ostatni miesiąc z fundamentami; poprawione przed odczytem: w 2026-10 brak danych przychodów -> wszystko sprzedawane) — weryfikacja tezy „+140 % od 2025”; oraz S = styczeń każdego roku 2015–2024 z E = S + 21 mies.
+(taka sama długość) i E = 2026-10. Także roczna stopa (IRR) strategii i SPY przy tych samych przepływach.
+(2) Portfel ograniczony: N ∈ {15, 20, 30} równych miejsc (1/N konta przy kupnie), kupno 7/7 od najniższego PEG gdy jest wolne miejsce, trzymanie ≥ 6/7, sprzedaż ≤ 5/7,
+wolna gotówka w SPY, bez przebudowy; 2015-01..2026-10, CAGR, DD, okna vs SPY; także wyniki od 2025-01.
+Hipoteza: +140 % w ~21 mies. na S&P 500 nie do odtworzenia (spodziewane rzędu +20–60 %); inne lata zmienne; portfel ograniczony ≈ SPY ± 3 pp.
+
+Wynik etapu 67 (2026-11-19): (1) nielimitowany kapitał od 2025-01 do 2026-09: +30,8 % (PEG z EPS) / +10,4 % (PEG z przychodów) vs SPY przy tych samych przepływach +12,2 / +8,3 % — teza „+140 %” nie potwierdzona na S&P 500 (autor: szerszy rynek USA i PEG z prognozy). Okna 21-mies. od stycznia 2015–2024: −4 % … +30 %. (2) Portfel 15–30 miejsc 2015–2026: 18,5–20,8 %/rok vs SPY 14,1 %, DD −22 … −34 %; bez FIX 17,3–17,7 %, bez 5 najlepszych spółek 16,1–17,0 %. Hipoteza: +140 % nie do odtworzenia — potwierdzona; portfel ograniczony ≈ SPY ± 3 pp — odrzucona (lepszy o 2–7 pp).
+
+## Etap 68: strategia Hello Stocks na „top 500 spółek USA wg kapitalizacji” (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: autor robi „screening of the top 500 US stocks by market cap” (nie S&P 500; 13 z 60 spółek jego listy jest poza S&P 500).
+Dane: kandydaci = kody z szerokiego zbioru EODHD (14 300) ze średnimi obrotami 12 mies. w top 600 w dowolnym miesiącu od 2009 (bez warrantów / preferowanych / OTC),
+CIK: dotychczasowe mapy + lista SEC + nazwy EODHD (aktywne i wycofane) dopasowane do cik-lookup-data i sprawdzone pokryciem okresu raportów;
+companyfacts dla wszystkich kandydatów: te same pozycje co dotąd + liczba akcji (dei:EntityCommonStockSharesOutstanding, zapas us-gaap CommonStockSharesOutstanding)
+-> /home/user/ndx/szer/. Kapitalizacja = cena (niekorygowana, koniec miesiąca) × ostatnia znana liczba akcji (≤ 400 dni). Skład = 500 największych w danym miesiącu
+spośród spółek z danymi SEC (spółki raportujące w IFRS / 20-F bez us-gaap odpadają — ograniczenie). Ten skład zastępuje S&P 500 w łańcuchu r19 → r25 → r59 → r66 → r90
+(ścieżki przez zmienne środowiskowe, osobny cache); reguły etapu 67 bez zmian (7 kryteriów, 5 sektorów wykluczonych, 7/7 / 6/7 / ≤ 5/7, nielimitowany kapitał
+i portfel 15 / 20 / 30). Porównanie z etapem 67 (S&P 500). Hipoteza: szerszy wszechświat podnosi wynik od 2025 (więcej mniejszych zwycięzców), ale nie do +140 %.
+
+Wynik etapu 68 (2026-11-19): top 500 USA (91 spółek spoza S&P 500 w 2026-10; z 13 spółek autora spoza S&P 9 w naszym składzie — HEI, ONC, TOST, UI wypadły przez brak liczby akcji / 20-F / obroty). Od 2025-01 nielimitowany kapitał: +35,5 % (PEG z EPS) vs SPY +12,9 % przy tych samych przepływach (S&P 500: +30,8 %); portfel 15–30: od 2025 +65…+71 %, 2015–2026 17,8–19,1 %/rok (S&P 500: 18,5–19,6 %). Hipoteza potwierdzona: szerszy rynek podnosi wynik o kilka pp, nie do +140 %.
+
+## Poprawka danych (2026-11-19): EPS przy splicie w trakcie roku finansowego
+Wykryte przy sprawdzaniu PEG dla NVDA: 4. kwartał = EPS roczny − Q1..Q3 liczony z wartości sprzed korekty o splity; przy splicie w trakcie roku (NVDA 10:1 w 06.2024)
+Q4 wychodził ujemny (−4,49 USD), EPS TTM i wzrost EPS r/r w 2025–26 = brak → kryterium K3 niespełnione (NVDA 6/7 zamiast 7/7). Członek z EPS TTM > 0 bez wzrostu
+r/r: 5,9 % obserwacji. Poprawka w r59: korekta każdego wiersza EPS (współczynnik adj/close w dniu złożenia) PRZED wyliczeniem Q4. Przeliczenie: cache top 500 i S&P 500,
+etapy 67 i 68 (wyniki przed poprawką zachowane). Etapy 31–66 korzystały z tego samego cache (EPS, P/E, PEG z EPS) — do ewentualnego przeliczenia.
+Wynik po poprawce EPS (2026-11-19): top 500 od 2025-01 +35,9 % (PEG z EPS) / +18,1 % (PEG z przychodów), NVDA kupiona w 2025 (+91 %); S&P 500 +31,3 % / +14,6 %; portfele 15–30: 17,7–21,3 %/rok 2015–2026. Wnioski etapów 67–68 bez zmian.
+
+## Etap 69: dwa wzorce wzrostu sprzedaży i zysków — „paraboliczny” (jak NVIDIA) i „stabilny, znaczny” (jak Microsoft); czy się powtarzają w innych spółkach (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „szukamy dwóch typów wzrostowych sprzedaży: jeden jak NVIDIA — paraboliczna sprzedaż rok do roku; drugi jak Microsoft — wzrost stabilny, ale znaczny;
+przeanalizuj wykresy sprzedaży i zarobków i szukaj podobnych wzorców w innych, sprawdź, czy się powtarzają”.
+Dane: top 500 USA (etap 68), przychody i zysk netto kwartalnie z SEC → TTM znane od daty złożenia; ceny miesięczne (skorygowane). Okres: 2012-01..2026-09.
+Cechy (na koniec miesiąca, z kwartałów znanych do t): g_k = wzrost przychodów TTM r/r dla kolejnych kwartałów; g0 = ostatni, g4 = 4 kwartały wcześniej.
+PARABOLA (typ NVIDIA): g0 ≥ 30 %, przyspieszenie g0 − g4 ≥ 15 pp, zysk netto TTM > 0 i wzrost zysku TTM r/r ≥ 50 %.
+STABILNY (typ Microsoft): wszystkie g z ostatnich 12 kwartałów w [8 %, 30 %], odch. std ≤ 5 pp, zysk TTM r/r > 0 teraz, rok i dwa lata temu, marża operacyjna
+teraz ≥ marża 3 lata temu − 2 pp. Sprawdzenie kalibracji: miesiące NVDA i MSFT oznaczone wzorcem (wykres przychodów i zysku obu spółek).
+Wyniki: (a) zwrot 12 / 36 mies. naprzód spółek we wzorcu vs średnia spółek top 500 (równe wagi) i vs SPY — średnia, mediana, odsetek pobić, osobno starty 2012–2017
+i 2018–2023; (b) portfel równych wag spółek we wzorcu przebudowywany co miesiąc vs SPY, QQQ, równe wagi top 500; (c) trwałość wzorca: P(wzorzec za 12 mies. | wzorzec teraz);
+(d) lista spółek we wzorcu dziś. Hipoteza: STABILNY bije średnią spółkę o kilka pp/rok (konsekwencja wzrostu, etap 58), PARABOLA ma wysoki średni, ale niski medianowy wynik
+(kilka wielkich zwycięzców, wiele odwróceń), wzorzec PARABOLA mało trwały.
+
+Wynik etapu 69 (2026-11-19): PARABOLA (typ NVIDIA) po wykryciu daje w 36 mies. średnio −9 pp względem średniej spółki (mediana −21 pp, 35 % pobić); wzorzec prawie nie trwa (5,5 % po roku), najczęściej łapie szczyty cyklu (fundusze, półprzewodniki pamięci, surowce). STABILNY (typ Microsoft): +6 pp średnio w 36 mies., ale tylko w 2018–2023 (+10 pp), w 2012–2017 −1 pp, mediana −2 pp. Portfele: 13,7 % i 9,9 %/rok vs SPY 14,7 %, QQQ 19,6 %. Hipoteza: PARABOLA wysoka średnia / niska mediana — częściowo (średnia też ujemna); STABILNY bije średnią o kilka pp — tylko w drugiej połowie.
+
+## Etap 70: kupno tylko przy PEG < 2 i trzymanie do 5 lat — MSFT, NVDA i spółki z wzorców (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „takie spółki zaczynają zarabiać po kilku latach, np. 5, bo dopiero rynek je wycenia; dlatego ważne jest PEG i kupowanie po rozsądnej cenie;
+sprawdź, kiedy Microsoft miał PEG poniżej 2 — kupuj; tak samo NVIDIA”.
+PEG = P/E (TTM) ÷ (100 × CAGR EPS 5 lat), dane top 500 USA po poprawce EPS (etap 68); wariant z CAGR przychodów 5 lat. Dla każdego miesiąca 2012-01..2025-09:
+zwrot ceny 12 / 36 / 60 mies. naprzód (60 mies. tylko starty do 2021-09). (a) MSFT i NVDA: miesiące z PEG < 1, 1–2, ≥ 2 (lub brak PEG) — średni zwrot i nadwyżka
+nad SPY; (b) spółki we wzorcach STABILNY / PARABOLA (etap 69) oraz wszystkie spółki top 500: to samo w koszykach PEG; nadwyżka nad średnią spółek i nad SPY,
+mediana, odsetek pobić, połowy startów 2012–2016 / 2017–2021. Hipoteza: dla pojedynczych spółek (MSFT, NVDA) kupno przy PEG < 2 daje lepszy zwrot 5-letni;
+w przekroju PEG < 2 w spółkach STABILNY daje kilka pp więcej niż PEG ≥ 2, ale efekt słaby (etap 47: PEG ~ 0 dla 5 lat).
+
+Wynik etapu 70 (2026-11-19): spółki o stabilnym wzroście (typ Microsoft) kupione przy PEG < 1 dały w 5 lat średnio +54 pp ponad średnią spółkę (mediana +53 pp, 64 % pobić SPY), przy PEG 1–2 i ≥ 2 — od −32 do −37 pp; efekt w obu połowach, ale tylko 13 różnych spółek. Dla wzorca PARABOLA i dla wszystkich spółek PEG działa słabo. MSFT: najlepsze lata zakupu (2015–2018) miały PEG ≥ 2 lub brak PEG (spadek EPS po odpisach). Hipoteza: dla pojedynczych spółek — nie (MSFT odwrotnie); w przekroju STABILNY + PEG < 2 — efekt dużo silniejszy niż zakładano, ale tylko przy PEG < 1.
+
+## Etap 71: własna prognoza wzrostu EPS na 5 lat (z historii EPS i przychodów) w PEG (zapisane 2026-11-19 PRZED uruchomieniem)
+
+Użytkownik: „weź przykładowe szacowanie po wzroście EPS i sprzedaży, sam oszacuj i dodaj do PEG, sprawdź wtedy”.
+Prognoza wzrostu EPS (CAGR 5 lat naprzód), dane top 500 USA po poprawce EPS: F1 historyczny CAGR EPS 5 lat; F2 CAGR przychodów 5 lat; F3 estymata ważona przychodów
+(ostatnie 4 kwartały r/r, wagi 0,1/0,2/0,3/0,4 — wzór użytkownika); F4 średnia F1 i F2; F5 model: regresja (najmniejsze kwadraty, zmienne przycięte do [−50 %, 100 %])
+przyszłego CAGR EPS 5 lat na F1, F2, F3 i wzrost EPS r/r, dopasowana na startach 2012–2016 i stosowana do wszystkich (2017+ = poza próbą); prognozy przycięte do [0, 60 %].
+Odniesienie (nieosiągalne): F* = faktyczny przyszły CAGR EPS 5 lat. PEG_k = P/E ÷ (100 × F_k).
+Miary: (a) trafność: IC Spearmana prognozy z faktycznym CAGR EPS 5 lat i średni błąd bezwzględny (starty 2012–2021); (b) jak w etapie 70: zwrot 3 i 5 lat
+wg koszyków PEG < 1 / 1–2 / ≥ 2 dla spółek STABILNY i wszystkich, nadwyżka nad średnią spółek, pobicie SPY, połowy 2012–2016 / 2017+; liczba różnych spółek.
+Hipoteza: F5 ≥ F1 w trafności, ale IC prognozy ≤ 0,3; PEG z F5 daje wyraźniejszy podział niż z F1 tylko poza próbą o kilka pp.
+
+Wynik etapu 71 (2026-11-19): najlepsza własna prognoza (model F5: wzrost przychodów + mean reversion historycznego EPS) ma IC 0,25 poza próbą (historyczny EPS −0,21). W całym top 500 PEG z każdą prognozą słabo dzieli zwroty (mediany nadwyżki ok. −15…−22 pp w każdym koszyku), tylko z faktycznym przyszłym EPS (nieosiągalne) PEG < 1 daje +94 pp. W spółkach STABILNY niski PEG pomaga przy każdej prognozie (+51…+164 pp), ale to 1–12 spółek. Hipoteza potwierdzona (F5 trafniejszy, IC ≤ 0,3; zysk zwrotu z lepszej prognozy mały w przekroju).
+
+## Etap 72: PEG z własną prognozą (model F5 i estymata przychodów F3) — MSFT, NVDA i portfel spółek stabilnych (zapisane 2026-11-19 PRZED uruchomieniem)
+Użytkownik: „jaki zysk z NVIDIA i MSFT przy takim estymowanym EPS i PEG; sprawdź też portfel spółek stabilnych z tym szacowaniem EPS do PEG”.
+(a) MSFT, NVDA: koszyki PEG (< 1, 1–2, ≥ 2) wg F5 i F3, zwrot 1 / 3 / 5 lat i nadwyżka nad SPY (jak etap 70). (b) Portfel: co roku w styczniu kupno spółek STABILNY
+(etap 69) z PEG < 1 (wariant < 2, < 1,5) wg F5 / F3 / F1, każda za 1/10 konta (max 10 pozycji, kolejność od najniższego PEG), trzymanie 5 lat (wariant: sprzedaż,
+gdy przestaje być STABILNY i PEG ≥ 3), wolna gotówka w SPY, koszt 0,1 %; 2013-01..2026-09; CAGR, DD, vs SPY / QQQ; kontrola bez najlepszej spółki.
+Hipoteza: portfel ≈ SPY ± 3 pp (mało spółek, większość w SPY).
+
+Wynik etapu 72 (2026-11-19): z prognozą F5 NVDA nigdy nie ma PEG < 2 (model przewiduje spowolnienie po szybkim wzroście EPS), MSFT tylko w 2014–2016. Portfele spółek stabilnych z PEG z własną prognozą: 12,6–15,5 %/rok vs SPY 14,6 % (QQQ 20,2 %), średnio 1–6 spółek, reszta w SPY. Hipoteza (≈ SPY ± 3 pp) potwierdzona.
+
+## Etap 73: inwestor długoterminowy — spółki stabilne (przychody 10–18 % r/r) i paraboliczne; czy fundamenty liczą się dopiero po 5–10 latach; portfel z dokupowaniem przy niskim PEG (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „autor twierdzi, że w długim terminie (5–10 lat) dopiero stabilne przychody mają znaczenie, a rok–dwa to sentyment; chcę mieć spółkę nawet 10 lat i kupować,
+gdy jest tania (PEG < 2, stabilne często ~1,5 to świetne okno; wzrostowe często < 1); 70 % spółek to stabilnie rosnące ze sprzedażą 10–18 % r/r; jedna paraboliczna da więcej”.
+Dane top 500 USA (etap 68). STABILNA = przychody TTM r/r w [10 %, 18 %] teraz, 12 i 24 mies. temu, 0 ≤ dług/kapitał < 1, FCF > 0. PARABOLICZNA = wzorzec PARABOLA (etap 69).
+(A) Horyzont: nadwyżka zwrotu nad średnią spółek top 500 po 12 / 36 / 60 / 120 mies. dla STABILNEJ, PARABOLICZNEJ i reszty (120 mies.: starty 2012–2016); mediana, odsetek pobić.
+(B) Portfel 2013-01..2026-09: co miesiąc kupno transzą 2 % konta (max 4 transze / mies., max 10 % na spółkę przy kupnie, kolejność od najniższego PEG): STABILNA przy PEG < 2,
+PARABOLICZNA przy PEG < 1 (część paraboliczna max 30 % konta); dokupowanie trzymanych przy tych samych progach; trzymanie bez limitu czasu; sprzedaż tylko przy załamaniu:
+przychody r/r < 5 % teraz i rok temu albo dług/kapitał > 1; wolna gotówka w SPY. PEG = P/E ÷ (100 × CAGR EPS 5 lat) [wariant: ÷ CAGR przychodów 5 lat].
+Warianty: tylko STABILNE; tylko PARABOLICZNE; obie; bez NVDA. CAGR, DD, vs SPY / QQQ / równe wagi top 500. Hipoteza: (A) przewaga STABILNEJ rośnie z horyzontem; (B) obie ≈ SPY + 0–3 pp.
+
+Wynik etapu 73 (2026-11-20): (A) przewaga spółek o stabilnym wzroście 10–18 % nie rośnie wyraźnie z horyzontem (1 rok −4,8 pp, 3 lata −1,9, 5 lat +2,4 pp; 10 lat — 7 spółek, niewiarygodne); paraboliczne: wysoka średnia, ujemna mediana. Takie spółki to 1,2 % top 500 (3 lata z rzędu 10–18 %). (B) Portfele 10,5–13,2 %/rok vs SPY 14,6 %. Hipoteza (A) odrzucona, (B) — wynik poniżej SPY (gorzej niż zakładano).
+
+## Etap 74: wzrost przychodów 5 lat > 8 %/rok, dług < 1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE dziś > ROE 5 lat temu — portfel długoterminowy (zapisane 2026-11-20 PRZED uruchomieniem)
+Użytkownik: „CAGR 5 lat sprzedaży powyżej 8 % plus reszta (dług itd.); podobno ROE > 15 %, ROA > 10 % i ROE dziś większe niż 5 lat temu”.
+Dane top 500 USA (etap 68) + aktywa ogółem z SEC (nowe pobranie). Warunki na koniec miesiąca: K1 CAGR przychodów 5 lat > 8 %, K2 0 ≤ dług/kapitał < 1, K3 FCF > 0,
+K4 ROE > 15 %, K5 ROA (zysk netto TTM / aktywa) > 10 %, K6 ROE teraz > ROE 60 mies. temu (wariant: 36 mies.). Zestawy: Z1 = K1–K3; Z2 = Z1 + K4; Z3 = Z2 + K5; Z4 = Z3 + K6.
+(A) nadwyżka nad średnią spółek po 1 / 3 / 5 lat (mediana, pobicia, liczba spółek), połowy 2012–2016 / 2017+. (B) portfel w stylu użytkownika: co miesiąc transze 2 % konta
+(max 4 / mies.), max 10 % na spółkę przy kupnie, kolejność od najniższego PEG (P/E ÷ CAGR przychodów 5 lat), warianty: bez progu PEG / PEG < 2; dokupowanie przy tych samych
+warunkach; sprzedaż przy załamaniu (przychody r/r < 5 % teraz i rok temu lub dług/kapitał > 1); gotówka w SPY; 2013-01..2026-09; wariant z przycinaniem do 15 % w styczniu;
+bez NVDA. Hipoteza: Z3 / Z4 dają kilka pp nad średnią spółek w 5 lat; portfel ≈ SPY + 0–3 pp; K6 (ROE rośnie) bez efektu (etap 58: Δ ROE słabe).
+
+Wynik etapu 74 (2026-11-20): warunki jakości działają narastająco: mediana nadwyżki 5 lat nad średnią spółkę: Z1 −21 pp, Z2 −12, Z3 +1, Z4 (ROE rośnie vs 5 lat temu) +13 pp, w obu połowach (+15 / +13 pp), 77 spółek. Hipoteza: Z3/Z4 kilka pp — potwierdzona (więcej niż zakładano); K6 bez efektu — odrzucona (rosnące ROE dodaje najwięcej). Portfel Z4 20,5–22,8 %/rok, ale NVDA = 69–73 % portfela; bez NVDA 12,3 %, z przycinaniem do 15 % 16,0 % (SPY 14,6 %).
+
+## Etap 75: + ROCE > 15 % (Z5) (zapisane 2026-11-20 PRZED uruchomieniem)
+Użytkownik: „podobno używa jeszcze ROCE, też powyżej 15 %, jako Z5”. ROCE = zysk operacyjny TTM ÷ kapitał zaangażowany, kapitał zaangażowany = aktywa ogółem − zobowiązania bieżące
+(ostatnie znane, ≤ 400 dni; zobowiązania bieżące — nowe pobranie z SEC; brak zobowiązań bieżących (np. banki) = brak ROCE). Z5 = Z4 + ROCE > 15 %; dodatkowo Z3 + ROCE > 15 %
+(bez warunku rosnącego ROE). Analiza i portfel jak w etapie 74 (bez progu PEG / PEG < 2, przycinanie do 15 %, bez NVDA). Hipoteza: ROCE w dużej mierze pokrywa się z ROE i ROA
+(mało spółek odpada), zmiana wyniku w granicach szumu.
+
+Wynik etapu 75 (2026-11-20): ROCE jest silnie powiązane z ROE (0,83) i ROA (0,88). Z5 (Z4 + ROCE > 15 %): mediana nadwyżki 5 lat +22 pp (Z4 +13), ale tylko w 2017+ (+26 pp); w 2012–2016 +0,7 pp (10 spółek). Portfel z przycinaniem 17,7 % vs 16,0 % (Z4), bez NVDA 13,0 % vs 12,3 %. Hipoteza (zmiana w granicach szumu) potwierdzona — poprawa niestabilna między połowami.

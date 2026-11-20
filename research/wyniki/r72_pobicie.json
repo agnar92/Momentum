@@ -1,0 +1,303 @@
+{
+ "zestawy": [
+  {
+   "zestaw": "S0 wszystkie spółki",
+   "sr_spolek": 467.2994,
+   "miesiecy_z_spolkami": 177,
+   "pobicie_rownych_12m": 0.1018,
+   "pobicie_SPY_12m": 0.3593,
+   "przewaga_SPY_12m": -0.0134,
+   "pobicie_rownych_60m": 0.0252,
+   "pobicie_SPY_60m": 0.1849,
+   "przewaga_SPY_60m": -0.0995,
+   "spolka_bije_SPY_60m": 0.3638,
+   "lata_pobite_SPY": "6 z 14"
+  },
+  {
+   "zestaw": "S1 przychody +8 % co rok (5 lat)",
+   "sr_spolek": 24.7133,
+   "miesiecy_z_spolkami": 143,
+   "pobicie_rownych_12m": 0.3835,
+   "pobicie_SPY_12m": 0.3233,
+   "przewaga_SPY_12m": -0.0402,
+   "pobicie_rownych_60m": 0.6353,
+   "pobicie_SPY_60m": 0.3176,
+   "przewaga_SPY_60m": -0.0166,
+   "spolka_bije_SPY_60m": 0.3669,
+   "lata_pobite_SPY": "4 z 11"
+  },
+  {
+   "zestaw": "S2 S1 + dług < 1 + FCF > 0",
+   "sr_spolek": 17.9504,
+   "miesiecy_z_spolkami": 141,
+   "pobicie_rownych_12m": 0.374,
+   "pobicie_SPY_12m": 0.2595,
+   "przewaga_SPY_12m": -0.045,
+   "pobicie_rownych_60m": 0.6627,
+   "pobicie_SPY_60m": 0.4096,
+   "przewaga_SPY_60m": 0.0409,
+   "spolka_bije_SPY_60m": 0.3511,
+   "lata_pobite_SPY": "4 z 11"
+  },
+  {
+   "zestaw": "S3 S2 + ROE > 15 %",
+   "sr_spolek": 10.8,
+   "miesiecy_z_spolkami": 140,
+   "pobicie_rownych_12m": 0.3538,
+   "pobicie_SPY_12m": 0.3154,
+   "przewaga_SPY_12m": -0.0601,
+   "pobicie_rownych_60m": 0.4512,
+   "pobicie_SPY_60m": 0.378,
+   "przewaga_SPY_60m": -0.1156,
+   "spolka_bije_SPY_60m": 0.3591,
+   "lata_pobite_SPY": "3 z 10"
+  },
+  {
+   "zestaw": "S4 S3 + ROE nie spada r/r",
+   "sr_spolek": 6.8406,
+   "miesiecy_z_spolkami": 138,
+   "pobicie_rownych_12m": 0.4141,
+   "pobicie_SPY_12m": 0.3125,
+   "przewaga_SPY_12m": -0.0778,
+   "pobicie_rownych_60m": 0.6,
+   "pobicie_SPY_60m": 0.45,
+   "przewaga_SPY_60m": -0.0395,
+   "spolka_bije_SPY_60m": 0.3894,
+   "lata_pobite_SPY": "3 z 9"
+  },
+  {
+   "zestaw": "S5 S4 + PEG z przychodów < 2",
+   "sr_spolek": 3.8346,
+   "miesiecy_z_spolkami": 133,
+   "pobicie_rownych_12m": 0.4797,
+   "pobicie_SPY_12m": 0.4146,
+   "przewaga_SPY_12m": -0.0499,
+   "pobicie_rownych_60m": 0.6667,
+   "pobicie_SPY_60m": 0.6,
+   "przewaga_SPY_60m": 0.0504,
+   "spolka_bije_SPY_60m": 0.4757,
+   "lata_pobite_SPY": "4 z 9"
+  },
+  {
+   "zestaw": "S6 S4 + PEG z przychodów < 1",
+   "sr_spolek": 2.0377,
+   "miesiecy_z_spolkami": 106,
+   "pobicie_rownych_12m": 0.6289,
+   "pobicie_SPY_12m": 0.5979,
+   "przewaga_SPY_12m": 0.0274,
+   "pobicie_rownych_60m": 0.7833,
+   "pobicie_SPY_60m": 0.7167,
+   "przewaga_SPY_60m": 0.2987,
+   "spolka_bije_SPY_60m": 0.6061,
+   "lata_pobite_SPY": "5 z 7"
+  },
+  {
+   "zestaw": "S7 S4 + PEG z EPS 5 lat < 2",
+   "sr_spolek": 4.72,
+   "miesiecy_z_spolkami": 125,
+   "pobicie_rownych_12m": 0.4957,
+   "pobicie_SPY_12m": 0.4609,
+   "przewaga_SPY_12m": -0.0231,
+   "pobicie_rownych_60m": 0.6269,
+   "pobicie_SPY_60m": 0.4179,
+   "przewaga_SPY_60m": -0.0286,
+   "spolka_bije_SPY_60m": 0.4035,
+   "lata_pobite_SPY": "4 z 9"
+  },
+  {
+   "zestaw": "S8 S2 + PEG z przychodów < 2 (bez ROE)",
+   "sr_spolek": 8.3,
+   "miesiecy_z_spolkami": 140,
+   "pobicie_rownych_12m": 0.4308,
+   "pobicie_SPY_12m": 0.3692,
+   "przewaga_SPY_12m": -0.0439,
+   "pobicie_rownych_60m": 0.5122,
+   "pobicie_SPY_60m": 0.4146,
+   "przewaga_SPY_60m": -0.0817,
+   "spolka_bije_SPY_60m": 0.4103,
+   "lata_pobite_SPY": "4 z 10"
+  }
+ ],
+ "lata": {
+  "S0 wszystkie spółki": {
+   "2012": [
+    0.016,
+    424
+   ],
+   "2013": [
+    0.032,
+    433
+   ],
+   "2014": [
+    0.001,
+    437
+   ],
+   "2015": [
+    -0.036,
+    440
+   ],
+   "2016": [
+    0.048,
+    447
+   ],
+   "2017": [
+    -0.039,
+    462
+   ],
+   "2018": [
+    -0.013,
+    468
+   ],
+   "2019": [
+    -0.054,
+    473
+   ],
+   "2020": [
+    -0.062,
+    480
+   ],
+   "2021": [
+    0.013,
+    482
+   ],
+   "2022": [
+    0.067,
+    482
+   ],
+   "2023": [
+    -0.137,
+    485
+   ],
+   "2024": [
+    -0.08,
+    490
+   ],
+   "2025": [
+    -0.036,
+    490
+   ]
+  },
+  "S2 S1 + dług < 1 + FCF > 0": {
+   "2015": [
+    0.664,
+    1
+   ],
+   "2016": [
+    -0.14,
+    5
+   ],
+   "2017": [
+    0.043,
+    12
+   ],
+   "2018": [
+    -0.058,
+    6
+   ],
+   "2019": [
+    -0.036,
+    5
+   ],
+   "2020": [
+    0.199,
+    17
+   ],
+   "2021": [
+    -0.075,
+    16
+   ],
+   "2022": [
+    -0.033,
+    22
+   ],
+   "2023": [
+    0.009,
+    23
+   ],
+   "2024": [
+    -0.101,
+    28
+   ],
+   "2025": [
+    -0.223,
+    28
+   ]
+  },
+  "S4 S3 + ROE nie spada r/r": {
+   "2017": [
+    -0.229,
+    2
+   ],
+   "2018": [
+    0.195,
+    1
+   ],
+   "2019": [
+    -0.427,
+    1
+   ],
+   "2020": [
+    0.237,
+    5
+   ],
+   "2021": [
+    0.021,
+    8
+   ],
+   "2022": [
+    -0.065,
+    8
+   ],
+   "2023": [
+    -0.05,
+    10
+   ],
+   "2024": [
+    -0.236,
+    8
+   ],
+   "2025": [
+    -0.28,
+    10
+   ]
+  },
+  "S5 S4 + PEG z przychodów < 2": {
+   "2017": [
+    -0.243,
+    1
+   ],
+   "2018": [
+    0.195,
+    1
+   ],
+   "2019": [
+    -0.427,
+    1
+   ],
+   "2020": [
+    0.295,
+    3
+   ],
+   "2021": [
+    -0.028,
+    4
+   ],
+   "2022": [
+    0.053,
+    5
+   ],
+   "2023": [
+    0.04,
+    6
+   ],
+   "2024": [
+    -0.162,
+    1
+   ],
+   "2025": [
+    -0.274,
+    3
+   ]
+  }
+ }
+}

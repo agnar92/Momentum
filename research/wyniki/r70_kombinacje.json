@@ -1,0 +1,1071 @@
+{
+ "filtry": [
+  "A przychody 5 l. > +50 %",
+  "B przychody 5 l. > 20 %/rok",
+  "C EPS 5 l. > 10 %/rok",
+  "D dług / kapitał < 0,5",
+  "E marża operacyjna > 25 %",
+  "F quick ratio > 1,5",
+  "G ROE > 15 %",
+  "H PEG < 2",
+  "I zwrot 3 mies. > 0",
+  "J current ratio > 1,5"
+ ],
+ "macierz": [
+  [
+   0.2074,
+   0.3203,
+   0.3636,
+   0.3086,
+   0.4596,
+   0.5053,
+   0.4297,
+   0.4081,
+   0.2668,
+   0.3383
+  ],
+  [
+   0.3203,
+   0.3203,
+   0.6416,
+   0.561,
+   1.4465,
+   0.7318,
+   0.6457,
+   0.5985,
+   0.3146,
+   0.659
+  ],
+  [
+   0.3636,
+   0.6416,
+   0.1421,
+   0.1979,
+   0.2908,
+   0.5264,
+   0.2127,
+   0.1551,
+   0.1891,
+   0.371
+  ],
+  [
+   0.3086,
+   0.561,
+   0.1979,
+   0.0376,
+   0.1701,
+   0.3333,
+   0.0712,
+   0.2062,
+   0.0587,
+   0.1637
+  ],
+  [
+   0.4596,
+   1.4465,
+   0.2908,
+   0.1701,
+   0.1009,
+   0.4358,
+   0.2077,
+   0.3235,
+   0.1015,
+   0.4019
+  ],
+  [
+   0.5053,
+   0.7318,
+   0.5264,
+   0.3333,
+   0.4358,
+   0.2539,
+   0.2848,
+   0.5817,
+   0.3271,
+   0.2539
+  ],
+  [
+   0.4297,
+   0.6457,
+   0.2127,
+   0.0712,
+   0.2077,
+   0.2848,
+   0.0459,
+   0.2573,
+   0.0672,
+   0.1481
+  ],
+  [
+   0.4081,
+   0.5985,
+   0.1551,
+   0.2062,
+   0.3235,
+   0.5817,
+   0.2573,
+   0.1608,
+   0.2121,
+   0.409
+  ],
+  [
+   0.2668,
+   0.3146,
+   0.1891,
+   0.0587,
+   0.1015,
+   0.3271,
+   0.0672,
+   0.2121,
+   0.0134,
+   0.1813
+  ],
+  [
+   0.3383,
+   0.659,
+   0.371,
+   0.1637,
+   0.4019,
+   0.2539,
+   0.1481,
+   0.409,
+   0.1813,
+   0.13
+  ]
+ ],
+ "lit": [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J"
+ ],
+ "pary": [
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok",
+   "nadwyzka_5l": 0.3203,
+   "t": 5.7205,
+   "pol1": 0.5181,
+   "pol2": 0.2412,
+   "sr_spolek": 12.4872,
+   "interakcja_vs_lepszy_skladnik": 0.0,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + C EPS 5 l. > 10 %/rok",
+   "nadwyzka_5l": 0.3636,
+   "t": 4.6762,
+   "pol1": 0.198,
+   "pol2": 0.452,
+   "sr_spolek": 33.0769,
+   "interakcja_vs_lepszy_skladnik": 0.1563,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + D dług / kapitał < 0,5",
+   "nadwyzka_5l": 0.3086,
+   "t": 8.9151,
+   "pol1": 0.2833,
+   "pol2": 0.3221,
+   "sr_spolek": 35.4615,
+   "interakcja_vs_lepszy_skladnik": 0.1012,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 0.4596,
+   "t": 4.7544,
+   "pol1": 0.2479,
+   "pol2": 0.5584,
+   "sr_spolek": 12.0171,
+   "interakcja_vs_lepszy_skladnik": 0.2523,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.5053,
+   "t": 4.2248,
+   "pol1": 0.3269,
+   "pol2": 0.5916,
+   "sr_spolek": 18.8632,
+   "interakcja_vs_lepszy_skladnik": 0.2514,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + G ROE > 15 %",
+   "nadwyzka_5l": 0.4297,
+   "t": 3.4667,
+   "pol1": 0.1592,
+   "pol2": 0.5605,
+   "sr_spolek": 22.6325,
+   "interakcja_vs_lepszy_skladnik": 0.2224,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + H PEG < 2",
+   "nadwyzka_5l": 0.4081,
+   "t": 3.149,
+   "pol1": 0.16,
+   "pol2": 0.5404,
+   "sr_spolek": 25.812,
+   "interakcja_vs_lepszy_skladnik": 0.2007,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.2668,
+   "t": 6.2858,
+   "pol1": 0.3077,
+   "pol2": 0.2451,
+   "sr_spolek": 33.6154,
+   "interakcja_vs_lepszy_skladnik": 0.0595,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + J current ratio > 1,5",
+   "nadwyzka_5l": 0.3383,
+   "t": 4.2985,
+   "pol1": 0.2057,
+   "pol2": 0.4023,
+   "sr_spolek": 24.0427,
+   "interakcja_vs_lepszy_skladnik": 0.1309,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok",
+   "nadwyzka_5l": 0.6416,
+   "t": 2.8101,
+   "pol1": 0.2487,
+   "pol2": 0.7987,
+   "sr_spolek": 6.8889,
+   "interakcja_vs_lepszy_skladnik": 0.3212,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5",
+   "nadwyzka_5l": 0.561,
+   "t": 7.3997,
+   "pol1": 0.7189,
+   "pol2": 0.4978,
+   "sr_spolek": 8.4615,
+   "interakcja_vs_lepszy_skladnik": 0.2407,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 1.4465,
+   "t": 2.4425,
+   "pol1": 0.3438,
+   "pol2": 1.8875,
+   "sr_spolek": 2.8974,
+   "interakcja_vs_lepszy_skladnik": 1.1261,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.7318,
+   "t": 1.8236,
+   "pol1": -0.0349,
+   "pol2": 1.0257,
+   "sr_spolek": 4.6325,
+   "interakcja_vs_lepszy_skladnik": 0.4115,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + G ROE > 15 %",
+   "nadwyzka_5l": 0.6457,
+   "t": 2.6244,
+   "pol1": 0.3068,
+   "pol2": 0.7813,
+   "sr_spolek": 5.1026,
+   "interakcja_vs_lepszy_skladnik": 0.3254,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + H PEG < 2",
+   "nadwyzka_5l": 0.5985,
+   "t": 2.5285,
+   "pol1": 0.1319,
+   "pol2": 0.7852,
+   "sr_spolek": 5.735,
+   "interakcja_vs_lepszy_skladnik": 0.2782,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.3146,
+   "t": 2.6828,
+   "pol1": 0.7029,
+   "pol2": 0.1593,
+   "sr_spolek": 7.547,
+   "interakcja_vs_lepszy_skladnik": -0.0057,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + J current ratio > 1,5",
+   "nadwyzka_5l": 0.659,
+   "t": 1.6916,
+   "pol1": -0.0754,
+   "pol2": 0.9405,
+   "sr_spolek": 5.2479,
+   "interakcja_vs_lepszy_skladnik": 0.3387,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + D dług / kapitał < 0,5",
+   "nadwyzka_5l": 0.1979,
+   "t": 3.9658,
+   "pol1": 0.3297,
+   "pol2": 0.1276,
+   "sr_spolek": 69.0,
+   "interakcja_vs_lepszy_skladnik": 0.0558,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 0.2908,
+   "t": 4.552,
+   "pol1": 0.4053,
+   "pol2": 0.2296,
+   "sr_spolek": 20.7436,
+   "interakcja_vs_lepszy_skladnik": 0.1486,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.5264,
+   "t": 14.9553,
+   "pol1": 0.5594,
+   "pol2": 0.5098,
+   "sr_spolek": 27.6581,
+   "interakcja_vs_lepszy_skladnik": 0.2724,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + G ROE > 15 %",
+   "nadwyzka_5l": 0.2127,
+   "t": 7.7352,
+   "pol1": 0.2596,
+   "pol2": 0.1893,
+   "sr_spolek": 61.5812,
+   "interakcja_vs_lepszy_skladnik": 0.0706,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + H PEG < 2",
+   "nadwyzka_5l": 0.1551,
+   "t": 3.0676,
+   "pol1": 0.2551,
+   "pol2": 0.1018,
+   "sr_spolek": 90.4701,
+   "interakcja_vs_lepszy_skladnik": -0.0056,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.1891,
+   "t": 3.0154,
+   "pol1": 0.3482,
+   "pol2": 0.1043,
+   "sr_spolek": 70.4359,
+   "interakcja_vs_lepszy_skladnik": 0.047,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + J current ratio > 1,5",
+   "nadwyzka_5l": 0.371,
+   "t": 12.2044,
+   "pol1": 0.4344,
+   "pol2": 0.3393,
+   "sr_spolek": 39.0427,
+   "interakcja_vs_lepszy_skladnik": 0.2289,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 0.1701,
+   "t": 4.4896,
+   "pol1": 0.1191,
+   "pol2": 0.2185,
+   "sr_spolek": 27.188,
+   "interakcja_vs_lepszy_skladnik": 0.0692,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.3333,
+   "t": 7.3532,
+   "pol1": 0.3304,
+   "pol2": 0.3362,
+   "sr_spolek": 66.2821,
+   "interakcja_vs_lepszy_skladnik": 0.0794,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + G ROE > 15 %",
+   "nadwyzka_5l": 0.0712,
+   "t": 1.4099,
+   "pol1": -0.0057,
+   "pol2": 0.1442,
+   "sr_spolek": 93.5726,
+   "interakcja_vs_lepszy_skladnik": 0.0253,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + H PEG < 2",
+   "nadwyzka_5l": 0.2062,
+   "t": 3.6691,
+   "pol1": 0.3194,
+   "pol2": 0.144,
+   "sr_spolek": 60.4957,
+   "interakcja_vs_lepszy_skladnik": 0.0455,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.0587,
+   "t": 3.1284,
+   "pol1": 0.0867,
+   "pol2": 0.0321,
+   "sr_spolek": 137.5983,
+   "interakcja_vs_lepszy_skladnik": 0.0211,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + J current ratio > 1,5",
+   "nadwyzka_5l": 0.1637,
+   "t": 6.0153,
+   "pol1": 0.1654,
+   "pol2": 0.162,
+   "sr_spolek": 94.5128,
+   "interakcja_vs_lepszy_skladnik": 0.0337,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 % + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.4358,
+   "t": 2.9732,
+   "pol1": 0.1856,
+   "pol2": 0.6734,
+   "sr_spolek": 18.7607,
+   "interakcja_vs_lepszy_skladnik": 0.1818,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 % + G ROE > 15 %",
+   "nadwyzka_5l": 0.2077,
+   "t": 2.7659,
+   "pol1": 0.0701,
+   "pol2": 0.3384,
+   "sr_spolek": 24.1368,
+   "interakcja_vs_lepszy_skladnik": 0.1068,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 % + H PEG < 2",
+   "nadwyzka_5l": 0.3235,
+   "t": 4.8674,
+   "pol1": 0.3702,
+   "pol2": 0.2978,
+   "sr_spolek": 15.6581,
+   "interakcja_vs_lepszy_skladnik": 0.1628,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 % + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.1015,
+   "t": 3.8884,
+   "pol1": 0.0851,
+   "pol2": 0.1171,
+   "sr_spolek": 29.7521,
+   "interakcja_vs_lepszy_skladnik": 0.0006,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 % + J current ratio > 1,5",
+   "nadwyzka_5l": 0.4019,
+   "t": 2.8995,
+   "pol1": 0.1644,
+   "pol2": 0.6275,
+   "sr_spolek": 19.8462,
+   "interakcja_vs_lepszy_skladnik": 0.2719,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "F quick ratio > 1,5 + G ROE > 15 %",
+   "nadwyzka_5l": 0.2848,
+   "t": 1.9787,
+   "pol1": 0.0647,
+   "pol2": 0.4939,
+   "sr_spolek": 44.6154,
+   "interakcja_vs_lepszy_skladnik": 0.0309,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 0.5817,
+   "t": 7.8661,
+   "pol1": 0.6017,
+   "pol2": 0.5707,
+   "sr_spolek": 22.0171,
+   "interakcja_vs_lepszy_skladnik": 0.3277,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "F quick ratio > 1,5 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.3271,
+   "t": 5.7735,
+   "pol1": 0.3216,
+   "pol2": 0.3323,
+   "sr_spolek": 61.4188,
+   "interakcja_vs_lepszy_skladnik": 0.0731,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "F quick ratio > 1,5 + J current ratio > 1,5",
+   "nadwyzka_5l": 0.2539,
+   "t": 5.7147,
+   "pol1": 0.2165,
+   "pol2": 0.2895,
+   "sr_spolek": 95.2564,
+   "interakcja_vs_lepszy_skladnik": 0.0,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "G ROE > 15 % + H PEG < 2",
+   "nadwyzka_5l": 0.2573,
+   "t": 3.7577,
+   "pol1": 0.3749,
+   "pol2": 0.1926,
+   "sr_spolek": 54.1111,
+   "interakcja_vs_lepszy_skladnik": 0.0965,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "G ROE > 15 % + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.0672,
+   "t": 1.1483,
+   "pol1": -0.0283,
+   "pol2": 0.1579,
+   "sr_spolek": 87.9231,
+   "interakcja_vs_lepszy_skladnik": 0.0213,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "G ROE > 15 % + J current ratio > 1,5",
+   "nadwyzka_5l": 0.1481,
+   "t": 1.2331,
+   "pol1": -0.0491,
+   "pol2": 0.3354,
+   "sr_spolek": 63.8205,
+   "interakcja_vs_lepszy_skladnik": 0.0181,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "H PEG < 2 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.2121,
+   "t": 2.7616,
+   "pol1": 0.3875,
+   "pol2": 0.1156,
+   "sr_spolek": 57.906,
+   "interakcja_vs_lepszy_skladnik": 0.0513,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "H PEG < 2 + J current ratio > 1,5",
+   "nadwyzka_5l": 0.409,
+   "t": 6.3507,
+   "pol1": 0.5086,
+   "pol2": 0.3542,
+   "sr_spolek": 32.4786,
+   "interakcja_vs_lepszy_skladnik": 0.2483,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "I zwrot 3 mies. > 0 + J current ratio > 1,5",
+   "nadwyzka_5l": 0.1813,
+   "t": 4.721,
+   "pol1": 0.168,
+   "pol2": 0.194,
+   "sr_spolek": 88.8034,
+   "interakcja_vs_lepszy_skladnik": 0.0513,
+   "stabilna": true
+  }
+ ],
+ "trojki": [
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 2.3453,
+   "t": 2.102,
+   "pol1": -0.3537,
+   "pol2": 3.4344,
+   "sr_spolek": 2.1966,
+   "interakcja_vs_lepszy_skladnik": 2.025,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + F quick ratio > 1,5",
+   "nadwyzka_5l": 2.2255,
+   "t": 1.9993,
+   "pol1": -0.3073,
+   "pol2": 3.2475,
+   "sr_spolek": 2.6239,
+   "interakcja_vs_lepszy_skladnik": 1.9052,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + H PEG < 2 + J current ratio > 1,5",
+   "nadwyzka_5l": 2.1052,
+   "t": 2.0219,
+   "pol1": -0.3572,
+   "pol2": 3.0988,
+   "sr_spolek": 2.4872,
+   "interakcja_vs_lepszy_skladnik": 1.7849,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 % + H PEG < 2",
+   "nadwyzka_5l": 2.0986,
+   "t": 2.6384,
+   "pol1": 0.3276,
+   "pol2": 2.8443,
+   "sr_spolek": 2.0684,
+   "interakcja_vs_lepszy_skladnik": 1.7783,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + J current ratio > 1,5",
+   "nadwyzka_5l": 2.0907,
+   "t": 1.9244,
+   "pol1": -0.3489,
+   "pol2": 3.0751,
+   "sr_spolek": 2.9316,
+   "interakcja_vs_lepszy_skladnik": 1.7704,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 2.0826,
+   "t": 2.4178,
+   "pol1": 0.2955,
+   "pol2": 2.8351,
+   "sr_spolek": 2.2735,
+   "interakcja_vs_lepszy_skladnik": 1.7623,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 % + F quick ratio > 1,5",
+   "nadwyzka_5l": 1.8009,
+   "t": 1.7682,
+   "pol1": -0.3603,
+   "pol2": 2.6294,
+   "sr_spolek": 2.0769,
+   "interakcja_vs_lepszy_skladnik": 1.4806,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 % + J current ratio > 1,5",
+   "nadwyzka_5l": 1.8009,
+   "t": 1.7682,
+   "pol1": -0.3603,
+   "pol2": 2.6294,
+   "sr_spolek": 2.0769,
+   "interakcja_vs_lepszy_skladnik": 1.4806,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 % + G ROE > 15 %",
+   "nadwyzka_5l": 1.5742,
+   "t": 2.5702,
+   "pol1": 0.5459,
+   "pol2": 1.9855,
+   "sr_spolek": 2.3333,
+   "interakcja_vs_lepszy_skladnik": 1.2539,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 1.5413,
+   "t": 3.3485,
+   "pol1": 0.8678,
+   "pol2": 1.8107,
+   "sr_spolek": 2.094,
+   "interakcja_vs_lepszy_skladnik": 1.221,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 %",
+   "nadwyzka_5l": 1.4465,
+   "t": 2.4425,
+   "pol1": 0.3438,
+   "pol2": 1.8875,
+   "sr_spolek": 2.8974,
+   "interakcja_vs_lepszy_skladnik": 1.1261,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + F quick ratio > 1,5 + G ROE > 15 %",
+   "nadwyzka_5l": 1.3141,
+   "t": 1.7277,
+   "pol1": -0.4248,
+   "pol2": 1.9806,
+   "sr_spolek": 2.7436,
+   "interakcja_vs_lepszy_skladnik": 0.9937,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + G ROE > 15 % + J current ratio > 1,5",
+   "nadwyzka_5l": 1.3061,
+   "t": 1.6858,
+   "pol1": -0.4248,
+   "pol2": 1.9696,
+   "sr_spolek": 2.8034,
+   "interakcja_vs_lepszy_skladnik": 0.9857,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + E marża operacyjna > 25 % + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 1.2383,
+   "t": 2.2149,
+   "pol1": 0.2512,
+   "pol2": 1.7017,
+   "sr_spolek": 1.6496,
+   "interakcja_vs_lepszy_skladnik": 0.918,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + F quick ratio > 1,5",
+   "nadwyzka_5l": 1.0166,
+   "t": 2.1289,
+   "pol1": 0.2452,
+   "pol2": 1.3124,
+   "sr_spolek": 3.3761,
+   "interakcja_vs_lepszy_skladnik": 0.6963,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + J current ratio > 1,5",
+   "nadwyzka_5l": 0.9374,
+   "t": 2.0468,
+   "pol1": 0.1874,
+   "pol2": 1.2249,
+   "sr_spolek": 3.8889,
+   "interakcja_vs_lepszy_skladnik": 0.6171,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + G ROE > 15 % + H PEG < 2",
+   "nadwyzka_5l": 0.8969,
+   "t": 2.4049,
+   "pol1": 0.241,
+   "pol2": 1.1637,
+   "sr_spolek": 3.3333,
+   "interakcja_vs_lepszy_skladnik": 0.5766,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 0.8765,
+   "t": 2.3077,
+   "pol1": 0.0995,
+   "pol2": 1.2391,
+   "sr_spolek": 9.4615,
+   "interakcja_vs_lepszy_skladnik": 0.6226,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + G ROE > 15 %",
+   "nadwyzka_5l": 0.8494,
+   "t": 2.2179,
+   "pol1": 0.241,
+   "pol2": 1.0928,
+   "sr_spolek": 3.8376,
+   "interakcja_vs_lepszy_skladnik": 0.5291,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + H PEG < 2",
+   "nadwyzka_5l": 0.826,
+   "t": 3.7924,
+   "pol1": 0.5147,
+   "pol2": 0.9506,
+   "sr_spolek": 4.3846,
+   "interakcja_vs_lepszy_skladnik": 0.5057,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + D dług / kapitał < 0,5",
+   "nadwyzka_5l": 0.82,
+   "t": 4.6178,
+   "pol1": 0.6074,
+   "pol2": 0.9051,
+   "sr_spolek": 5.2564,
+   "interakcja_vs_lepszy_skladnik": 0.4997,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + G ROE > 15 %",
+   "nadwyzka_5l": 0.8135,
+   "t": 3.1462,
+   "pol1": 0.4327,
+   "pol2": 0.9658,
+   "sr_spolek": 4.0,
+   "interakcja_vs_lepszy_skladnik": 0.4931,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + C EPS 5 l. > 10 %/rok + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.7815,
+   "t": 2.7869,
+   "pol1": 0.1941,
+   "pol2": 1.0655,
+   "sr_spolek": 12.1368,
+   "interakcja_vs_lepszy_skladnik": 0.5276,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + F quick ratio > 1,5 + G ROE > 15 %",
+   "nadwyzka_5l": 0.771,
+   "t": 2.715,
+   "pol1": 0.1909,
+   "pol2": 1.0513,
+   "sr_spolek": 10.0684,
+   "interakcja_vs_lepszy_skladnik": 0.517,
+   "stabilna": true
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + E marża operacyjna > 25 % + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.7627,
+   "t": 2.7469,
+   "pol1": 0.1629,
+   "pol2": 1.0426,
+   "sr_spolek": 6.8718,
+   "interakcja_vs_lepszy_skladnik": 0.5088,
+   "stabilna": false
+  }
+ ],
+ "czworki": [
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 2.3856,
+   "t": 2.1427,
+   "pol1": -0.2608,
+   "pol2": 3.4535,
+   "sr_spolek": 1.5983,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + F quick ratio > 1,5",
+   "nadwyzka_5l": 2.2255,
+   "t": 1.9993,
+   "pol1": -0.3073,
+   "pol2": 3.2475,
+   "sr_spolek": 2.6239,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + D dług / kapitał < 0,5 + F quick ratio > 1,5",
+   "nadwyzka_5l": 2.134,
+   "t": 2.1051,
+   "pol1": -0.1779,
+   "pol2": 3.0669,
+   "sr_spolek": 1.9487,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + H PEG < 2 + J current ratio > 1,5",
+   "nadwyzka_5l": 2.1052,
+   "t": 2.0219,
+   "pol1": -0.3572,
+   "pol2": 3.0988,
+   "sr_spolek": 2.4872,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + J current ratio > 1,5",
+   "nadwyzka_5l": 2.0907,
+   "t": 1.9244,
+   "pol1": -0.3489,
+   "pol2": 3.0751,
+   "sr_spolek": 2.9316,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + C EPS 5 l. > 10 %/rok + F quick ratio > 1,5 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 1.7284,
+   "t": 1.9628,
+   "pol1": -0.1274,
+   "pol2": 2.4859,
+   "sr_spolek": 1.5299,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok + F quick ratio > 1,5 + H PEG < 2 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 1.5264,
+   "t": 1.9452,
+   "pol1": -0.3368,
+   "pol2": 2.3734,
+   "sr_spolek": 1.2308,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + F quick ratio > 1,5 + G ROE > 15 %",
+   "nadwyzka_5l": 1.3141,
+   "t": 1.7277,
+   "pol1": -0.4248,
+   "pol2": 1.9806,
+   "sr_spolek": 2.7436,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + G ROE > 15 % + J current ratio > 1,5",
+   "nadwyzka_5l": 1.3061,
+   "t": 1.6858,
+   "pol1": -0.4248,
+   "pol2": 1.9696,
+   "sr_spolek": 2.8034,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + D dług / kapitał < 0,5 + F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 1.0368,
+   "t": 2.5985,
+   "pol1": 0.268,
+   "pol2": 1.3956,
+   "sr_spolek": 6.5299,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + B przychody 5 l. > 20 %/rok + D dług / kapitał < 0,5 + F quick ratio > 1,5",
+   "nadwyzka_5l": 1.0166,
+   "t": 2.1289,
+   "pol1": 0.2452,
+   "pol2": 1.3124,
+   "sr_spolek": 3.3761,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5 + E marża operacyjna > 25 % + F quick ratio > 1,5 + H PEG < 2",
+   "nadwyzka_5l": 0.9966,
+   "t": 6.6781,
+   "pol1": 0.7648,
+   "pol2": 1.1242,
+   "sr_spolek": 4.2308,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok + D dług / kapitał < 0,5 + E marża operacyjna > 25 % + F quick ratio > 1,5",
+   "nadwyzka_5l": 0.9751,
+   "t": 10.3614,
+   "pol1": 0.9132,
+   "pol2": 1.006,
+   "sr_spolek": 5.3077,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + F quick ratio > 1,5 + H PEG < 2 + I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.9645,
+   "t": 2.5391,
+   "pol1": 0.0869,
+   "pol2": 1.3494,
+   "sr_spolek": 5.6154,
+   "stabilna": false
+  },
+  {
+   "kombinacja": "A przychody 5 l. > +50 % + F quick ratio > 1,5 + G ROE > 15 % + H PEG < 2",
+   "nadwyzka_5l": 0.9025,
+   "t": 1.9443,
+   "pol1": -0.0405,
+   "pol2": 1.3426,
+   "sr_spolek": 6.8889,
+   "stabilna": false
+  }
+ ],
+ "pojedyncze": [
+  {
+   "kombinacja": "A przychody 5 l. > +50 %",
+   "nadwyzka_5l": 0.2074,
+   "t": 7.4185,
+   "pol1": 0.2349,
+   "pol2": 0.1927,
+   "sr_spolek": 53.1709
+  },
+  {
+   "kombinacja": "B przychody 5 l. > 20 %/rok",
+   "nadwyzka_5l": 0.3203,
+   "t": 5.7205,
+   "pol1": 0.5181,
+   "pol2": 0.2412,
+   "sr_spolek": 12.4872
+  },
+  {
+   "kombinacja": "C EPS 5 l. > 10 %/rok",
+   "nadwyzka_5l": 0.1421,
+   "t": 3.1154,
+   "pol1": 0.2511,
+   "pol2": 0.084,
+   "sr_spolek": 112.2821
+  },
+  {
+   "kombinacja": "D dług / kapitał < 0,5",
+   "nadwyzka_5l": 0.0376,
+   "t": 4.4922,
+   "pol1": 0.0523,
+   "pol2": 0.0236,
+   "sr_spolek": 215.6068
+  },
+  {
+   "kombinacja": "E marża operacyjna > 25 %",
+   "nadwyzka_5l": 0.1009,
+   "t": 4.6221,
+   "pol1": 0.0922,
+   "pol2": 0.1092,
+   "sr_spolek": 44.7949
+  },
+  {
+   "kombinacja": "F quick ratio > 1,5",
+   "nadwyzka_5l": 0.2539,
+   "t": 5.7147,
+   "pol1": 0.2165,
+   "pol2": 0.2895,
+   "sr_spolek": 95.2564
+  },
+  {
+   "kombinacja": "G ROE > 15 %",
+   "nadwyzka_5l": 0.0459,
+   "t": 0.8828,
+   "pol1": -0.0391,
+   "pol2": 0.1266,
+   "sr_spolek": 136.9915
+  },
+  {
+   "kombinacja": "H PEG < 2",
+   "nadwyzka_5l": 0.1608,
+   "t": 2.5295,
+   "pol1": 0.2873,
+   "pol2": 0.0911,
+   "sr_spolek": 97.9573
+  },
+  {
+   "kombinacja": "I zwrot 3 mies. > 0",
+   "nadwyzka_5l": 0.0134,
+   "t": 0.9623,
+   "pol1": 0.0272,
+   "pol2": 0.0002,
+   "sr_spolek": 238.4017
+  },
+  {
+   "kombinacja": "J current ratio > 1,5",
+   "nadwyzka_5l": 0.13,
+   "t": 4.0328,
+   "pol1": 0.0926,
+   "pol2": 0.1656,
+   "sr_spolek": 138.5812
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spółka · Momentum</title>
+<link rel="stylesheet" href="css/styl.css">
+<link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+<header class="gora"><div class="w">
+  <a class="logo" href="index.html">Momen<span>tum</span></a>
+  <nav><a href="index.html">Spółki</a><a href="metoda.html">Metoda</a></nav>
+  <div class="szukaj"><input id="q" type="text" placeholder="Ticker, np. NVDA" list="tickery" autocomplete="off"><datalist id="tickery"></datalist></div>
+</div></header>
+<main class="main">
+  <div id="err" class="blad" hidden></div>
+  <section class="karta ciemna" id="top"></section>
+  <section class="siatka2">
+    <div class="karta" id="liczby"></div>
+    <div class="karta" id="wykres-ceny"></div>
+  </section>
+  <section class="karta metryki" id="metryki"></section>
+  <section class="karta" id="strategie"></section>
+  <section class="karta" id="wycena"></section>
+  <section class="karta" id="sprawozdania"></section>
+  <div class="stopka">Informacyjnie, nie rekomendacja. Wycena DCF i PEG to model — zmieniaj założenia, żeby zobaczyć, co musi się wydarzyć, by cena była uczciwa.</div>
+</main>
+<div id="tip" class="tooltip" hidden></div>
+<script src="js/wspolne.js"></script>
+<script src="js/wykresy.js"></script>
+<script src="js/spolka.js"></script>
+</body>
+</html>
