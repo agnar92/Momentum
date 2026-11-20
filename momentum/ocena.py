@@ -20,8 +20,12 @@ def _r(x, n=4):
     return None if x is None else round(x, n)
 
 
-def metryki(ex, fv):
+def metryki(ex, fv, dzis=None):
     """ex = fundamenty.wyciag(...) (może być {}), fv = wiersz Finviz -> (wskaźniki, historia do wykresów)."""
+    if ex.get("rev"):   # nieaktualne raporty SEC (ostatnie przychody > 550 dni temu, np. TM / HMC przestały składać XBRL) -> jak brak danych SEC
+        ost = max(r[1] for rows in ex["rev"].values() for r in rows)
+        if (dzis or dt.date.today()) - F.D(ost) > dt.timedelta(days=550):
+            ex = {}
     p = _f(fv.get("price"))
     pe = _f(fv.get("PE"))
     mc = _f(fv.get("marketCap"))
@@ -44,6 +48,14 @@ def metryki(ex, fv):
     ot = F.ttm(q["op"]) if "op" in q else []
     fq = {e: q["ocf"][e] - q.get("capex", {}).get(e, 0.0) for e in q.get("ocf", {})}
     ft = F.ttm(fq) if fq else []
+    if rt and ra and rt[-1][0] == ra[-1][0] and rt is ra:     # tryb roczny (MSSF / 20-F): zysk operacyjny i FCF też z lat obrotowych
+        e = ra[-1][0]
+        oa = F.polacz(ex["op"], F.roczne) if ex.get("op") else {}
+        if oa.get(e) is not None and (not ot or ot[-1][0] < e):
+            ot = list(oa.items())
+        ca, xa = (F.polacz(ex[k], F.roczne) if ex.get(k) else {} for k in ("ocf", "capex"))
+        if ca.get(e) is not None and (not ft or ft[-1][0] < e):
+            ft = [(d, v - xa.get(d, 0.0)) for d, v in ca.items()]
     if rt:
         e, r0 = rt[-1]
         m["rev_ttm"] = r0

@@ -21,7 +21,7 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    list are kept ({tag: rows}) and `polacz` picks, per date, the first tag that has a value (companies switch tags, e.g. Revenues →
    RevenueFromContract…; NVDA's marketable securities tag stopped). Quarters (`kwartalne`): 3-month values plus differences of cumulative values of the
    same fiscal year (Q4 = FY − 9M; quarterly cash flow from YTD); first filing wins (no restatements). Debt (`dlug`): non-current + current + short-term
-   borrowings + commercial paper, fallback LongTermDebt. Foreign IFRS / 20-F filers have no us-gaap data (~100 of 500: TSM, ASML …) → Finviz fallbacks
+   borrowings + commercial paper, fallback LongTermDebt. Foreign filers: other reporting currencies (ASML EUR in us-gaap) and IFRS (`ifrs-full`, `TAGI_IFRS`, annual only) are read in the reporting currency (`waluta`) and converted with one current yfinance FX rate (`kursy`, `przelicz`: growth stays as in local currency); SEC data whose latest revenue is > 550 days old is ignored (TM / HMC stopped XBRL); the rest (no SEC filings, e.g. SKHY) → Finviz fallbacks
    (sales / EPS 5Y growth, FCF = mcap / P/FCF, cash = mcap / P/C, debt = D/E × mcap / P/B, revenue = mcap / P/S). Cash = max(SEC cash + short-term
    investments, Finviz mcap / P/C when > 1.2× SEC). < 70 % of tickers with SEC revenue = nothing written.
 3. yfinance weekly closes, 5 years (adjusted) → price chart and 1W / 1M / 1Y / 5Y returns.

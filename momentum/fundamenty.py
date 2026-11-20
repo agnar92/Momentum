@@ -26,6 +26,22 @@ CHWILE = {
     "assets": ["Assets"],
     "lc": ["LiabilitiesCurrent"],
 }
+# emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
+TAGI_IFRS = {
+    "rev": ["Revenue", "RevenueFromContractsWithCustomers", "RevenueFromSaleOfGoods"],
+    "ni": ["ProfitLossAttributableToOwnersOfParent", "ProfitLoss"],
+    "op": ["ProfitLossFromOperatingActivities"],
+    "gp": ["GrossProfit"],
+    "ocf": ["CashFlowsFromUsedInOperatingActivities"],
+    "capex": ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment"],
+    "eps": ["DilutedEarningsLossPerShare", "BasicAndDilutedEarningsLossPerShare", "BasicEarningsLossPerShare"],
+}
+CHWILE_IFRS = {
+    "cash": ["CashAndCashEquivalents"],
+    "eq": ["EquityAttributableToOwnersOfParent", "Equity"],
+    "assets": ["Assets"],
+    "lc": ["CurrentLiabilities"],
+}
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
 
@@ -87,13 +103,29 @@ def chwilowe(rows):
     return dict(sorted(out.items()))
 
 
+def _waluta(g, tags):
+    """Waluta sprawozdań: jednostka (kod ISO) z największą liczbą wierszy przychodów (np. ASML: EUR w us-gaap, TSM: TWD w ifrs-full)."""
+    licz = {}
+    for t in tags:
+        for u, rows in (g.get(t) or {}).get("units", {}).items():
+            if len(u) == 3 and u.isalpha() and u.isupper():
+                licz[u] = licz.get(u, 0) + len(rows)
+    return max(licz, key=licz.get) if licz else None
+
+
 def wyciag(facts):
     """companyfacts['facts'] -> {klucz: {tag: wiersze}} dla przepływów (start, end, val, filed) i stanów (end, val, filed), dług osobno, liczba akcji.
     Spółki zmieniają tagi w czasie (np. Revenues -> RevenueFromContract...), więc zapisujemy wszystkie tagi z listy i wybieramy wartość dla
-    każdej daty z pierwszego tagu, który ją ma (`polacz`)."""
+    każdej daty z pierwszego tagu, który ją ma (`polacz`). Bez us-gaap -> ifrs-full (MSSF). Kwoty w walucie sprawozdań (`waluta`);
+    przeliczenie na USD: `przelicz`."""
     g = facts.get("us-gaap", {})
-    out = {}
-    for k, (unit, tags) in TAGI.items():
+    tagi, chwile, dlug_t = {k: t for k, (_, t) in TAGI.items()}, CHWILE, DLUG
+    if not any(t in g for t in TAGI["rev"][1]) and "ifrs-full" in facts:
+        g, tagi, chwile, dlug_t = facts["ifrs-full"], TAGI_IFRS, CHWILE_IFRS, []
+    cur = _waluta(g, tagi["rev"]) or "USD"
+    out = {"waluta": cur}
+    for k, tags in tagi.items():
+        unit = f"{cur}/shares" if k == "eps" else cur
         d = {}
         for t in tags:
             rows = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get(t) or {}).get("units", {}).get(unit, []) if "start" in x]
@@ -101,22 +133,34 @@ def wyciag(facts):
                 d[t] = rows
         if d:
             out[k] = d
-    for k, tags in CHWILE.items():
+    for k, tags in chwile.items():
         d = {}
         for t in tags:
-            rows = [[x["end"], x["val"], x["filed"]] for x in (g.get(t) or {}).get("units", {}).get("USD", []) if "start" not in x]
+            rows = [[x["end"], x["val"], x["filed"]] for x in (g.get(t) or {}).get("units", {}).get(cur, []) if "start" not in x]
             if rows:
                 d[t] = rows
         if d:
             out[k] = d
     dl = {}
-    for t in DLUG:
-        rows = [[x["end"], x["val"], x["filed"]] for x in (g.get(t) or {}).get("units", {}).get("USD", []) if "start" not in x]
+    for t in dlug_t:
+        rows = [[x["end"], x["val"], x["filed"]] for x in (g.get(t) or {}).get("units", {}).get(cur, []) if "start" not in x]
         if rows:
             dl[t] = rows
     out["debt"] = dl
     sh = [[x["end"], x["val"], x["filed"]] for x in facts.get("dei", {}).get("EntityCommonStockSharesOutstanding", {}).get("units", {}).get("shares", [])]
     out["shares"] = [r for r in sh if r[1] and r[1] > 0]
+    return out
+
+
+def przelicz(ex, kurs):
+    """Kwoty wyciągu × kurs (waluta -> USD, jeden bieżący kurs dla całej historii: dynamika wzrostu jak w walucie spółki)."""
+    if not kurs or kurs == 1:
+        return ex
+    out = {"waluta": "USD", "waluta_zrodlo": ex.get("waluta"), "kurs": kurs, "shares": ex.get("shares", [])}
+    for k, d in ex.items():
+        if k in ("waluta", "waluta_zrodlo", "kurs", "shares"):
+            continue
+        out[k] = {t: [r[:-2] + [r[-2] * kurs, r[-1]] for r in rows] for t, rows in d.items()}
     return out
 
 

@@ -77,11 +77,10 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                     return
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
-            if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
-                ex = json.load(open(p))
-            else:
+            ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
+            if ex is None or "waluta" not in ex:          # stary format cache (bez waluty / MSSF) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
-                ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {}
+                ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
                     json.dump(ex, open(p, "w"))
                 time.sleep(0.25)
@@ -92,6 +91,30 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
     th = [threading.Thread(target=praca) for _ in range(watki)]
     [x.start() for x in th]
     [x.join() for x in th]
+    waluty = sorted({ex.get("waluta") for ex in out.values() if ex.get("waluta") not in (None, "USD")})
+    k = kursy(waluty, log)
+    for t, ex in out.items():
+        w = ex.get("waluta")
+        if w and w != "USD":
+            out[t] = fundamenty.przelicz(ex, k.get(w)) if k.get(w) else {}   # bez kursu nie mieszamy walut
+    return out
+
+
+def kursy(waluty, log=print):
+    """{waluta: USD za 1 jednostkę} — bieżący kurs z yfinance (np. TWDUSD=X)."""
+    if not waluty:
+        return {}
+    import yfinance as yf
+    out = {}
+    try:
+        d = yf.download([f"{w}USD=X" for w in waluty], period="10d", interval="1d", progress=False, group_by="column")["Close"]
+        for w in waluty:
+            s = d[f"{w}USD=X"].dropna() if f"{w}USD=X" in d else []
+            if len(s):
+                out[w] = float(s.iloc[-1])
+    except Exception as e:  # noqa: BLE001
+        log(f"kursy walut: błąd ({e})")
+    log(f"kursy walut: {', '.join(f'{w} {v:.4g}' for w, v in out.items())}")
     return out
 
 
