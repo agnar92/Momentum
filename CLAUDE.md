@@ -26,12 +26,12 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    investments, Finviz mcap / P/C when > 1.2× SEC). < 70 % of tickers with SEC revenue = nothing written.
 3. yfinance weekly closes, 5 years (adjusted) → price chart and 1W / 1M / 1Y / 5Y returns.
 4. `ocena.metryki` (growth 1Y / 3Y / 5Y TTM, quarter y/y, years with revenue > 10 % of last 5, margins / ROE / ROA / ROIC from Finviz, ROCE = operating
-   income TTM / (assets − current liabilities), ROE now (SEC) vs 5 years ago, FCF TTM and margin, net cash, PEG = P/E ÷ (100 × Finviz EPS next 5Y));
+   income TTM / (assets − current liabilities), ROE now (SEC) vs 3 years ago (`roe_wcz`; younger: earliest available ≥ 1 year, `roe_wcz_lat`; user: „ROE wyższe niż 3 lata temu lub tyle ile jest”), FCF TTM and margin, net cash, PEG = P/E ÷ (100 × Finviz EPS next 5Y));
    `oceny` = percentile of each metric within its **sector** (≥ 5 peers), group score = mean × 10 with a missing metric counted as 0.5 (`BRAK`, neutral; user: missing data inflated scores, e.g. RDDT growth 9.7 from 4 of 7 metrics); `mediany` = sector medians shown under every metric on the card (`sektor_med`, user: „P/E powinien być do sektora”): Wzrost (growth), Siła (strength), Wycena (value; high =
    cheap), Ogólna = 0.4 / 0.35 / 0.25 (needs growth + one other group); young companies (`mlode`, history 1.9–5 years): growth 3Y / 5Y from available years (`hist_lat`), ni_5y annualised to 5 years, rev_lata_10 scaled to 5 (`rev_lata_n`) (user: „jeżeli spółka jest młodsza niż 5 lat to licz z tylu lat ile jest”); `rozklady` → `docs/data/sektory.json` (sorted sector values per metric) so the card can recompute scores from values the user types in for missing metrics (`W.percentyl`, `W.ocenyZ`, localStorage `fundamenta_wlasne`, ✎ on the list); `typy` = Lynch categories by own rules with fit 0–100; `strategie` = checklists
    from research: **7/7 (niskie ryzyko)** (the Hello-Stocks-style screen, stage 67–68: rev 5Y > +50 %, rev and earnings 1Y > 5 %, ROE > 15 %, D/E 0–1,
    FCF > 0, PEG 0–1; excluded sectors Financial, Basic Materials, Energy, Utilities, Real Estate), **Jakość (7 kryteriów)** (stages 74–75: rev 5Y CAGR > 8 %,
-   D/E 0–1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE above 5 years ago, ROCE > 15 %), **Konsekwentny wzrost** (rev > 10 % in ≥ 3 of 5 years, D/E < 1, FCF > 0).
+   D/E 0–1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE above 3 years ago, ROCE > 15 %), **Konsekwentny wzrost** (rev > 10 % in ≥ 3 of 5 years, D/E < 1, FCF > 0).
 5. Valuation: PEG scenarios growth × 0.67 / 1 / 1.26; DCF (`ocena.dcf` = JS `W.dcf`, same numbers, tested in both): revenue TTM grows g for `lata` (5)
    years, then fades linearly to tg over 5 years, FCF = revenue × margin, terminal FCF × (1 + tg) / (r − tg), (PV + cash − debt) / shares. Defaults
    (`dcf_domyslne`): g = min(revenue 3Y CAGR, EPS next 5Y) clipped 0–25 %; margin = median of TTM and last 5 annual FCF margins, 0–60 %; r 10 %, tg 3 %.

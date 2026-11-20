@@ -54,7 +54,7 @@ def test_oceny_percentyle_w_sektorze():
 
 
 def test_strategie_i_typy():
-    m = dict(rev_5y=0.8, rev_1y=0.2, ni_1y=0.3, roe=0.3, de=0.2, fcf_ttm=1e9, peg=0.8, rev_cagr5=0.13, roa=0.15, roe_sec=0.3, roe_5l=0.2, roce=0.25,
+    m = dict(rev_5y=0.8, rev_1y=0.2, ni_1y=0.3, roe=0.3, de=0.2, fcf_ttm=1e9, peg=0.8, rev_cagr5=0.13, roa=0.15, roe_sec=0.3, roe_wcz=0.2, roe_wcz_lat=3, roce=0.25,
              rev_lata_10=4, mcap=100e9, rev_lata=[0.12, 0.13, 0.12, 0.14, 0.13])
     s = O.strategie(m, "Technology")
     assert all(ok for _, _, ok in s["7/7 (niskie ryzyko)"]) and all(ok for _, _, ok in s["Jakość (7 kryteriów)"])

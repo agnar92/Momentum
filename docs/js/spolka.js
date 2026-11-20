@@ -167,7 +167,7 @@
             if (/Dług|PEG/.test(n)) return W.fmtNum(v);
             if (/FCF > 0/.test(n)) return W.fmtUsd(v);
             if (/Lata|≥ 3 z 5/.test(n)) return String(v);
-            if (/5 lat temu/.test(n)) return "5 lat temu " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
+            if (/ROE wyższe/.test(n)) return (n.match(/niż (.*)$/) || ["", ""])[1] + " " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
             return W.fmtPct(v, 1);
         };
         $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/): ile z nich spółka dziś spełnia.</div><div class="kol3">` +
