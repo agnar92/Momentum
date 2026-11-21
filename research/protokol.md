@@ -1186,3 +1186,21 @@ Przeszły wzrost przychodów → przychody w następnym roku: 3,5 / 2,5 / 7,1 / 
 kierunek jak u autora, bardzo mało obserwacji. F8: dobre wyniki po wzroście kursu +20 % — 1 mies. po −0,0 pp vs +0,2 pp (średnio +1,1) — „spadek po wycenionych wynikach” nie widać
 w danych miesięcznych; dobre wyniki w strachu rynku +1,5 pp w 1 i 3 mies. vs ~0, w 12 mies. jak w spokoju (−4,4 vs −4,2 pp). Hipoteza: F5 tak, słabiej (z warunkiem ≥ 50 % — nie
 wzmacnia); F6 zwroty nie, stabilność tak; F7 (a) nie, (b) tak (bez przewagi), (c) kierunek tak; F8 (a) brak efektu, (b) mały efekt krótkoterminowy.
+
+## Etap 88: bootstrap dla spornych tez autora (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „zrób ten bootstrap dla spornych”. Dane i grupy jak w etapach 86–87 (zbiór bez wykluczonych sektorów, starty w styczniu, mediana zwrotu ceny 5 lat; ROIC także 10 lat).
+Statystyka: różnica median (grupa A − grupa B) z puli obserwacji. Bootstrap blokowy po latach startowych: losowanie lat ze zwracaniem (B = 2000), w wylosowanym roku wszystkie
+spółki; 95 % przedział (percentyle 2,5–97,5). Porównania sporne: (1) ROIC K5 vs K1 — 5 i 10 lat (autor: +59 pp w 10 lat); (2) FCF > 12 % aktywów: przeszły P1–P4 vs przeszły P1–P3,
+odpadły na P4 (autor: +4 pp na tym kroku, 86 vs 82); (3) cykliczne: P/E dolna vs górna tercyla (autor: niskie P/E = pułapka, czyli różnica < 0); (4) wolno rosnące: P/E ≤ 18 vs > 25
+(autor: kupuj w okolicach kilkunastu → > 0); (5) ROCE ≥ 30 %: przeszły R1–R4 vs przeszły R1–R3, odpadły na R4 (autor: 91 vs 77 → +14 pp). Kontrolnie (potwierdzone): (6) R2 vs
+odpadłe na R2 (autor +16 pp), (7) P1 vs odpadłe na P1 (autor +26 pp), (8) przyspieszające przychody vs nieprzyspieszające (autor: 64 vs 53 vs wszystkie). Werdykt dla każdej tezy:
+„zgodne z autorem” (przedział zawiera wartość autora i nie zawiera 0 albo ma jego znak), „nasze dane nie rozstrzygają” (przedział zawiera 0 i wartość autora), „sprzeczne” (przedział
+nie zawiera wartości autora i ma znak przeciwny lub 0 poza nim). Hipoteza: większość spornych (1–4) — „nie rozstrzygają” (szerokie przedziały przy 10 startach).
+
+Wynik etapu 88 (2026-11-21), różnica median 5 lat [95 % przedział z bootstrapu po latach]: ROIC K5 − K1 +2 pp [−22; +31] — nie rozstrzyga; 10 lat −52 pp [−96; −2] — sprzeczne
+z autorem (+59), ale tylko 5 nakładających się startów 2012–2016; FCF > 12 % aktywów −2 [−20; +13] — nie rozstrzyga (autor +4); cykliczne niskie − wysokie P/E −0 [−51; +39] —
+nie rozstrzyga; wolno rosnące P/E ≤ 18 − > 25: −22 [−46; −6] — sprzeczne z autorem; ROCE ≥ 30 %: +25 [−9; +50] — nie rozstrzyga (autor +14 w przedziale); kontrolne: ROA ≥ 10 %
++16 [+10; +25] i OCF ≥ 30 % długu +19 [+4; +34] — zgodne z autorem; przyspieszające przychody +9 [−9; +22] — nie rozstrzyga. Hipoteza (sporne głównie „nie rozstrzygają”) — tak
+dla 4 z 6; sprzeczne 2 (ROIC 10 lat — słaba podstawa, wolno rosnące z niskim P/E). Wniosek: przy 10 latach startowych większość różnic rzędu ±10–20 pp mieści się w szumie;
+nawet przyspieszenie przychodów (dodane do oceny w etapie 87 na prośbę użytkownika) nie jest statystycznie pewne.
