@@ -137,11 +137,11 @@
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
     const GRUPY = {
         wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
-            ["ni_5y", "Zysk netto 5 lat"], ["eps_next5", "Prognoza EPS 5 lat"], ["rev_lata_10", "Lata z przychodami > 10 %"], ["zysk_lata", "Lata ze wzrostem zysku"]],
+            ["ni_5y", "Zysk netto 5 lat"], ["eps_next5", "Prognoza EPS 5 lat"], ["rev_lata_10", "Lata z przychodami > 10 %"], ["zysk_lata", "Lata ze wzrostem zysku"], ["przysp", "Tempo przychodów (przyspiesza)"]],
         sila: [["gm", "Marża brutto"], ["om", "Marża operacyjna"], ["nm", "Marża netto"], ["roe", "ROE"], ["roa", "ROA"], ["roce", "ROCE"], ["fcf_margin", "Marża FCF"],
             ["de", "Dług / kapitał (mniej = lepiej)"], ["qr", "Quick ratio"], ["net_cash_mc", "Gotówka netto / kapitalizacja"],
             ["akcje_3l", "Zmiana liczby akcji 3 lata (mniej = lepiej)"], ["capex_przych", "Capex / przychody (mniej = lepiej)"],
-            ["kapital_3l", "Wzrost kapitału własnego 3 lata (mniej = lepiej)"]],
+            ["kapital_3l", "Wzrost kapitału własnego 3 lata (mniej = lepiej)"], ["roic", "ROIC"]],
         wycena: [["pe", "P/E (mniej = lepiej)"], ["peg", "PEG (mniej = lepiej)"], ["ps", "P/S (mniej = lepiej)"], ["pfcf", "P/FCF (mniej = lepiej)"],
             ["fcf_yield", "Stopa FCF"], ["dcf_pot", "Potencjał DCF"]],
     };
@@ -177,14 +177,14 @@
     const POLA_WLASNE = [["rev_1y", "Przychody 1 rok", "%"], ["rev_cagr3", "Przychody 3 lata, rocznie", "%"], ["rev_cagr5", "Przychody 5 lat, rocznie", "%"],
         ["ni_1y", "Zysk netto 1 rok", "%"], ["ni_5y", "Zysk netto 5 lat, łącznie", "%"], ["eps_next5", "Prognoza EPS 5 lat, rocznie", "%"],
         ["rev_lata_10", "Lata z przychodami > 10 % (z 5)", ""], ["zysk_lata", "Lata ze wzrostem zysku (z 5)", ""], ["gm", "Marża brutto", "%"], ["om", "Marża operacyjna", "%"], ["nm", "Marża netto", "%"],
-        ["roe", "ROE", "%"], ["roa", "ROA", "%"], ["roce", "ROCE", "%"], ["fcf_margin", "Marża FCF", "%"], ["de", "Dług / kapitał", ""], ["qr", "Quick ratio", ""],
+        ["roe", "ROE", "%"], ["roa", "ROA", "%"], ["roce", "ROCE", "%"], ["roic", "ROIC", "%"], ["fcf_margin", "Marża FCF", "%"], ["de", "Dług / kapitał", ""], ["qr", "Quick ratio", ""],
         ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["capex_przych", "Capex / przychody", "%"], ["kapital_3l", "Wzrost kapitału własnego 3 lata, rocznie", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
 
     // dobra cena wg typu spółki (jak ocena.CENA_TYPU): [próg PEG lub null, opis]
-    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"],
-        "Szybko rosnąca": [1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"],
-        "Wolno rosnąca": [null, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"],
-        "Cykliczna": [null, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"],
+    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"],
+        "Szybko rosnąca": [1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); progu PEG z prognozą analityków nie mogliśmy sprawdzić — kluczowe, czy wzrost się utrzyma"],
+        "Wolno rosnąca": [null, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"],
+        "Cykliczna": [null, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"],
         "Wychodząca z kłopotów": [null, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"],
         "Ukryte aktywa": [null, "wartość w aktywach, nie w zyskach — wymaga cierpliwości"] };
 

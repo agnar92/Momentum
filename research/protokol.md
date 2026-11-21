@@ -1102,3 +1102,105 @@ Wynik etapu 85 (2026-11-21): 2013–2026 (SPY 14,6 %, QQQ 20,2 %): 10 + 10 — C
 (DD −43 %), N=10 21,1 %. Połowy: 2013–2019 — 10 + 10 F1 13,5 %, F2 10,9 %; 5 + 5 10,3–10,7 % (SPY 14,0 %, CEM10 N=5 6,8 %); 2020–2026 — 10 + 10 27,2–30,2 %, 5 + 5
 37–38 % (CEM10 N=5 54,9 %, w 2026 +229 %). Bez NVDA: 10 + 10 19,1–21,1 % (DD −21 %), 5 + 5 25,2–26,5 %. Hipoteza: 10 + 10 ≈ etap 84 ± 2 pp — tak (+1,5 / +0,3 pp);
 5 + 5 większe obsunięcie — tak (−30 % vs −24 %), CAGR ± 4 pp — wyższy o 4–6 pp, ale cała przewaga z 2020–2026 (w 2013–2019 o 3–4 pp poniżej SPY).
+
+## Etap 86: test wszystkich tez z 4 filmów autora (rentowność, przepływy, typy Lyncha, przewidywanie wzrostu zysku) (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „przetestuj wszystko z tych filmów, nie pomijaj niczego”. Dane: top 500 USA PIT ze spółkami usuniętymi (etap 68), dane SEC znane w dniu startu;
+starty: styczeń każdego roku 2012–2021 (5 lat naprzód) i 2012–2023 (3 lata); miara jak u autora: MEDIANA zwrotu ceny spółek w grupie w 5 (3) lat, liczba
+obserwacji, odsetek bijących medianę wszystkich, połowy startów 2012–2016 / 2017–2021. Filmy 1–3: bez sektorów wykluczonych (jak u autora); film 4: wszystkie sektory.
+Przepływy i bilans: ostatni znany rok obrotowy (autor: 12 mies.) — przybliżenie; skup / emisja / dywidendy — nowe pobranie z SEC (PaymentsForRepurchaseOfCommonStock,
+ProceedsFromIssuanceOfCommonStock + ProceedsFromStockOptionsExercised, PaymentsOfDividends[CommonStock]).
+F1 (rentowność, filtry narastająco): R1 ROE ≥ 15 %; R2 + ROA ≥ 10 %; R3 + ROE wyższe niż 3 lata temu; R4 + ROCE (zysk operacyjny ÷ (aktywa − zobowiązania bieżące))
+≥ 30 %; wariant R4' ROCE ≥ 25 %; dla każdego kroku: mediana spółek, które przeszły, i tych, które przeszły poprzednie, ale odpadły na tym kroku; to samo bez sektora
+technologicznego. Teza autora: 63 → 68 → 78 → 82 → 91 % (ROCE ≥ 25 %: 88 %), bez technologii 61 → 83 %.
+F2 (przepływy, narastająco): P1 przepływy operacyjne ≥ 30 % długu (brak długu = spełnione); P2 + capex < 35 % przepływów operacyjnych; P3 + skup netto (skup − emisje)
+> 2 % kapitalizacji; P4 + FCF > 12 % aktywów; bez technologii. Teza: 51 / 77 → 80 → 82 → 86 % (wszystkie 66 %). Rampy capex: capex ≥ 2 × capex sprzed 2 lat i ≥ 5 %
+przychodów; podział: „bogate w gotówkę przed rampą” (przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex); wśród bogatych: zwrot z nowych aktywów (Δ przepływów
+operacyjnych ÷ Δ aktywów, 2 lata) ≥ 0,20 vs < 0,10; odsetek spełniających P1–P4 po 3 latach. Teza: rampy 56 % vs reszta 67 %; bogate 82 % vs reszta 28 %; bogate
+z wysokim zwrotem 149 % vs niskim 20 %; 3 × częściej spełniają P1–P4 później.
+F3 (typy Lyncha, na starcie; spółka może mieć kilka): stabilnie rosnąca — CAGR przychodów 5 l. 8–18 % i kapitalizacja ≥ 20 mld; szybko rosnąca — CAGR przychodów lub
+zysku 5 l. ≥ 20 %; wolno rosnąca — CAGR przychodów < 8 % i dywidenda; cykliczna — w którymś z 5 lat przychody −10 % lub gorzej; wychodząca z kłopotów — zysk 12 mies.
+> 0, a rok wcześniej < 0. Miary: mediana 3 / 5 lat; stabilnie rosnące: odsetek z ≥ +50 % w 3 lata; PEG (historyczny, P/E ÷ CAGR zysku 5 l.) ≤ 1,5 vs > 1,5
+(stabilne), < 1 / 1–1,6 / > 1,6 (szybkie); cykliczne: P/E w dolnej vs górnej tercyli (teza: niskie P/E u cyklicznych = pułapka); wolno rosnące: P/E ≤ 18 vs > 25;
+wychodzące z kłopotów: mediana i odsetek spadków > 50 %.
+F4 (przewidywanie wzrostu zysku; wszystkie sektory): pasma przeszłego wzrostu przychodów 5 l. (łącznie < 0, 0–25, 25–50, 50–100, > 100 %) → mediana przyszłego wzrostu
+przychodów i zysku netto w 5 lat (starty 2012–2021, gdy jest 5 lat danych); stabilność dla spółek cyklicznych (korelacja rang przeszłego i przyszłego wzrostu: cykliczne
+vs pozostałe); wielkość: 100 największych vs pozostałe — mediana przyszłego CAGR zysku 5 l. (teza: 5,7 vs 8,4 % dla 10 lat); stopa bazowa: rozkład CAGR zysku 5 l.
+(teza: ~50 % w 0–20 %, ~25 % spadek, 13 % ≥ 30 %); jednorazowe zyski: zysk r/r > +100 % przy przychodach < +30 % — mediana zwrotu 1 / 3 lata vs reszta; skup a EPS:
+różnica wzrostu EPS i zysku netto 5 l. (udział skupu) i czy wzrost EPS „ze skupu” (EPS − zysk ≥ 5 pp/rok) daje gorszy zwrot; migawka dziś: odsetek spółek z prognozą
+EPS ≥ 15 % i wzrostem przychodów < 5 %/rok (teza: 1 na 7). Nietestowalne (brak danych historycznych): trafność prognoz analityków, wartość aktywów (asset play).
+Hipoteza: kierunki z F1 i F2 potwierdzą się (rosnąca mediana z filtrami), ale słabiej niż u autora i nie we wszystkich połowach; ROCE ≥ 30 % i skup > 2 % — mała różnica;
+rampy bogate z wysokim zwrotem — lepiej, ale mało obserwacji; typy: niski PEG pomaga stabilnym (etap 70), cykliczne z niskim P/E gorzej; F4: przeszły wzrost przychodów
+monotonicznie przewiduje przyszły (etap 49), duże spółki rosną wolniej, jednorazowe zyski — gorszy zwrot.
+
+Wynik etapu 86 (2026-11-21), mediana zwrotu ceny w 5 lat, starty w styczniu 2012–2021:
+F1 rentowność (bez wykluczonych sektorów): wszystkie 69 %, R1 ROE ≥ 15 % 70 %, R2 + ROA ≥ 10 % 79 % (odpadłe 63 %), R3 + ROE rośnie 86 % (odpadłe 71 %), R4 + ROCE ≥ 30 % 103 %
+(odpadłe 78 %), ROCE ≥ 25 % 99 % — jak u autora (63 → 91 %), ale tylko dla startów 2017+ (R4 113 % vs 59 %); w 2012–2016 filtry nie pomagały (R4 75 % vs 81 %).
+Bez technologii: 64 → 62 → 66 → 73 → 86 %. F2 przepływy: P1 OCF ≥ 30 % długu 73 % vs odpadłe 54 % (obie połowy), P2 capex < 35 % OCF 76 % vs 63 %, P3 skup > 2 % 79 % vs 72 %
+(bez technologii 72 vs 56 %), P4 FCF > 12 % aktywów 77 % vs odpadłe 79 % — bez efektu; wynik końcowy 77 % (autor 86 %). Rampy capex: 35 % vs 68 % bez rampy; bogate w gotówkę
+77 % vs niebogate 0 %; bogate z wysokim zwrotem z nowych aktywów 108 % (n 11) vs niskim 63 % (n 15); spełniają P1–P4 po 3 latach 20 % vs 4–6 % — kierunki jak u autora.
+F3 typy: stabilnie rosnące 83 % (najlepiej; 2012–2016 80 %, 2017+ 84 %), szybko rosnące 56 %, wolno rosnące 63 %, cykliczne 78 %, wychodzące z kłopotów 58 %; stabilne z ≥ +50 % w 3 lata
+39 % (wszystkie 40 %). Stabilne PEG ≤ 1,5 93 % vs > 1,5 86 % (połowy przeciwne: 62 / 121 % i 117 / 84 %); szybkie PEG < 1 57 %, 1–1,6 43 %, > 1,6 56 % — bez wzoru; cykliczne
+z niskim P/E 79 % = wysokie P/E 79 % (pułapka nie potwierdzona); wolno rosnące P/E ≤ 18 43 % vs > 25 65 % (odwrotnie niż teza); wychodzące z kłopotów: spadek > 50 % 11 % vs 5 %.
+F4: przeszły wzrost przychodów 5 l. → przyszłe przychody 20 / 20 / 35 / 51 / 96 % i zysk 21 / 16 / 47 / 65 / 103 % (rośnie od pasma 25–50 %); korelacja przeszłego i przyszłego wzrostu:
+cykliczne 0,11 vs pozostałe 0,50; 100 największych: przyszły CAGR zysku 6,7 % vs 8,0 %; stopa bazowa zysku 5 l.: spadek 32 %, 0–20 %/rok 51 %, 20–30 % 8 %, ≥ 30 % 9 %; skok zysku
+przy słabych przychodach: 3 lata 28 % vs 38 %; EPS „ze skupu” 68 % vs 63 % (bez kary); dziś 20 % spółek z prognozą ≥ 15 % ma przychody < 5 %/rok (autor 14 %).
+Hipoteza: F1 i F2 kierunkowo tak, słabiej i nie w obu połowach (F1 tylko 2017+); ROCE ≥ 30 % — więcej niż zakładano; skup > 2 % — mała różnica (tak); P4 — bez efektu; rampy — tak
+(mało obserwacji); typy: niski PEG u stabilnych — niestabilny, cykliczne z niskim P/E — nie gorzej (teza nie potwierdzona); F4 — tak (monotonicznie od 25 %, duże wolniej,
+jednorazowe zyski gorzej).
+
+Uwaga do etapów 70–72, 80–83 i 86 (2026-11-21, po uwadze użytkownika): wszystkie testy z PEG używały PEG historycznego (P/E ÷ przeszły CAGR zysku 5 l.) albo własnej prognozy,
+bo nie mamy historii prognoz analityków. Teza autora dotyczy PEG z prognozą analityków (P/E ÷ oczekiwany wzrost EPS 3–5 lat) — tych testów NIE należy traktować jako
+potwierdzenia ani obalenia. Etap 86 „progi PEG w typach niestabilne” = niesprawdzone, nie „niepotwierdzone”. Dane autora (szerszy zbiór, prognozy, normalizacja zysków) są lepsze.
+
+## Etap 87: test tez z kolejnych 4 filmów autora (przyspieszenie przychodów, ROIC, pułapki wartości, spadki po dobrych wynikach) (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik wkleił transkrypcje 4 kolejnych filmów (wcześniej: „przetestuj wszystko z tych filmów, nie pomijaj niczego”). Dane jak w etapie 86 (top 500 USA PIT ze spółkami usuniętymi,
+starty w styczniu, MEDIANA zwrotu ceny, połowy), wszystkie sektory (jak u autora: S&P 500) i wariant bez wykluczonych sektorów.
+F5 przyspieszenie: 5 rocznych wzrostów przychodów (TTM rok do roku) z ostatnich 5 lat; „przyspiesza” = nachylenie prostej dopasowanej do nich > 0. Mediana zwrotu 1 i 5 lat:
+przyspieszające vs wszystkie; przyspieszające + przychody 5 l. ≥ +50 % vs wszystkie; także średnia; w podziale na sektory (ile sektorów lepiej); starty 2016–2021 (jak autor)
+i 2012–2021. Teza: 11 vs 9 % (1 r.), 64 vs 53 % (5 l.); z ≥ +50 %: 12,4 vs 8,9 % i 72,6 vs 53 %; 9 z 11 sektorów. Dodatkowo: pasma przeszłego wzrostu przychodów 5 l. →
+wzrost przychodów w następnym roku (teza: liniowo).
+F6 ROIC (≈ zysk operacyjny × 0,79 ÷ (kapitał + dług − gotówka)): kwintyle w każdym styczniu 2012–2021; mediana zwrotu 1 / 3 / 5 lat i 10 lat (starty 2012–2016); CAGR zysku netto
+10 l. (bez kwintyla najniższego w interpretacji); odsetek z zyskiem w każdym roku przez 10 lat; zmienność zysku (odch. std. rocznego zysku ÷ średni zysk); odsetek z przychodami
+rosnącymi w każdym roku przez 10 lat; mediana zmiany liczby akcji w 10 lat. Teza: najwyższe kwintyle najlepiej (+59 pp w 10 lat), wzrost EPS podobny, zysk co rok 74 vs 59 %,
+stabilniejsze zyski, 1 na 6 z przychodami rosnącymi co rok, akcje −17 %.
+F7 pułapki wartości: (a) cykliczne (spadek przychodów ≥ 10 % w którymś z 5 lat): przychody nadal rosną, ale wzrost zwolnił o ≥ 10 pp r/r vs pozostałe cykliczne — mediana zwrotu
+1 rok (teza: kurs spada, zanim spadną przychody); (b) P/B < 1 (kapitał > kapitalizacja) vs reszta — 1 / 5 lat; (c) kurs ≥ 40 % poniżej maks. 12 mies.: P/E w górnej tercyli vs
+dolnej (zamiast PEG z prognozą — niedostępnej) — 1 / 3 lata. Teza: (a) gorzej, (b) bez przewagi, (c) drogie po spadku gorzej.
+F8 spadki po dobrych wynikach: zdarzenie = pierwsza publikacja raportu kwartalnego w SEC (data złożenia), „dobre wyniki” = przychody kwartału r/r ≥ +15 %; (a) kurs +20 % lub więcej
+w 3 mies. przed publikacją vs bez wzrostu — nadwyżka nad SPY 1 i 3 mies. po (teza: dobre wyniki „wycenione wcześniej” → spadek po); (b) dobre wyniki przy rynku w strachu
+(SPY ≥ 10 % poniżej maks. 12 mies.) vs spokojnym — nadwyżka 3 i 12 mies. (teza: w strachu kurs najpierw nie reaguje, potem odrabia). Nietestowalne: prognozy spółek (guidance),
+wyniki vs oczekiwania analityków, korekty jednorazowe (poza przybliżeniem z etapu 86).
+Hipoteza: F5 kierunkowo tak, ale słabiej (etap 58: przyspieszenie ~0 przy innej definicji); F6 wyższy ROIC lepiej (etap 79: ROIC lata niestabilne), stabilność zysków tak;
+F7 (a) tak, (b) bez przewagi, (c) słabo; F8 (a) mały efekt na 1 mies., (b) dobre wyniki w strachu lepiej w 12 mies.
+
+Wynik etapu 87 (2026-11-21). Uwaga metodyczna (dotyczy też etapu 86, F4): cechy z raportów liczone są tylko dla spółek bez wykluczonych sektorów, więc „wszystkie sektory”
+w F4 etapu 86 to w praktyce ten sam zbiór bez finansów, surowców, energii, użyteczności i nieruchomości (wnioski bez zmian, poprawiona etykieta). Etap 87 — ten zbiór, mediana zwrotu.
+F5: przychody przyspieszają (nachylenie 5 rocznych wzrostów > 0) — 1 rok 17,3 % vs nie przyspieszają 15,2 % (wszystkie 14,3 %), 5 lat 75 % vs 66 % (wszystkie 69 %), średnia 100 %;
+przyspieszają + przychody 5 l. ≥ +50 % — 15,0 % i 71 % (średnia 115 %) — słabiej niż samo przyspieszenie (autor: 72,6 vs 53 %); sektory: lepiej w 2 z 3 z ≥ 10 obs. (Health Care gorzej).
+Przeszły wzrost przychodów → przychody w następnym roku: 3,5 / 2,5 / 7,1 / 8,0 / 17,2 % (rośnie od 25 %). F6 ROIC: zwroty bez wzoru (5 lat 61–67 %, 10 lat K1 228 % vs K5 176 %; połowy:
+2012–2016 K1 najlepszy, 2017+ K5 najlepszy); ale stabilność jak u autora: zysk co rok 10 lat K1 39 % vs K4–K5 67–74 %, zmienność zysku 0,86 vs 0,40–0,46, liczba akcji 10 lat
+−5 % vs −20 %; przychody rosnące co rok bez wzoru (12–26 %). F7: cykliczne z hamującym wzrostem 18 % vs 11 % (1 rok, n 20) — teza nie potwierdzona; P/B < 1 1 rok 12 % = 12 %,
+5 lat 86 % vs 68 % (n 37; 2017+ 4 %) — bez stałej przewagi; kurs −40 % od szczytu i nadal drogo (P/E górna tercyla): 1 rok −7 % vs tanie +8 %, 3 lata −40 % vs +19 % (n 10 / 14) —
+kierunek jak u autora, bardzo mało obserwacji. F8: dobre wyniki po wzroście kursu +20 % — 1 mies. po −0,0 pp vs +0,2 pp (średnio +1,1) — „spadek po wycenionych wynikach” nie widać
+w danych miesięcznych; dobre wyniki w strachu rynku +1,5 pp w 1 i 3 mies. vs ~0, w 12 mies. jak w spokoju (−4,4 vs −4,2 pp). Hipoteza: F5 tak, słabiej (z warunkiem ≥ 50 % — nie
+wzmacnia); F6 zwroty nie, stabilność tak; F7 (a) nie, (b) tak (bez przewagi), (c) kierunek tak; F8 (a) brak efektu, (b) mały efekt krótkoterminowy.
+
+## Etap 88: bootstrap dla spornych tez autora (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „zrób ten bootstrap dla spornych”. Dane i grupy jak w etapach 86–87 (zbiór bez wykluczonych sektorów, starty w styczniu, mediana zwrotu ceny 5 lat; ROIC także 10 lat).
+Statystyka: różnica median (grupa A − grupa B) z puli obserwacji. Bootstrap blokowy po latach startowych: losowanie lat ze zwracaniem (B = 2000), w wylosowanym roku wszystkie
+spółki; 95 % przedział (percentyle 2,5–97,5). Porównania sporne: (1) ROIC K5 vs K1 — 5 i 10 lat (autor: +59 pp w 10 lat); (2) FCF > 12 % aktywów: przeszły P1–P4 vs przeszły P1–P3,
+odpadły na P4 (autor: +4 pp na tym kroku, 86 vs 82); (3) cykliczne: P/E dolna vs górna tercyla (autor: niskie P/E = pułapka, czyli różnica < 0); (4) wolno rosnące: P/E ≤ 18 vs > 25
+(autor: kupuj w okolicach kilkunastu → > 0); (5) ROCE ≥ 30 %: przeszły R1–R4 vs przeszły R1–R3, odpadły na R4 (autor: 91 vs 77 → +14 pp). Kontrolnie (potwierdzone): (6) R2 vs
+odpadłe na R2 (autor +16 pp), (7) P1 vs odpadłe na P1 (autor +26 pp), (8) przyspieszające przychody vs nieprzyspieszające (autor: 64 vs 53 vs wszystkie). Werdykt dla każdej tezy:
+„zgodne z autorem” (przedział zawiera wartość autora i nie zawiera 0 albo ma jego znak), „nasze dane nie rozstrzygają” (przedział zawiera 0 i wartość autora), „sprzeczne” (przedział
+nie zawiera wartości autora i ma znak przeciwny lub 0 poza nim). Hipoteza: większość spornych (1–4) — „nie rozstrzygają” (szerokie przedziały przy 10 startach).
+
+Wynik etapu 88 (2026-11-21), różnica median 5 lat [95 % przedział z bootstrapu po latach]: ROIC K5 − K1 +2 pp [−22; +31] — nie rozstrzyga; 10 lat −52 pp [−96; −2] — sprzeczne
+z autorem (+59), ale tylko 5 nakładających się startów 2012–2016; FCF > 12 % aktywów −2 [−20; +13] — nie rozstrzyga (autor +4); cykliczne niskie − wysokie P/E −0 [−51; +39] —
+nie rozstrzyga; wolno rosnące P/E ≤ 18 − > 25: −22 [−46; −6] — sprzeczne z autorem; ROCE ≥ 30 %: +25 [−9; +50] — nie rozstrzyga (autor +14 w przedziale); kontrolne: ROA ≥ 10 %
++16 [+10; +25] i OCF ≥ 30 % długu +19 [+4; +34] — zgodne z autorem; przyspieszające przychody +9 [−9; +22] — nie rozstrzyga. Hipoteza (sporne głównie „nie rozstrzygają”) — tak
+dla 4 z 6; sprzeczne 2 (ROIC 10 lat — słaba podstawa, wolno rosnące z niskim P/E). Wniosek: przy 10 latach startowych większość różnic rzędu ±10–20 pp mieści się w szumie;
+nawet przyspieszenie przychodów (dodane do oceny w etapie 87 na prośbę użytkownika) nie jest statystycznie pewne.

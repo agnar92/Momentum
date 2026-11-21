@@ -76,6 +76,11 @@ def metryki(ex, fv, dzis=None, splity=()):
                 lata.append(b / a - 1)
         m["rev_lata_10"] = sum(x > 0.10 for x in lata) if len(lata) == 5 else None
         m["rev_lata"] = [_r(x) for x in lata]
+        if len(lata) == 5:      # etap 87: tempo przychodów — nachylenie 5 rocznych wzrostów (od najstarszego), > 0 = przyspiesza
+            g_ = lata[::-1]
+            xs = range(5)
+            mx, my = 2.0, sum(g_) / 5
+            m["przysp"] = sum((x - mx) * (y - my) for x, y in zip(xs, g_)) / sum((x - mx) ** 2 for x in xs)
     if nt:
         e, n0 = nt[-1]
         m["ni_ttm"] = n0
@@ -216,6 +221,28 @@ def metryki(ex, fv, dzis=None, splity=()):
     if m.get("mcap") and (skup is not None or emis is not None) and ex.get("skup"):
         m["skup_netto_mc"] = ((skup or 0) - (emis or 0)) / m["mcap"]
     m["fcf_aktywa"] = m["fcf_ttm"] / m["aktywa"] if m.get("fcf_ttm") is not None and m.get("aktywa") else None
+    # ROIC (jak w badaniu, etap 87): zysk operacyjny 12 mies. × 0,79 (po podatku) ÷ (kapitał + dług − gotówka); zapas: Finviz (ROI)
+    if ot and m.get("equity") is not None:
+        ic = m["equity"] + (m.get("debt") or 0) - (m.get("cash") or 0)
+        if ic > 0:
+            m["roic_fv"], m["roic"] = m.get("roic"), ot[-1][1] * 0.79 / ic
+    # stabilność zysku (etap 87: wysoki ROIC = zysk w każdym roku i mniejsze wahania): lata z dodatnim zyskiem z 5 i zmienność zysku
+    if nt:
+        e_, n0_ = nt[-1]
+        zl5 = [F.wartosc_lata_temu(nt, e_, k) if k else n0_ for k in range(5)]
+        if all(x is not None for x in zl5):
+            m["zysk_dodatni_lata"] = sum(x > 0 for x in zl5)
+            sr_ = sum(zl5) / 5
+            m["zmiennosc_zysku"] = (sum((x - sr_) ** 2 for x in zl5) / 5) ** 0.5 / abs(sr_) if sr_ else None
+    # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
+    ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
+    if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
+        ce = list(ya["capex"].items())
+        e0, c0 = ce[-1]
+        c2 = next((v for d_, v in ce if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
+        o2 = next((v for d_, v in ya["ocf"].items() if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
+        if c2 and c2 > 0 and c0 >= 2 * c2 and c0 >= 0.05 * m["rev_ttm"]:
+            m["rampa_capex"] = dict(x=c0 / c2, przych=c0 / m["rev_ttm"], bogata=bool(o2 is not None and o2 >= 3 * c2), ocf_przed=o2 / c2 if o2 is not None else None)
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
@@ -267,9 +294,9 @@ def _pct(x):
 
 # --- oceny względem sektora --------------------------------------------------------------------------------------
 GRUPY = {
-    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1)],
+    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1), ("przysp", 1)],
     "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1),
-             ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1)],
+             ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1), ("roic", 1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
 
@@ -404,14 +431,22 @@ def ostrzezenia(m, typ=None, rank=None):
         out.append(f"Prognoza wzrostu EPS {100 * g:.0f} % rocznie przy przychodach rosnących {_pl(100 * r5)} % rocznie przez 5 lat — "
                    "historycznie mało realne (wzrost przychodów najlepiej przewiduje przyszły wzrost zysku).")
     if g is not None and g > 0.25 and len(lata) >= 3 and min(lata) < -0.10:
-        out.append(f"Spółka cykliczna (przychody spadały nawet o {100 * -min(lata):.0f} % w roku) z prognozą {100 * g:.0f} % rocznie — prognoza może łapać "
-                   "szczyt cyklu; niski PEG i P/E bywają tu pułapką.")
+        out.append(f"Spółka cykliczna (przychody spadały nawet o {100 * -min(lata):.0f} % w roku) z prognozą {100 * g:.0f} % rocznie — u cyklicznych przeszły "
+                   "wzrost prawie nie przewiduje przyszłego (etap 86: korelacja 0,11 vs 0,50 u pozostałych); prognoza może łapać szczyt cyklu.")
     if rank is not None and rank <= 30 and g is not None and g > 0.30:
         out.append(f"Jedna z 30 największych spółek z prognozą {100 * g:.0f} % rocznie — im większa firma, tym trudniej utrzymać takie tempo; "
                    "przyjmij ostrożniejszy wzrost w wycenie.")
     if m.get("ni_1y") is not None and m["ni_1y"] > 1.0 and (m.get("rev_1y") or 0) < 0.30:
         out.append(f"Zysk netto +{100 * m['ni_1y']:.0f} % r/r przy przychodach +{100 * (m.get('rev_1y') or 0):.0f} % — możliwe jednorazowe zyski "
                    "(np. przeszacowanie udziałów); P/E i PEG mogą być zaniżone.")
+    rc = m.get("rampa_capex")
+    if rc and not rc.get("bogata"):
+        przed = f"przepływy operacyjne przed rampą {_pl(rc['ocf_przed'])}× capex, próg 3×" if rc.get("ocf_przed") is not None else "brak danych o przepływach przed rampą"
+        out.append(f"Capex wzrósł {_pl(rc['x'])}× w 2 lata (do {100 * rc['przych']:.0f} % przychodów) przy niewystarczających przepływach wcześniej ({przed}) — "
+                   "takie spółki dały w 5 lat medianę ok. 0 % (etap 86; bogate w gotówkę +77 %, a te z wysokim zwrotem z nowych aktywów +108 %).")
+    if m.get("od_maks_12m") is not None and m["od_maks_12m"] <= -0.40 and m.get("pe_gorna_tercyla"):
+        out.append(f"Kurs {100 * m['od_maks_12m']:.0f} % od szczytu z 12 mies., a P/E ({_pl(m['pe'])}) nadal w górnej 1/3 listy — spadek nie oznacza, że jest tanio "
+                   "(etap 87: po takim spadku drogie spółki dalej traciły, mediana −40 % w 3 lata vs +19 % tanie; mało przypadków).")
     if m.get("baza_wzrostu") is not None and g is not None and g > 0.15 and m["baza_wzrostu"] < 0.15:
         out.append(f"Wzrost zysku ≥ {100 * g:.0f} % rocznie przez ostatnie 5 lat osiągnęło tylko {100 * m['baza_wzrostu']:.0f} % spółek z listy — sprawdź, "
                    "czy prognoza nie jest zbyt optymistyczna (scenariusz pesymistyczny w PEG).")
@@ -419,10 +454,10 @@ def ostrzezenia(m, typ=None, rank=None):
 
 
 # dobra cena wg typu spółki (Peter Lynch w ujęciu autora filmu o 6 typach)
-CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"),
-             "Szybko rosnąca": (1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"),
-             "Wolno rosnąca": (None, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"),
-             "Cykliczna": (None, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"),
+CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"),
+             "Szybko rosnąca": (1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); progu PEG z prognozą analityków nie mogliśmy sprawdzić — kluczowe, czy wzrost się utrzyma"),
+             "Wolno rosnąca": (None, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"),
+             "Cykliczna": (None, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"),
              "Wychodząca z kłopotów": (None, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"),
              "Ukryte aktywa": (None, "wartość w aktywach, nie w zyskach — wymaga cierpliwości")}
 
