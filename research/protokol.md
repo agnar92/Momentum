@@ -1072,3 +1072,20 @@ spółek spełnia 7/7), P1 16,4 %; Jakość 7/7 — ≤ 5/7 16,9 % (DD −30 %),
 ≤ 5/7 12,3–13,6 % (SPY 14,0 %, E1 + P1 15,0 %); 2020–2026 17,1–22,2 % (SPY 15,5 %, E1 + P1 21,4 %). Bez NVDA: E1 + P1 17,0 %, Jakość 7/7 + ≤ 5/7 16,6 %,
 E1 + ≤ 5/7 7/7 16,0 %, 7/7 + ≤ 5/7 14,4 %. Hipoteza: lista 7/7 ≤ 5/7 gorzej niż P1 — tak (−1,8 pp); Jakość ≈ P1 ± 2 pp — tak (−2,1 pp z E1, −1,5 pp z
 wejściem 7/7); wejście 7/7 ≈ etap 68 (18–21 %) — nie (14,4 %; tu PEG historyczny zamiast prognoz analityków, transza 4 %, inny zbiór).
+
+## Etap 84: portfel pół na pół — CEM10 i strategia fundamentalna (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „tak, sprawdź pół na pół CEM10 i fundamentalną”. Okres 2013-01..2026-09 (wspólny; dane SEC od 2011). CEM10 jak w etapie 12 (S&P 500 PIT, N = 10,
+zwrot 6 mies. > 30 % i kurs > SMA 10, ranking po zwrocie 6 mies., wyjście pod SMA 10, brak zakupów, gdy SPY < SMA 12, gotówka nieoprocentowana, koszt 0,1 %).
+Fundamentalna F1 = etap 81 bez dokupowania (ocena top 10 % + PEG 0–2, transza 4 %, sprzedaż, gdy przychody lub zysk spadają 2 lata z rzędu, gotówka w SPY);
+F2 = wejście 7/7 Jakość + ta sama sprzedaż (etap 83). Połączenia: 50/50 z wyrównaniem do 50/50 co rok w styczniu; 50/50 bez wyrównywania; 50/50 z wyrównaniem
+co miesiąc. Miary: CAGR, maks. obsunięcie, zmienność, Sharpe (bez stopy wolnej), korelacja miesięcznych zwrotów CEM10 i F, zwroty rok po roku, najgorszy rok,
+lata lepsze od SPY; połowy 2013–2019 / 2020–2026 (start od zera); bez NVDA w obu częściach. Hipoteza: korelacja 0,6–0,85; 50/50 CAGR między składnikami,
+obsunięcie mniejsze od gorszego składnika o 2–5 pp, Sharpe ≥ lepszego składnika.
+
+Wynik etapu 84 (2026-11-21): 2013–2026: CEM10 23,6 %/rok (DD −33 %, zmienność 27 %), F1 18,4 % (DD −34 %), F2 20,7 % (DD −34 %), SPY 14,6 %, QQQ 20,2 %;
+korelacja miesięcznych zwrotów CEM10–F 0,61–0,63. 50/50 z wyrównaniem co rok: CEM10 + F1 21,7 % (DD −23 %, Sharpe 1,04), CEM10 + F2 22,9 % (DD −23 %, Sharpe 1,07);
+bez wyrównywania 21,4 / 22,3 %, co miesiąc 21,6 / 22,8 % (DD −23 %). Połowy: 2013–2019 CEM10 10,8 %, F1 15,0 %, 50/50 13,1 % (SPY 14,0 %); 2020–2026 CEM10 37,2 %,
+F1 21,4 %, 50/50 30,3 % (SPY 15,5 %). Najgorszy rok: CEM10 −16 % (2018), F1 −25 % (2022), 50/50 −14 % (2018) / −11 % (2022). Bez NVDA: CEM10 21,3 %, F1 17,0 %,
+50/50 19,8 % (DD −22 %). Hipoteza: korelacja 0,6–0,85 — tak; CAGR między składnikami — tak; obsunięcie mniejsze o 2–5 pp — więcej: o ok. 10 pp (−23 % vs −33/−34 %);
+Sharpe ≥ lepszego składnika — tak (≈ F2, wyżej niż CEM10). CEM10 i F wygrywają w różnych latach (2014, 2019, 2022, 2023 vs 2024, 2026).
