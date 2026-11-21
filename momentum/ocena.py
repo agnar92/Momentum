@@ -216,6 +216,15 @@ def metryki(ex, fv, dzis=None, splity=()):
     if m.get("mcap") and (skup is not None or emis is not None) and ex.get("skup"):
         m["skup_netto_mc"] = ((skup or 0) - (emis or 0)) / m["mcap"]
     m["fcf_aktywa"] = m["fcf_ttm"] / m["aktywa"] if m.get("fcf_ttm") is not None and m.get("aktywa") else None
+    # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
+    ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
+    if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
+        ce = list(ya["capex"].items())
+        e0, c0 = ce[-1]
+        c2 = next((v for d_, v in ce if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
+        o2 = next((v for d_, v in ya["ocf"].items() if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
+        if c2 and c2 > 0 and c0 >= 2 * c2 and c0 >= 0.05 * m["rev_ttm"]:
+            m["rampa_capex"] = dict(x=c0 / c2, przych=c0 / m["rev_ttm"], bogata=bool(o2 is not None and o2 >= 3 * c2))
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
@@ -404,14 +413,18 @@ def ostrzezenia(m, typ=None, rank=None):
         out.append(f"Prognoza wzrostu EPS {100 * g:.0f} % rocznie przy przychodach rosnących {_pl(100 * r5)} % rocznie przez 5 lat — "
                    "historycznie mało realne (wzrost przychodów najlepiej przewiduje przyszły wzrost zysku).")
     if g is not None and g > 0.25 and len(lata) >= 3 and min(lata) < -0.10:
-        out.append(f"Spółka cykliczna (przychody spadały nawet o {100 * -min(lata):.0f} % w roku) z prognozą {100 * g:.0f} % rocznie — prognoza może łapać "
-                   "szczyt cyklu; niski PEG i P/E bywają tu pułapką.")
+        out.append(f"Spółka cykliczna (przychody spadały nawet o {100 * -min(lata):.0f} % w roku) z prognozą {100 * g:.0f} % rocznie — u cyklicznych przeszły "
+                   "wzrost prawie nie przewiduje przyszłego (etap 86: korelacja 0,11 vs 0,50 u pozostałych); prognoza może łapać szczyt cyklu.")
     if rank is not None and rank <= 30 and g is not None and g > 0.30:
         out.append(f"Jedna z 30 największych spółek z prognozą {100 * g:.0f} % rocznie — im większa firma, tym trudniej utrzymać takie tempo; "
                    "przyjmij ostrożniejszy wzrost w wycenie.")
     if m.get("ni_1y") is not None and m["ni_1y"] > 1.0 and (m.get("rev_1y") or 0) < 0.30:
         out.append(f"Zysk netto +{100 * m['ni_1y']:.0f} % r/r przy przychodach +{100 * (m.get('rev_1y') or 0):.0f} % — możliwe jednorazowe zyski "
                    "(np. przeszacowanie udziałów); P/E i PEG mogą być zaniżone.")
+    rc = m.get("rampa_capex")
+    if rc and not rc.get("bogata"):
+        out.append(f"Capex wzrósł {rc['x']:.1f}× w 2 lata (do {100 * rc['przych']:.0f} % przychodów) przy słabych przepływach wcześniej — takie spółki dały "
+                   "w 5 lat medianę ok. 0 % (etap 86; bogate w gotówkę +77 %).".replace(".", ",", 1))
     if m.get("baza_wzrostu") is not None and g is not None and g > 0.15 and m["baza_wzrostu"] < 0.15:
         out.append(f"Wzrost zysku ≥ {100 * g:.0f} % rocznie przez ostatnie 5 lat osiągnęło tylko {100 * m['baza_wzrostu']:.0f} % spółek z listy — sprawdź, "
                    "czy prognoza nie jest zbyt optymistyczna (scenariusz pesymistyczny w PEG).")
@@ -419,10 +432,10 @@ def ostrzezenia(m, typ=None, rank=None):
 
 
 # dobra cena wg typu spółki (Peter Lynch w ujęciu autora filmu o 6 typach)
-CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"),
-             "Szybko rosnąca": (1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"),
-             "Wolno rosnąca": (None, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"),
-             "Cykliczna": (None, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"),
+CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %), ale efekt progu PEG niestabilny"),
+             "Szybko rosnąca": (1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); u nas próg PEG bez wyraźnego efektu — kluczowe, czy wzrost się utrzyma"),
+             "Wolno rosnąca": (None, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"),
+             "Cykliczna": (None, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"),
              "Wychodząca z kłopotów": (None, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"),
              "Ukryte aktywa": (None, "wartość w aktywach, nie w zyskach — wymaga cierpliwości")}
 

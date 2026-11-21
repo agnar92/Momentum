@@ -1102,3 +1102,49 @@ Wynik etapu 85 (2026-11-21): 2013–2026 (SPY 14,6 %, QQQ 20,2 %): 10 + 10 — C
 (DD −43 %), N=10 21,1 %. Połowy: 2013–2019 — 10 + 10 F1 13,5 %, F2 10,9 %; 5 + 5 10,3–10,7 % (SPY 14,0 %, CEM10 N=5 6,8 %); 2020–2026 — 10 + 10 27,2–30,2 %, 5 + 5
 37–38 % (CEM10 N=5 54,9 %, w 2026 +229 %). Bez NVDA: 10 + 10 19,1–21,1 % (DD −21 %), 5 + 5 25,2–26,5 %. Hipoteza: 10 + 10 ≈ etap 84 ± 2 pp — tak (+1,5 / +0,3 pp);
 5 + 5 większe obsunięcie — tak (−30 % vs −24 %), CAGR ± 4 pp — wyższy o 4–6 pp, ale cała przewaga z 2020–2026 (w 2013–2019 o 3–4 pp poniżej SPY).
+
+## Etap 86: test wszystkich tez z 4 filmów autora (rentowność, przepływy, typy Lyncha, przewidywanie wzrostu zysku) (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „przetestuj wszystko z tych filmów, nie pomijaj niczego”. Dane: top 500 USA PIT ze spółkami usuniętymi (etap 68), dane SEC znane w dniu startu;
+starty: styczeń każdego roku 2012–2021 (5 lat naprzód) i 2012–2023 (3 lata); miara jak u autora: MEDIANA zwrotu ceny spółek w grupie w 5 (3) lat, liczba
+obserwacji, odsetek bijących medianę wszystkich, połowy startów 2012–2016 / 2017–2021. Filmy 1–3: bez sektorów wykluczonych (jak u autora); film 4: wszystkie sektory.
+Przepływy i bilans: ostatni znany rok obrotowy (autor: 12 mies.) — przybliżenie; skup / emisja / dywidendy — nowe pobranie z SEC (PaymentsForRepurchaseOfCommonStock,
+ProceedsFromIssuanceOfCommonStock + ProceedsFromStockOptionsExercised, PaymentsOfDividends[CommonStock]).
+F1 (rentowność, filtry narastająco): R1 ROE ≥ 15 %; R2 + ROA ≥ 10 %; R3 + ROE wyższe niż 3 lata temu; R4 + ROCE (zysk operacyjny ÷ (aktywa − zobowiązania bieżące))
+≥ 30 %; wariant R4' ROCE ≥ 25 %; dla każdego kroku: mediana spółek, które przeszły, i tych, które przeszły poprzednie, ale odpadły na tym kroku; to samo bez sektora
+technologicznego. Teza autora: 63 → 68 → 78 → 82 → 91 % (ROCE ≥ 25 %: 88 %), bez technologii 61 → 83 %.
+F2 (przepływy, narastająco): P1 przepływy operacyjne ≥ 30 % długu (brak długu = spełnione); P2 + capex < 35 % przepływów operacyjnych; P3 + skup netto (skup − emisje)
+> 2 % kapitalizacji; P4 + FCF > 12 % aktywów; bez technologii. Teza: 51 / 77 → 80 → 82 → 86 % (wszystkie 66 %). Rampy capex: capex ≥ 2 × capex sprzed 2 lat i ≥ 5 %
+przychodów; podział: „bogate w gotówkę przed rampą” (przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex); wśród bogatych: zwrot z nowych aktywów (Δ przepływów
+operacyjnych ÷ Δ aktywów, 2 lata) ≥ 0,20 vs < 0,10; odsetek spełniających P1–P4 po 3 latach. Teza: rampy 56 % vs reszta 67 %; bogate 82 % vs reszta 28 %; bogate
+z wysokim zwrotem 149 % vs niskim 20 %; 3 × częściej spełniają P1–P4 później.
+F3 (typy Lyncha, na starcie; spółka może mieć kilka): stabilnie rosnąca — CAGR przychodów 5 l. 8–18 % i kapitalizacja ≥ 20 mld; szybko rosnąca — CAGR przychodów lub
+zysku 5 l. ≥ 20 %; wolno rosnąca — CAGR przychodów < 8 % i dywidenda; cykliczna — w którymś z 5 lat przychody −10 % lub gorzej; wychodząca z kłopotów — zysk 12 mies.
+> 0, a rok wcześniej < 0. Miary: mediana 3 / 5 lat; stabilnie rosnące: odsetek z ≥ +50 % w 3 lata; PEG (historyczny, P/E ÷ CAGR zysku 5 l.) ≤ 1,5 vs > 1,5
+(stabilne), < 1 / 1–1,6 / > 1,6 (szybkie); cykliczne: P/E w dolnej vs górnej tercyli (teza: niskie P/E u cyklicznych = pułapka); wolno rosnące: P/E ≤ 18 vs > 25;
+wychodzące z kłopotów: mediana i odsetek spadków > 50 %.
+F4 (przewidywanie wzrostu zysku; wszystkie sektory): pasma przeszłego wzrostu przychodów 5 l. (łącznie < 0, 0–25, 25–50, 50–100, > 100 %) → mediana przyszłego wzrostu
+przychodów i zysku netto w 5 lat (starty 2012–2021, gdy jest 5 lat danych); stabilność dla spółek cyklicznych (korelacja rang przeszłego i przyszłego wzrostu: cykliczne
+vs pozostałe); wielkość: 100 największych vs pozostałe — mediana przyszłego CAGR zysku 5 l. (teza: 5,7 vs 8,4 % dla 10 lat); stopa bazowa: rozkład CAGR zysku 5 l.
+(teza: ~50 % w 0–20 %, ~25 % spadek, 13 % ≥ 30 %); jednorazowe zyski: zysk r/r > +100 % przy przychodach < +30 % — mediana zwrotu 1 / 3 lata vs reszta; skup a EPS:
+różnica wzrostu EPS i zysku netto 5 l. (udział skupu) i czy wzrost EPS „ze skupu” (EPS − zysk ≥ 5 pp/rok) daje gorszy zwrot; migawka dziś: odsetek spółek z prognozą
+EPS ≥ 15 % i wzrostem przychodów < 5 %/rok (teza: 1 na 7). Nietestowalne (brak danych historycznych): trafność prognoz analityków, wartość aktywów (asset play).
+Hipoteza: kierunki z F1 i F2 potwierdzą się (rosnąca mediana z filtrami), ale słabiej niż u autora i nie we wszystkich połowach; ROCE ≥ 30 % i skup > 2 % — mała różnica;
+rampy bogate z wysokim zwrotem — lepiej, ale mało obserwacji; typy: niski PEG pomaga stabilnym (etap 70), cykliczne z niskim P/E gorzej; F4: przeszły wzrost przychodów
+monotonicznie przewiduje przyszły (etap 49), duże spółki rosną wolniej, jednorazowe zyski — gorszy zwrot.
+
+Wynik etapu 86 (2026-11-21), mediana zwrotu ceny w 5 lat, starty w styczniu 2012–2021:
+F1 rentowność (bez wykluczonych sektorów): wszystkie 69 %, R1 ROE ≥ 15 % 70 %, R2 + ROA ≥ 10 % 79 % (odpadłe 63 %), R3 + ROE rośnie 86 % (odpadłe 71 %), R4 + ROCE ≥ 30 % 103 %
+(odpadłe 78 %), ROCE ≥ 25 % 99 % — jak u autora (63 → 91 %), ale tylko dla startów 2017+ (R4 113 % vs 59 %); w 2012–2016 filtry nie pomagały (R4 75 % vs 81 %).
+Bez technologii: 64 → 62 → 66 → 73 → 86 %. F2 przepływy: P1 OCF ≥ 30 % długu 73 % vs odpadłe 54 % (obie połowy), P2 capex < 35 % OCF 76 % vs 63 %, P3 skup > 2 % 79 % vs 72 %
+(bez technologii 72 vs 56 %), P4 FCF > 12 % aktywów 77 % vs odpadłe 79 % — bez efektu; wynik końcowy 77 % (autor 86 %). Rampy capex: 35 % vs 68 % bez rampy; bogate w gotówkę
+77 % vs niebogate 0 %; bogate z wysokim zwrotem z nowych aktywów 108 % (n 11) vs niskim 63 % (n 15); spełniają P1–P4 po 3 latach 20 % vs 4–6 % — kierunki jak u autora.
+F3 typy: stabilnie rosnące 83 % (najlepiej; 2012–2016 80 %, 2017+ 84 %), szybko rosnące 56 %, wolno rosnące 63 %, cykliczne 78 %, wychodzące z kłopotów 58 %; stabilne z ≥ +50 % w 3 lata
+39 % (wszystkie 40 %). Stabilne PEG ≤ 1,5 93 % vs > 1,5 86 % (połowy przeciwne: 62 / 121 % i 117 / 84 %); szybkie PEG < 1 57 %, 1–1,6 43 %, > 1,6 56 % — bez wzoru; cykliczne
+z niskim P/E 79 % = wysokie P/E 79 % (pułapka nie potwierdzona); wolno rosnące P/E ≤ 18 43 % vs > 25 65 % (odwrotnie niż teza); wychodzące z kłopotów: spadek > 50 % 11 % vs 5 %.
+F4: przeszły wzrost przychodów 5 l. → przyszłe przychody 20 / 20 / 35 / 51 / 96 % i zysk 21 / 16 / 47 / 65 / 103 % (rośnie od pasma 25–50 %); korelacja przeszłego i przyszłego wzrostu:
+cykliczne 0,11 vs pozostałe 0,50; 100 największych: przyszły CAGR zysku 6,7 % vs 8,0 %; stopa bazowa zysku 5 l.: spadek 32 %, 0–20 %/rok 51 %, 20–30 % 8 %, ≥ 30 % 9 %; skok zysku
+przy słabych przychodach: 3 lata 28 % vs 38 %; EPS „ze skupu” 68 % vs 63 % (bez kary); dziś 20 % spółek z prognozą ≥ 15 % ma przychody < 5 %/rok (autor 14 %).
+Hipoteza: F1 i F2 kierunkowo tak, słabiej i nie w obu połowach (F1 tylko 2017+); ROCE ≥ 30 % — więcej niż zakładano; skup > 2 % — mała różnica (tak); P4 — bez efektu; rampy — tak
+(mało obserwacji); typy: niski PEG u stabilnych — niestabilny, cykliczne z niskim P/E — nie gorzej (teza nie potwierdzona); F4 — tak (monotonicznie od 25 %, duże wolniej,
+jednorazowe zyski gorzej).

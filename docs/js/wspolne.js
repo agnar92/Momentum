@@ -181,10 +181,10 @@
         ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["capex_przych", "Capex / przychody", "%"], ["kapital_3l", "Wzrost kapitału własnego 3 lata, rocznie", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
 
     // dobra cena wg typu spółki (jak ocena.CENA_TYPU): [próg PEG lub null, opis]
-    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"],
-        "Szybko rosnąca": [1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"],
-        "Wolno rosnąca": [null, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"],
-        "Cykliczna": [null, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"],
+    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %), ale efekt progu PEG niestabilny"],
+        "Szybko rosnąca": [1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); u nas próg PEG bez wyraźnego efektu — kluczowe, czy wzrost się utrzyma"],
+        "Wolno rosnąca": [null, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"],
+        "Cykliczna": [null, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"],
         "Wychodząca z kłopotów": [null, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"],
         "Ukryte aktywa": [null, "wartość w aktywach, nie w zyskach — wymaga cierpliwości"] };
 
