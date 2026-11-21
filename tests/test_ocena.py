@@ -154,3 +154,10 @@ def test_przeplywy_zyskownosc_i_ostrzezenia():
     o = O.ostrzezenia(dict(eps_next5=0.17, rev_cagr5=0.03, rev_lata=[0.02, -0.15, 0.30], ni_1y=1.5, rev_1y=0.05), rank=10)
     assert len(o) == 2          # prognoza vs przychody, jednorazowy zysk (cykliczna wymaga prognozy > 25 %)
     assert O.ostrzezenia(dict(eps_next5=0.40, rev_cagr5=0.30, rev_lata=[0.5, -0.2, 0.6]), rank=5)   # cykliczna + duża spółka
+
+
+def test_duzy_zwyciezca():
+    m = dict(mcap=3e12, przych_lata_wzrostu_10=10, przych_10l=3.5, roe=0.3, fcf_ttm=7e10, de=0.2)
+    assert all(ok for _, _, ok in O.strategie(m, "Technology")["Duży zwycięzca (10+ lat)"])
+    m["przych_lata_wzrostu_10"] = 7
+    assert not all(ok for _, _, ok in O.strategie(m, "Technology")["Duży zwycięzca (10+ lat)"])
