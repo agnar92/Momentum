@@ -224,7 +224,7 @@ def metryki(ex, fv, dzis=None, splity=()):
         c2 = next((v for d_, v in ce if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
         o2 = next((v for d_, v in ya["ocf"].items() if abs((F.D(d_) - (F.D(e0) - dt.timedelta(days=730))).days) <= 60), None)
         if c2 and c2 > 0 and c0 >= 2 * c2 and c0 >= 0.05 * m["rev_ttm"]:
-            m["rampa_capex"] = dict(x=c0 / c2, przych=c0 / m["rev_ttm"], bogata=bool(o2 is not None and o2 >= 3 * c2))
+            m["rampa_capex"] = dict(x=c0 / c2, przych=c0 / m["rev_ttm"], bogata=bool(o2 is not None and o2 >= 3 * c2), ocf_przed=o2 / c2 if o2 is not None else None)
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
@@ -423,8 +423,9 @@ def ostrzezenia(m, typ=None, rank=None):
                    "(np. przeszacowanie udziałów); P/E i PEG mogą być zaniżone.")
     rc = m.get("rampa_capex")
     if rc and not rc.get("bogata"):
-        out.append(f"Capex wzrósł {rc['x']:.1f}× w 2 lata (do {100 * rc['przych']:.0f} % przychodów) przy słabych przepływach wcześniej — takie spółki dały "
-                   "w 5 lat medianę ok. 0 % (etap 86; bogate w gotówkę +77 %).".replace(".", ",", 1))
+        przed = f"przepływy operacyjne przed rampą {_pl(rc['ocf_przed'])}× capex, próg 3×" if rc.get("ocf_przed") is not None else "brak danych o przepływach przed rampą"
+        out.append(f"Capex wzrósł {_pl(rc['x'])}× w 2 lata (do {100 * rc['przych']:.0f} % przychodów) przy niewystarczających przepływach wcześniej ({przed}) — "
+                   "takie spółki dały w 5 lat medianę ok. 0 % (etap 86; bogate w gotówkę +77 %, a te z wysokim zwrotem z nowych aktywów +108 %).")
     if m.get("baza_wzrostu") is not None and g is not None and g > 0.15 and m["baza_wzrostu"] < 0.15:
         out.append(f"Wzrost zysku ≥ {100 * g:.0f} % rocznie przez ostatnie 5 lat osiągnęło tylko {100 * m['baza_wzrostu']:.0f} % spółek z listy — sprawdź, "
                    "czy prognoza nie jest zbyt optymistyczna (scenariusz pesymistyczny w PEG).")
