@@ -180,13 +180,21 @@
         ["roe", "ROE", "%"], ["roa", "ROA", "%"], ["roce", "ROCE", "%"], ["fcf_margin", "Marża FCF", "%"], ["de", "Dług / kapitał", ""], ["qr", "Quick ratio", ""],
         ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["capex_przych", "Capex / przychody", "%"], ["kapital_3l", "Wzrost kapitału własnego 3 lata, rocznie", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
 
+    // dobra cena wg typu spółki (jak ocena.CENA_TYPU): [próg PEG lub null, opis]
+    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"],
+        "Szybko rosnąca": [1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"],
+        "Wolno rosnąca": [null, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"],
+        "Cykliczna": [null, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"],
+        "Wychodząca z kłopotów": [null, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"],
+        "Ukryte aktywa": [null, "wartość w aktywach, nie w zyskach — wymaga cierpliwości"] };
+
     function miejsce(rows, t, f) {
         const z = rows.filter((r) => ok(f(r))).sort((a, b) => f(b) - f(a));
         const i = z.findIndex((r) => r.t === t);
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
