@@ -1089,3 +1089,16 @@ bez wyrównywania 21,4 / 22,3 %, co miesiąc 21,6 / 22,8 % (DD −23 %). Połowy
 F1 21,4 %, 50/50 30,3 % (SPY 15,5 %). Najgorszy rok: CEM10 −16 % (2018), F1 −25 % (2022), 50/50 −14 % (2018) / −11 % (2022). Bez NVDA: CEM10 21,3 %, F1 17,0 %,
 50/50 19,8 % (DD −22 %). Hipoteza: korelacja 0,6–0,85 — tak; CAGR między składnikami — tak; obsunięcie mniejsze o 2–5 pp — więcej: o ok. 10 pp (−23 % vs −33/−34 %);
 Sharpe ≥ lepszego składnika — tak (≈ F2, wyżej niż CEM10). CEM10 i F wygrywają w różnych latach (2014, 2019, 2022, 2023 vs 2024, 2026).
+
+## Etap 85: pół na pół z ograniczoną liczbą spółek — po 5 lub po 10 na strategię (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik: „ile akcji wziąłeś? nie chcę 50, tylko po 5 max na strategię albo po 10, żeby mieć 20 akcji”. Jak etap 84, ale: CEM10 N = 5 lub 10; część fundamentalna
+ma N miejsc po 1/N swojej części (kupno w wolne miejsca od najwyższej oceny, bez dokupowania, sprzedaż, gdy przychody lub zysk spadają 2 lata z rzędu, gotówka
+w SPY): F1 = ocena top 10 % + PEG 0–2, F2 = 7/7 Jakość. Warianty: 5 + 5 i 10 + 10, 50/50 z wyrównaniem co rok. Miary jak w etapie 84 (CAGR, DD, zmienność, Sharpe,
+połowy, rok po roku, bez NVDA). Hipoteza: 10 + 10 ≈ etap 84 (±2 pp); 5 + 5 — wyższa zmienność i obsunięcie o kilka pp, CAGR ±4 pp (większa zależność od kilku spółek).
+
+Wynik etapu 85 (2026-11-21): 2013–2026 (SPY 14,6 %, QQQ 20,2 %): 10 + 10 — CEM10 + F1 24,2 %/rok (DD −24 %, Sharpe 1,10), CEM10 + F2 23,2 % (DD −24 %);
+5 + 5 — CEM10 + F1 25,7 % (DD −30 %), CEM10 + F2 29,4 % (DD −30 %). Składniki: CEM10 N=5 28,0 % (DD −41 %), N=10 23,6 %; F1 N=5 19,8 %, N=10 22,9 %; F2 N=5 26,2 %
+(DD −43 %), N=10 21,1 %. Połowy: 2013–2019 — 10 + 10 F1 13,5 %, F2 10,9 %; 5 + 5 10,3–10,7 % (SPY 14,0 %, CEM10 N=5 6,8 %); 2020–2026 — 10 + 10 27,2–30,2 %, 5 + 5
+37–38 % (CEM10 N=5 54,9 %, w 2026 +229 %). Bez NVDA: 10 + 10 19,1–21,1 % (DD −21 %), 5 + 5 25,2–26,5 %. Hipoteza: 10 + 10 ≈ etap 84 ± 2 pp — tak (+1,5 / +0,3 pp);
+5 + 5 większe obsunięcie — tak (−30 % vs −24 %), CAGR ± 4 pp — wyższy o 4–6 pp, ale cała przewaga z 2020–2026 (w 2013–2019 o 3–4 pp poniżej SPY).
