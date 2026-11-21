@@ -180,12 +180,12 @@
     function domyslne() {
         const d = K.dcf && K.dcf.base;
         const p = K.dcf_param || { r: 0.10, tg: 0.03, lata: 5, wygaszanie: 5 };
-        S.g = d ? d.g : (W.ok(M.rev_cagr3) ? Math.max(0, Math.min(0.25, M.rev_cagr3)) : 0.08);
-        S.marza = d ? d.marza : (W.ok(M.fcf_margin) && M.fcf_margin > 0 ? M.fcf_margin : 0.1);
+        S.g = d ? d.g : W.ok(M.dcf_g) ? M.dcf_g : (W.ok(M.rev_cagr3) ? Math.max(0, Math.min(0.25, M.rev_cagr3)) : 0.08);
+        S.marza = d ? d.marza : W.ok(M.dcf_marza) ? M.dcf_marza : (W.ok(M.fcf_margin) && M.fcf_margin > 0 ? M.fcf_margin : 0.1);
         S.r = p.r; S.tg = p.tg; S.lata = p.lata; S.wyg = p.wygaszanie;
         S.eps = M.eps; S.geps = W.ok(M.eps_next5) ? M.eps_next5 : (W.ok(M.rev_cagr5) ? M.rev_cagr5 : 0.1);
     }
-    const parDcf = () => ({ rev: M.rev_ttm, marza: S.marza, g: S.g, akcje: M.shares, gotowka: M.cash || 0, dlug: M.debt || 0, r: S.r, tg: S.tg, lata: S.lata, wyg: S.wyg });
+    const parDcf = () => ({ rev: W.ok(M.dcf_rev) ? M.dcf_rev : M.rev_ttm, marza: S.marza, g: S.g, akcje: M.shares, gotowka: M.cash || 0, dlug: M.debt || 0, r: S.r, tg: S.tg, lata: S.lata, wyg: S.wyg });
     function margines5() {
         const y = (K.hist.y || []).slice(-5).filter((x) => x[1] > 0 && W.ok(x[3])).map((x) => x[3] / x[1]).sort((a, b) => a - b);
         return y.length ? y[Math.floor(y.length / 2)] : null;
@@ -229,7 +229,7 @@
         const chip = (pole, x, n) => W.ok(x) ? `<button data-${pole}="${x}">${n} ${W.fmtPct(x, 1)}</button>` : "";
         $("wyc-tresc").innerHTML = `<div class="siatka3">
           <div class="karta ciemna" style="margin:0"><div class="mut male">Wartość DCF na akcję</div>
-            ${W.ok(v) ? `<span class="pill p-${slug(et)}" style="margin:8px 0">${esc(et)}</span>
+            ${W.ok(v) && v > 0 ? `<span class="pill p-${slug(et)}" style="margin:8px 0">${esc(et)}</span>
             <div style="display:flex;justify-content:space-between;align-items:baseline"><div><div class="mut male">Cena</div><b style="font-size:20px">${W.fmtCena(M.price)}</b></div>
               <div style="text-align:right"><div class="mut male">Wartość DCF</div><b style="font-size:20px;color:#5eead4">${W.fmtCena(v)}</b></div></div>
             <div class="pasek-wyceny"><span class="znak" style="left:${(100 * poz).toFixed(1)}%"></span></div>
@@ -238,9 +238,10 @@
             <div class="pole" style="margin-top:12px"><div class="mut male">Co zakłada dzisiejsza cena</div>
               <div class="male" style="display:flex;justify-content:space-between"><span>wzrost przychodów rocznie</span><b>${W.fmtPct(ig, 1)}</b></div>
               <div class="male" style="display:flex;justify-content:space-between"><span>albo marża FCF</span><b>${W.fmtPct(im, 1)}</b></div></div>`
-            : '<p class="mut">Za mało danych (przychody, marża FCF > 0, liczba akcji).</p>'}
+            : `<p class="mut">${W.ok(v) && v <= 0 ? "Wartość DCF wychodzi ujemna (dług większy niż wartość przepływów) — DCF nie ma tu sensu." : "Za mało danych (przychody, marża FCF > 0, liczba akcji)."}${M.dcf_uwagi ? " " + esc(M.dcf_uwagi.join("; ")) : ""}</p>`}
           </div>
-          <div><div class="mut male" style="margin-bottom:4px">Przychody i wolne przepływy: historia (lata obrotowe) i prognoza (kreskowane)</div><div id="dcf-wykres"></div></div>
+          <div><div class="mut male" style="margin-bottom:4px">Przychody i wolne przepływy: historia (lata obrotowe) i prognoza (kreskowane)</div><div id="dcf-wykres"></div>
+            ${M.dcf_uwagi ? `<div class="mut male" style="margin-top:6px">Korekta danych: ${esc(M.dcf_uwagi.join("; "))} — dane z SEC odbiegały od Finviz.</div>` : ""}</div>
           <div class="wej" style="grid-template-columns:1fr">
             <label>Wzrost przychodów rocznie (%)<input id="d-g" type="number" step="0.5" value="${(100 * S.g).toFixed(1)}">
               <div class="chipy">${chip("g", K.dcf && K.dcf.base ? K.dcf.base.g : null, "domyślnie")}${chip("g", M.rev_1y, "1 rok")}${chip("g", M.rev_cagr3, "3 lata")}${chip("g", M.rev_cagr5, "5 lat")}${chip("g", M.eps_next5, "prognoza EPS")}</div></label>

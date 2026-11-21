@@ -176,9 +176,9 @@ def metryki(ex, fv, dzis=None, splity=()):
                 dil[e_] = v_
         m["akcje_3l"] = zmiana_akcji(dict(sorted(dil.items())), splity)
     s_fv = m["mcap"] / p if m.get("mcap") and p else None
-    m["shares"] = list(sh.values())[-1] if sh else s_fv
-    if s_fv and (not m["shares"] or abs(m["shares"] / s_fv - 1) > 0.35):   # akcje kilku klas / błędny dei (np. FOX = 1) -> kapitalizacja ÷ cena
-        m["shares"] = s_fv
+    # liczba akcji do DCF = kapitalizacja ÷ cena (spójna z ceną: wartość na akcję porównujemy z kursem; dei bywa jedną klasą akcji, ADR ma inny przelicznik —
+    # np. BABA, QSR, UPS); zapas: dei z SEC
+    m["shares"] = s_fv if s_fv else (list(sh.values())[-1] if sh else None)
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
@@ -421,17 +421,44 @@ def dcf_domyslne(m, hist=None):
     return g, mz
 
 
+def dcf_wejscie(m, hist=None):
+    """Przychody i marża FCF do DCF z kontrolą zgodności z Finviz: gdy przychody SEC (12 mies.) różnią się od Finviz (kapitalizacja ÷ P/S) o > 25 %
+    (np. raport roczny spółki zagranicznej sprzed roku, przychody z akcyzą, zły znacznik) — przychody z Finviz; gdy FCF z SEC różni się od Finviz
+    (kapitalizacja ÷ P/FCF) ponad 2 × (np. brak znacznika nakładów na flotę URI, ramię finansowe GM / DE) — marża FCF z Finviz, bez historii.
+    Zwraca (przychody, g, marża, uwagi)."""
+    g, mz = dcf_domyslne(m, hist)
+    rev, uw = m.get("rev_ttm"), []
+    rev_fv = m["mcap"] / m["ps"] if m.get("mcap") and m.get("ps") and m["ps"] > 0 else None
+    if rev_fv and (not rev or not 0.8 <= rev / rev_fv <= 1.25):
+        uw.append(f"przychody z Finviz ({rev_fv / 1e9:.1f} mld USD; SEC: {rev / 1e9:.1f} mld)" if rev else "przychody z Finviz (brak w SEC)")
+        rev = rev_fv
+    fcf_fv = m["mcap"] / m["pfcf"] if m.get("mcap") and m.get("pfcf") and m["pfcf"] > 0 else None
+    f_sec = m.get("fcf_ttm")
+    if fcf_fv and rev and (f_sec is None or f_sec <= 0 or not 0.5 <= f_sec / fcf_fv <= 2):
+        nowa = max(0.0, min(0.60, fcf_fv / rev))
+        if f_sec is not None and f_sec > 0:
+            uw.append(f"marża FCF z Finviz {100 * nowa:.1f} % (SEC: FCF {f_sec / 1e9:.1f} mld vs Finviz {fcf_fv / 1e9:.1f} mld)")
+            mz = nowa
+        elif mz is None or mz <= 0:
+            mz = nowa
+    return rev, g, mz, uw
+
+
 def dcf_scenariusze(m, hist=None, sektor=None):
     if sektor == "Financial":            # banki / ubezpieczyciele: wolne przepływy nie mierzą wartości (depozyty, rezerwy) — bez DCF
         return None
-    g, mz = dcf_domyslne(m, hist)
+    rev, g, mz, uw = dcf_wejscie(m, hist)
+    m["dcf_rev"], m["dcf_uwagi"], m["dcf_g"], m["dcf_marza"] = rev, uw or None, g, mz     # założenia także dla karty, gdy DCF pominięty
     if g is None or not mz:
         return None
-    a = (m.get("rev_ttm"), m.get("shares"), m.get("cash") or 0, m.get("debt") or 0)
+    a = (rev, m.get("shares"), m.get("cash") or 0, m.get("debt") or 0)
     out = {}
     for k, fg, fm in (("bear", 0.6, 0.85), ("base", 1.0, 1.0), ("bull", 1.2, 1.1)):
         v = dcf(a[0], mz * fm, g * fg, a[1], a[2], a[3])
         out[k] = dict(g=g * fg, marza=mz * fm, wartosc=v)
+    if out["base"]["wartosc"] is not None and out["base"]["wartosc"] <= 0:   # np. GM: dług banku w grupie > wartość przepływów — DCF bez sensu
+        m["dcf_uwagi"] = (m["dcf_uwagi"] or []) + ["wartość DCF ujemna (dług większy niż wartość przepływów, np. bank / leasing w grupie) — DCF pominięty"]
+        return None
     return out if out["base"]["wartosc"] else None
 
 
