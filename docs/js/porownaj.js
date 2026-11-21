@@ -9,7 +9,7 @@
     const oc = (x) => `<span class="ocena ${W.klasaOceny(x)}">${W.ok(x) ? W.fmtNum(x, 1) : "–"}</span>`;
     const FMT = { pct: (x) => W.fmtPct(x, 1), num: (x) => W.fmtNum(x, 2), int: (x) => (W.ok(x) ? String(x) : "–") };
     const POLA = { rev_1y: "pct", rev_cagr3: "pct", rev_cagr5: "pct", ni_1y: "pct", ni_5y: "pct", eps_next5: "pct", rev_lata_10: "int", gm: "pct", om: "pct", nm: "pct",
-        roe: "pct", roa: "pct", roce: "pct", fcf_margin: "pct", de: "num", qr: "num", net_cash_mc: "pct", pe: "num", peg: "num", ps: "num", pfcf: "num", fcf_yield: "pct", dcf_pot: "pct", zysk_lata: "int", akcje_3l: "pct", capex_przych: "pct", kapital_3l: "pct", roic: "pct" };
+        roe: "pct", roa: "pct", roce: "pct", fcf_margin: "pct", de: "num", qr: "num", net_cash_mc: "pct", pe: "num", peg: "num", ps: "num", pfcf: "num", fcf_yield: "pct", dcf_pot: "pct", zysk_lata: "int", akcje_3l: "pct", capex_przych: "pct", kapital_3l: "pct", roic: "pct", przysp: "pct" };
 
     function adres() { history.replaceState(null, "", "porownaj.html?t=" + wyb.join(",")); }
     function wiersz(nazwa, komorki, wartosci) {
@@ -33,8 +33,8 @@
         for (const [g, n] of [["wzrost", "Wzrost — składniki"], ["sila", "Siła finansowa — składniki"], ["wycena", "Wycena — składniki"]]) {
             h += sek(n);
             for (const [pole, nazwa] of W.GRUPY[g]) {
-                h += wiersz(nazwa, K.map((k) => { const p = k.pct[pole]; const md = k.med500 && W.ok(k.med500[pole]) ? `<br><span class="mut male">mediana 500: ${FMT[POLA[pole]](k.med500[pole])}</span>` : "";
-                    return `${FMT[POLA[pole]](k.m[pole])} <span class="mut male">(${W.ok(p) ? Math.round(100 * p) : "50*"})</span>${md}`; }), K.map((k) => k.pct[pole]));
+                h += wiersz(nazwa, K.map((k) => { const p = k.pct[pole]; const md = k.med500 && W.ok(k.med500[pole]) ? `<br><span class="mut male">mediana 500: ${(FMT[POLA[pole]] || FMT.num)(k.med500[pole])}</span>` : "";
+                    return `${(FMT[POLA[pole]] || FMT.num)(k.m[pole])} <span class="mut male">(${W.ok(p) ? Math.round(100 * p) : "50*"})</span>${md}`; }), K.map((k) => k.pct[pole]));
             }
         }
         h += sek("Strategie (spełnione kryteria)");
