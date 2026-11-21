@@ -988,3 +988,87 @@ mocno dodatnie), wskaźnik księgowa / rynkowa (2017+ −0,164: tanie „value�
 słabsze w 2017+. Model LightGBM poza próbą (2017–2021): IC 0,126 (t 2,3) vs ocena strony 0,076 (t 4,3), ale najlepsza piątka modelu +14,6 pp vs strony +27,3 pp;
 najważniejsze w modelu: wielkość, księgowa / rynkowa, gotówka / aktywa, capex / przychody, maks. spadek przychodów 5 l., skup akcji, marża operacyjna. Hipoteza:
 ≤ 10 odkryć — 12 (5 l.); gotówka / płynność — tylko w 2012–2016; zysk brutto / aktywa — nie; wzrost aktywów — nie; model lepszy o ≤ 0,03 — o 0,05 IC, ale gorsza piątka.
+
+## Etap 80: strategia ze strony — kupno spółek z najwyższą oceną przy uczciwej wycenie i reguły sprzedaży (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „jak byś wybierał akcje o najwyższym score i uczciwej wycenie, czy ta strategia zarabia i kiedy sprzedać? To jest teraz najważniejsze”.
+Zbiór: top 500 USA PIT bez wykluczonych sektorów (etap 76), tylko spółki z kursem sprzed ≥ 60 mies. (≥ 5 lat na giełdzie). Ocena ogólna jak na stronie
+(percentyle w całym zbiorze; wzrost: przychody 1 r., CAGR 3 / 5 l., zysk 1 r. / 5 l., lata z przychodami > 10 %, lata ze wzrostem zysku; siła: marże brutto /
+operacyjna / netto, ROE, ROA, ROCE, marża FCF, dług/kapitał, quick ratio, gotówka netto / kapitalizacja, zmiana liczby akcji 3 l., capex / przychody, wzrost
+kapitału 3 l.; wycena: P/E, PEG, P/S, P/FCF, stopa FCF; wagi 0,4 / 0,35 / 0,25). PEG historyczny = P/E ÷ (100 × CAGR zysku netto 5 l.) — prognozy analityków
+(używane na stronie) nie mają historii. Portfel co miesiąc, 2013-01..2026-09, koszt 0,1 % przy transakcji, równe wagi przy kupnie (1 / N konta), wolne miejsca
+uzupełniane spółkami z najwyższą oceną spełniającymi warunek kupna, gotówka w SPY.
+Kupno (K): ocena ogólna w top 10 % zbioru i PEG 0–2 (warianty: PEG 0–1; bez progu PEG; top 20 %). N = 20 (warianty 10, 30).
+Sprzedaż (S): S0 nigdy (tylko wycofanie z obrotu); S1 ocena spada poza top 30 %; S2 fundamenty słabną 2 lata z rzędu (przychody lub zysk r/r < 0 teraz i rok
+wcześniej); S3 PEG > 3 lub ujemny zysk; S4 = S2 lub S3; S5 co rok w styczniu sprzedaż spółek niespełniających warunku kupna.
+Miary: CAGR, maks. obsunięcie, średni czas trzymania, średnia liczba spółek, odsetek kapitału w spółkach; vs SPY, QQQ, równe wagi zbioru; połowy 2013–2019 /
+2020–2026; kontrola bez najlepszej spółki (NVDA). Hipoteza: K + S0/S2 ≈ SPY + 0–4 pp/rok; S1 (sprzedaż po spadku oceny) gorzej niż S0 przez koszty i wcześniejszą
+sprzedaż zwycięzców; S3 (PEG > 3) obcina zwycięzców — gorzej niż S0; S2 ≈ S0 ± 1 pp.
+
+Wynik etapu 80 (2026-11-20): kupno top 10 % oceny + PEG 0–2, N = 20, 2013-01..2026-09 (SPY 14,6 %/rok, QQQ 20,2 %, równe wagi 13,8 %): S0 nigdy 16,0 %
+(DD −29 %; tylko 24 zakupy — portfel z 2013 r.), S1 spadek oceny 16,7 %, S2 fundamenty słabną 2 lata 20,1 % (DD −36 %, mediana trzymania 24 mies.), S3 PEG > 3
+16,1 %, S4 (S2 lub S3) 16,9 %, S5 roczna przebudowa 16,3 %. Bez NVDA: S0 16,0 %, S2 16,4 %. Połowy: 2013–2019 S0 14,5 %, S2 13,2 %, S4 13,4 % (SPY 14,0 %);
+2020–2026 S0 14,9 %, S2 17,7 %, S3 22,1 %, S4 24,3 % (SPY 15,5 %, QQQ 20,8 %). PEG 0–1 + S0 30,9 % i N = 30 + S0 29,3 % to efekt NVDA (63–78 % portfela).
+Hipoteza: K + S0/S2 ≈ SPY + 0–4 pp — tak (+1,4 / +5,5 pp, bez NVDA +1,4 / +1,8 pp); S1 gorzej niż S0 — nie (podobnie); S3 obcina zwycięzców — w całości ≈ S0,
+w 2020–2026 lepiej; S2 ≈ S0 ± 1 pp — nie, S2 +4 pp (głównie NVDA i 2020–2026; w 2013–2019 −1,3 pp).
+
+## Etap 81: strategia użytkownika — trzymaj dobre firmy, dokupuj przy korzystnym PEG, sprzedaj, gdy fundamenty się psują (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „jak firma rośnie, to trzymasz i dokupujesz, kiedy PEG pokaże korzystną cenę … trzymasz, aż wszystko się zgadza, ale jak zaczyna się psuć
+i pogarszać, to rozważamy sprzedaż”. Zbiór, ocena, PEG (historyczny) jak w etapie 80; 2013-01..2026-09, koszt 0,1 %, wolna gotówka w SPY.
+Wejście: ocena w top 10 % i PEG 0–2 → pierwsza transza 4 % konta (max 4 nowe spółki / mies., kolejność od najwyższej oceny).
+Dokupowanie (D): trzymana spółka z PEG 0–1 („korzystna cena”) i bez pogorszenia → transza 2 % konta, max 1 transza / spółkę / mies., limit pozycji 15 %
+konta przy dokupowaniu (warianty: bez dokupowania; PEG 0–1,5; limit 10 % / 20 %). Sprzedaż (P = pogorszenie): P1 fundamenty słabną 2 lata z rzędu
+(przychody lub zysk r/r < 0 teraz i rok wcześniej); P2 = P1 lub ocena spada poniżej mediany zbioru (pogorszenie jakości); P3 = P1 lub 2 z 3: przychody r/r < 0,
+zysk r/r < 0, ocena siły finansowej spadła o ≥ 2 pkt w 12 mies. Bez sprzedaży z powodu samej wysokiej wyceny.
+Miary: CAGR, maks. obsunięcie, średnia liczba spółek, odsetek w spółkach, największe pozycje; vs SPY, QQQ, etap 80 (S2: 20,1 %); połowy 2013–2019 / 2020–2026
+(start od zera); bez NVDA. Hipoteza: dokupowanie przy PEG 0–1 dodaje 0–2 pp/rok vs bez dokupowania; P1 ≈ P3, P2 gorzej (sprzedaje za wcześnie);
+całość ≈ etap 80 S2 ± 2 pp; bez NVDA SPY + 0–3 pp.
+
+Wynik etapu 81 (2026-11-20): 2013-01..2026-09 (SPY 14,6 %, QQQ 20,2 %): P1 (sprzedaż, gdy fundamenty słabną 2 lata) z dokupowaniem przy PEG 0–1 18,2 %/rok
+(DD −37 %, średnio 10 spółek), bez dokupowania 18,4 % (DD −34 %, 23 spółki); dokupowanie przy PEG 0–1,5 20,4 %, limit 10 % 19,8 %, 20 % 19,3 %; P2 (P1 lub ocena
+poniżej mediany) 17,2–17,3 %; P3 (P1 lub 2 z 3 pogorszeń) 13,5–15,0 %. Bez NVDA: P1 z dokupowaniem 16,2 %, bez dokupowania 17,0 %. Połowy: 2013–2019 P1 bez
+dokupowania 15,0 % (SPY 14,0 %), z dokupowaniem 11,4 % (dokupowanie tanich SBUX, LUV); 2020–2026 bez 21,4 %, z 22,6 % (SPY 15,5 %, QQQ 20,8 %).
+Hipoteza: dokupowanie +0–2 pp — nie (≈ 0 w całości, −3,6 pp w 2013–2019, +1,2 pp w 2020–2026; koncentruje portfel); P1 ≈ P3 — nie (P3 −3…−5 pp, sprzedaje
+za wcześnie); P2 gorzej — tak (−1 pp); ≈ etap 80 S2 ± 2 pp — tak; bez NVDA SPY + 0–3 pp — tak (+1,6…+2,4 pp).
+
+## Etap 82: sygnały ostrzegawcze — co wyprzedza załamanie kursu dobrych spółek i czy sprzedaż na sygnale poprawia portfel (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, jakie parametry sprawiają pogorszenie ceny, żeby spodziewać się załamania i sprzedać spółkę”. Zbiór jak w etapie 80 (≥ 5 lat na giełdzie).
+Próba: spółki „dobre” — ocena ogólna w top 30 % zbioru w danym miesiącu (to, co mogłoby być w portfelu). Wynik: nadwyżka zwrotu nad średnią zbioru w 12 mies.
+i „załamanie” = nadwyżka 12 mies. ≤ −30 pp. Sygnały (stan na koniec miesiąca): Z1 przychody ostatniego kwartału r/r < 0; Z2 wzrost przychodów 12 mies. spadł
+o ≥ 10 pp vs rok wcześniej; Z3 marża operacyjna spadła o ≥ 3 pp r/r; Z4 zysk netto r/r < 0; Z5 ocena ogólna spadła o ≥ 1,5 pkt w 12 mies.; Z6 ocena siły spadła
+o ≥ 2 pkt w 12 mies.; Z7 kurs ≥ 30 % poniżej maks. 12 mies.; Z8 kurs poniżej średniej 10 mies.; Z9 zwrot 6 mies. ≤ −20 %; Z10 PEG > 3; Z11 P/E > 1,5 × mediana
+własnego P/E z 36 mies.; Z12 liczba akcji +3 % r/r (emisja); Z13 zapasy rosną o ≥ 10 pp szybciej niż przychody; Z14 FCF < 0; Z15 (odniesienie) fundamenty słabną
+2 lata z rzędu. Miary: dla każdego sygnału — średnia nadwyżka 12 mies. z sygnałem vs bez, odsetek załamań z sygnałem vs bez (krotność), liczba obserwacji;
+okres WYBORU starty 2013–2018, SPRAWDZIAN 2019–2025-09. Sygnał „ostrzegawczy” = w wyborze nadwyżka z sygnałem niższa o ≥ 5 pp (t ≥ 2, błąd grupowany po miesiącach)
+i ten sam znak w sprawdzianie. Portfel: strategia z etapu 81 bez dokupowania (sprzedaż P1) + dodatkowa sprzedaż przy każdym sygnale ostrzegawczym osobno
+i przy dwóch najlepszych łącznie; CAGR, DD, połowy 2013–2019 / 2020–2026, bez NVDA.
+Hipoteza: sygnały cenowe (Z7–Z9) i spadek oceny (Z5, Z6) wskazują gorszą przyszłość o kilka pp, ale jako reguła sprzedaży nie poprawiają portfela (sprzedają
+zwycięzców w korektach); wycena (Z10, Z11) — słaby sygnał; Z1 / Z3 — ostrzegawcze, poprawa portfela ≤ 1 pp.
+
+Wynik etapu 82 (2026-11-20): żaden sygnał nie przeszedł reguły ostrzegawczej. Dla dobrych spółek (ocena top 30 %) nadwyżka 12 mies. z sygnałem vs bez: w wyborze
+od −6 pp (emisja akcji, t −1,0) do +41 pp (P/E > 1,5 × własna mediana), w sprawdzianie od −43 pp (spadek oceny siły, 3 obs.) do +14 pp; odsetek załamań (≤ −30 pp)
+z sygnałem 6–24 % vs bez 10–17 % — sygnały cenowe (kurs −30 % od szczytu, zwrot 6 mies. ≤ −20 %) nieco częściej poprzedzają dalsze spadki (14–21 % vs 10–15 %),
+ale średnio bez gorszego zwrotu (odbicia). Portfel (P1 18,4 %/rok): każdy dodatkowy sygnał sprzedaży poza dwoma obniżył wynik — przychody kwartału r/r < 0: 13,4 %,
+spadek wzrostu przychodów: 13,2 %, spadek oceny: 14,3 %, kurs −30 % od szczytu: 14,4 %, kurs poniżej średniej 10 mies.: 15,3 % (DD −30 %), PEG > 3: 16,9 %;
+emisja akcji > 3 % r/r 19,5 % i FCF < 0 19,0 % (poprawa po fakcie, bez sprawdzenia w połowach). Hipoteza: sygnały cenowe nie poprawiają portfela — tak; Z1 / Z3
+ostrzegawcze — nie (Z1 −5 pp w portfelu); wycena słaba — tak (w wyborze wysokie P/E wręcz lepiej).
+
+## Etap 83: sprzedaż, gdy 2 z 7 kryteriów listy kontrolnej przestają być spełnione (zapisane 2026-11-20 PRZED uruchomieniem)
+
+Użytkownik: „tam jest ta ocena przez 7 parametrów — jak dwa będą niespełnione, to sprzedaj; sprawdź takie coś”. Zbiór, portfel i PEG (historyczny) jak w etapach 80–81
+(transza 4 % konta, bez dokupowania, gotówka w SPY, koszt 0,1 %, 2013-01..2026-09). Listy: L7 „7/7 niskie ryzyko” — przychody 5 l. > +50 %, przychody 1 r. > 5 %,
+zysk 1 r. > 5 %, ROE > 15 %, dług/kapitał 0–1, FCF > 0, PEG 0–1; J7 „Jakość” — CAGR przychodów 5 l. > 8 %, dług/kapitał 0–1, FCF > 0, ROE > 15 %, ROA > 10 %,
+ROE wyższe niż 3 lata temu, ROCE > 15 %. Przy sprzedaży brak danych = kryterium spełnione (nie sprzedajemy przez lukę w danych); przy kupnie brak = niespełnione.
+Warianty: wejście E1 = ocena top 10 % + PEG 0–2 (jak etap 81); E2 = 7/7 danej listy (kolejność od najwyższej oceny). Sprzedaż: ≤ 5/7 (2 niespełnione) danej listy;
+≤ 4/7 (3 niespełnione); ≤ 5/7 lub P1 (fundamenty słabną 2 lata); odniesienie P1. Miary: CAGR, DD, liczba spółek, mediana trzymania, połowy 2013–2019 / 2020–2026,
+bez NVDA. Hipoteza: E1 + sprzedaż ≤ 5/7 L7 gorzej niż P1 (kryterium PEG 0–1 i przychody 1 r. sprzedają zwycięzców przy przejściowych wahaniach), J7 ≈ P1 ± 2 pp;
+E2 L7 ≈ etap 68 (18–21 %).
+
+Wynik etapu 83 (2026-11-20): 2013-01..2026-09 (SPY 14,6 %, QQQ 20,2 %; odniesienie E1 + P1 18,4 %): wejście E1 (ocena + PEG) i sprzedaż ≤ 5/7: lista 7/7 16,6 %,
+Jakość 16,3 % (≤ 5/7 lub P1: 16,5 / 15,6 %); ≤ 4/7: 16,5 / 19,9 %. Wejście 7/7: lista 7/7 — sprzedaż ≤ 5/7 14,4 % (średnio 49 % kapitału w spółkach, mało
+spółek spełnia 7/7), P1 16,4 %; Jakość 7/7 — ≤ 5/7 16,9 % (DD −30 %), ≤ 4/7 21,0 %, P1 20,7 % (NVDA 43–45 % portfela). Połowy: 2013–2019 wszystkie warianty
+≤ 5/7 12,3–13,6 % (SPY 14,0 %, E1 + P1 15,0 %); 2020–2026 17,1–22,2 % (SPY 15,5 %, E1 + P1 21,4 %). Bez NVDA: E1 + P1 17,0 %, Jakość 7/7 + ≤ 5/7 16,6 %,
+E1 + ≤ 5/7 7/7 16,0 %, 7/7 + ≤ 5/7 14,4 %. Hipoteza: lista 7/7 ≤ 5/7 gorzej niż P1 — tak (−1,8 pp); Jakość ≈ P1 ± 2 pp — tak (−2,1 pp z E1, −1,5 pp z
+wejściem 7/7); wejście 7/7 ≈ etap 68 (18–21 %) — nie (14,4 %; tu PEG historyczny zamiast prognoz analityków, transza 4 %, inny zbiór).

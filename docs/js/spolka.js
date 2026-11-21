@@ -9,6 +9,7 @@
     const oc = (x) => `<span class="ocena ${W.klasaOceny(x)}">${W.ok(x) ? W.fmtNum(x, 1) : "–"}</span>`;
     const usdOs = (v) => W.fmtUsd(v, 0);
 
+    const jak77 = () => { const s = K.strategie && K.strategie[W.JAKOSC]; return !!(s && s.length && s.every((x) => x[2])); };
     function top() {
         const m = M;
         const fakty = [];
@@ -19,7 +20,7 @@
         const typ = K.typy && K.typy[0];
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">szczegóły PEG / DCF ↓</a></div>` : "";
         $("top").innerHTML = `
-          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span></h1>
+          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}</h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div></div>
           <div class="siatka2">
             <div class="pole"><div class="mut male">W skrócie</div><p style="font-size:15px;margin:6px 0">${esc(fakty.join(", ") || "Brak danych z raportów.")}.</p>

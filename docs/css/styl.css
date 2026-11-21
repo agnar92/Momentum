@@ -150,3 +150,5 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 .wlasne button.drugi { background: transparent; }
 .moje { color: #7a5af8; font-weight: 700; }
 .spadek { color: #d92d20; font-weight: 700; }
+.jakosc { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
+.jakosc.duzy { font-size: 13px; padding: 3px 10px; }
