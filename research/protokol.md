@@ -1152,3 +1152,37 @@ jednorazowe zyski gorzej).
 Uwaga do etapów 70–72, 80–83 i 86 (2026-11-21, po uwadze użytkownika): wszystkie testy z PEG używały PEG historycznego (P/E ÷ przeszły CAGR zysku 5 l.) albo własnej prognozy,
 bo nie mamy historii prognoz analityków. Teza autora dotyczy PEG z prognozą analityków (P/E ÷ oczekiwany wzrost EPS 3–5 lat) — tych testów NIE należy traktować jako
 potwierdzenia ani obalenia. Etap 86 „progi PEG w typach niestabilne” = niesprawdzone, nie „niepotwierdzone”. Dane autora (szerszy zbiór, prognozy, normalizacja zysków) są lepsze.
+
+## Etap 87: test tez z kolejnych 4 filmów autora (przyspieszenie przychodów, ROIC, pułapki wartości, spadki po dobrych wynikach) (zapisane 2026-11-21 PRZED uruchomieniem)
+
+Użytkownik wkleił transkrypcje 4 kolejnych filmów (wcześniej: „przetestuj wszystko z tych filmów, nie pomijaj niczego”). Dane jak w etapie 86 (top 500 USA PIT ze spółkami usuniętymi,
+starty w styczniu, MEDIANA zwrotu ceny, połowy), wszystkie sektory (jak u autora: S&P 500) i wariant bez wykluczonych sektorów.
+F5 przyspieszenie: 5 rocznych wzrostów przychodów (TTM rok do roku) z ostatnich 5 lat; „przyspiesza” = nachylenie prostej dopasowanej do nich > 0. Mediana zwrotu 1 i 5 lat:
+przyspieszające vs wszystkie; przyspieszające + przychody 5 l. ≥ +50 % vs wszystkie; także średnia; w podziale na sektory (ile sektorów lepiej); starty 2016–2021 (jak autor)
+i 2012–2021. Teza: 11 vs 9 % (1 r.), 64 vs 53 % (5 l.); z ≥ +50 %: 12,4 vs 8,9 % i 72,6 vs 53 %; 9 z 11 sektorów. Dodatkowo: pasma przeszłego wzrostu przychodów 5 l. →
+wzrost przychodów w następnym roku (teza: liniowo).
+F6 ROIC (≈ zysk operacyjny × 0,79 ÷ (kapitał + dług − gotówka)): kwintyle w każdym styczniu 2012–2021; mediana zwrotu 1 / 3 / 5 lat i 10 lat (starty 2012–2016); CAGR zysku netto
+10 l. (bez kwintyla najniższego w interpretacji); odsetek z zyskiem w każdym roku przez 10 lat; zmienność zysku (odch. std. rocznego zysku ÷ średni zysk); odsetek z przychodami
+rosnącymi w każdym roku przez 10 lat; mediana zmiany liczby akcji w 10 lat. Teza: najwyższe kwintyle najlepiej (+59 pp w 10 lat), wzrost EPS podobny, zysk co rok 74 vs 59 %,
+stabilniejsze zyski, 1 na 6 z przychodami rosnącymi co rok, akcje −17 %.
+F7 pułapki wartości: (a) cykliczne (spadek przychodów ≥ 10 % w którymś z 5 lat): przychody nadal rosną, ale wzrost zwolnił o ≥ 10 pp r/r vs pozostałe cykliczne — mediana zwrotu
+1 rok (teza: kurs spada, zanim spadną przychody); (b) P/B < 1 (kapitał > kapitalizacja) vs reszta — 1 / 5 lat; (c) kurs ≥ 40 % poniżej maks. 12 mies.: P/E w górnej tercyli vs
+dolnej (zamiast PEG z prognozą — niedostępnej) — 1 / 3 lata. Teza: (a) gorzej, (b) bez przewagi, (c) drogie po spadku gorzej.
+F8 spadki po dobrych wynikach: zdarzenie = pierwsza publikacja raportu kwartalnego w SEC (data złożenia), „dobre wyniki” = przychody kwartału r/r ≥ +15 %; (a) kurs +20 % lub więcej
+w 3 mies. przed publikacją vs bez wzrostu — nadwyżka nad SPY 1 i 3 mies. po (teza: dobre wyniki „wycenione wcześniej” → spadek po); (b) dobre wyniki przy rynku w strachu
+(SPY ≥ 10 % poniżej maks. 12 mies.) vs spokojnym — nadwyżka 3 i 12 mies. (teza: w strachu kurs najpierw nie reaguje, potem odrabia). Nietestowalne: prognozy spółek (guidance),
+wyniki vs oczekiwania analityków, korekty jednorazowe (poza przybliżeniem z etapu 86).
+Hipoteza: F5 kierunkowo tak, ale słabiej (etap 58: przyspieszenie ~0 przy innej definicji); F6 wyższy ROIC lepiej (etap 79: ROIC lata niestabilne), stabilność zysków tak;
+F7 (a) tak, (b) bez przewagi, (c) słabo; F8 (a) mały efekt na 1 mies., (b) dobre wyniki w strachu lepiej w 12 mies.
+
+Wynik etapu 87 (2026-11-21). Uwaga metodyczna (dotyczy też etapu 86, F4): cechy z raportów liczone są tylko dla spółek bez wykluczonych sektorów, więc „wszystkie sektory”
+w F4 etapu 86 to w praktyce ten sam zbiór bez finansów, surowców, energii, użyteczności i nieruchomości (wnioski bez zmian, poprawiona etykieta). Etap 87 — ten zbiór, mediana zwrotu.
+F5: przychody przyspieszają (nachylenie 5 rocznych wzrostów > 0) — 1 rok 17,3 % vs nie przyspieszają 15,2 % (wszystkie 14,3 %), 5 lat 75 % vs 66 % (wszystkie 69 %), średnia 100 %;
+przyspieszają + przychody 5 l. ≥ +50 % — 15,0 % i 71 % (średnia 115 %) — słabiej niż samo przyspieszenie (autor: 72,6 vs 53 %); sektory: lepiej w 2 z 3 z ≥ 10 obs. (Health Care gorzej).
+Przeszły wzrost przychodów → przychody w następnym roku: 3,5 / 2,5 / 7,1 / 8,0 / 17,2 % (rośnie od 25 %). F6 ROIC: zwroty bez wzoru (5 lat 61–67 %, 10 lat K1 228 % vs K5 176 %; połowy:
+2012–2016 K1 najlepszy, 2017+ K5 najlepszy); ale stabilność jak u autora: zysk co rok 10 lat K1 39 % vs K4–K5 67–74 %, zmienność zysku 0,86 vs 0,40–0,46, liczba akcji 10 lat
+−5 % vs −20 %; przychody rosnące co rok bez wzoru (12–26 %). F7: cykliczne z hamującym wzrostem 18 % vs 11 % (1 rok, n 20) — teza nie potwierdzona; P/B < 1 1 rok 12 % = 12 %,
+5 lat 86 % vs 68 % (n 37; 2017+ 4 %) — bez stałej przewagi; kurs −40 % od szczytu i nadal drogo (P/E górna tercyla): 1 rok −7 % vs tanie +8 %, 3 lata −40 % vs +19 % (n 10 / 14) —
+kierunek jak u autora, bardzo mało obserwacji. F8: dobre wyniki po wzroście kursu +20 % — 1 mies. po −0,0 pp vs +0,2 pp (średnio +1,1) — „spadek po wycenionych wynikach” nie widać
+w danych miesięcznych; dobre wyniki w strachu rynku +1,5 pp w 1 i 3 mies. vs ~0, w 12 mies. jak w spokoju (−4,4 vs −4,2 pp). Hipoteza: F5 tak, słabiej (z warunkiem ≥ 50 % — nie
+wzmacnia); F6 zwroty nie, stabilność tak; F7 (a) nie, (b) tak (bez przewagi), (c) kierunek tak; F8 (a) brak efektu, (b) mały efekt krótkoterminowy.

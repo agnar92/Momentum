@@ -187,6 +187,13 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
                          rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t))))
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     ocena.oceny(rows)
+    pes = sorted(r["m"]["pe"] for r in rows if r["m"].get("pe") and r["m"]["pe"] > 0)
+    pe67 = pes[int(len(pes) * 2 / 3)] if pes else None
+    for r in rows:
+        c = r["ceny"]
+        if c and len(c[1]) >= 52:
+            r["m"]["od_maks_12m"] = c[1][-1] / max(c[1][-52:]) - 1
+        r["m"]["pe_gorna_tercyla"] = bool(pe67 and r["m"].get("pe") and r["m"]["pe"] >= pe67)
     for r in rows:
         r["typy"] = ocena.typy(r["m"], r["sector"])
         r["strategie"] = ocena.strategie(r["m"], r["sector"])

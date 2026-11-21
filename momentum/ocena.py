@@ -76,6 +76,11 @@ def metryki(ex, fv, dzis=None, splity=()):
                 lata.append(b / a - 1)
         m["rev_lata_10"] = sum(x > 0.10 for x in lata) if len(lata) == 5 else None
         m["rev_lata"] = [_r(x) for x in lata]
+        if len(lata) == 5:      # etap 87: tempo przychodów — nachylenie 5 rocznych wzrostów (od najstarszego), > 0 = przyspiesza
+            g_ = lata[::-1]
+            xs = range(5)
+            mx, my = 2.0, sum(g_) / 5
+            m["przysp"] = sum((x - mx) * (y - my) for x, y in zip(xs, g_)) / sum((x - mx) ** 2 for x in xs)
     if nt:
         e, n0 = nt[-1]
         m["ni_ttm"] = n0
@@ -426,6 +431,9 @@ def ostrzezenia(m, typ=None, rank=None):
         przed = f"przepływy operacyjne przed rampą {_pl(rc['ocf_przed'])}× capex, próg 3×" if rc.get("ocf_przed") is not None else "brak danych o przepływach przed rampą"
         out.append(f"Capex wzrósł {_pl(rc['x'])}× w 2 lata (do {100 * rc['przych']:.0f} % przychodów) przy niewystarczających przepływach wcześniej ({przed}) — "
                    "takie spółki dały w 5 lat medianę ok. 0 % (etap 86; bogate w gotówkę +77 %, a te z wysokim zwrotem z nowych aktywów +108 %).")
+    if m.get("od_maks_12m") is not None and m["od_maks_12m"] <= -0.40 and m.get("pe_gorna_tercyla"):
+        out.append(f"Kurs {100 * m['od_maks_12m']:.0f} % od szczytu z 12 mies., a P/E ({_pl(m['pe'])}) nadal w górnej 1/3 listy — spadek nie oznacza, że jest tanio "
+                   "(etap 87: po takim spadku drogie spółki dalej traciły, mediana −40 % w 3 lata vs +19 % tanie; mało przypadków).")
     if m.get("baza_wzrostu") is not None and g is not None and g > 0.15 and m["baza_wzrostu"] < 0.15:
         out.append(f"Wzrost zysku ≥ {100 * g:.0f} % rocznie przez ostatnie 5 lat osiągnęło tylko {100 * m['baza_wzrostu']:.0f} % spółek z listy — sprawdź, "
                    "czy prognoza nie jest zbyt optymistyczna (scenariusz pesymistyczny w PEG).")
