@@ -1148,3 +1148,7 @@ przy słabych przychodach: 3 lata 28 % vs 38 %; EPS „ze skupu” 68 % vs 63 % 
 Hipoteza: F1 i F2 kierunkowo tak, słabiej i nie w obu połowach (F1 tylko 2017+); ROCE ≥ 30 % — więcej niż zakładano; skup > 2 % — mała różnica (tak); P4 — bez efektu; rampy — tak
 (mało obserwacji); typy: niski PEG u stabilnych — niestabilny, cykliczne z niskim P/E — nie gorzej (teza nie potwierdzona); F4 — tak (monotonicznie od 25 %, duże wolniej,
 jednorazowe zyski gorzej).
+
+Uwaga do etapów 70–72, 80–83 i 86 (2026-11-21, po uwadze użytkownika): wszystkie testy z PEG używały PEG historycznego (P/E ÷ przeszły CAGR zysku 5 l.) albo własnej prognozy,
+bo nie mamy historii prognoz analityków. Teza autora dotyczy PEG z prognozą analityków (P/E ÷ oczekiwany wzrost EPS 3–5 lat) — tych testów NIE należy traktować jako
+potwierdzenia ani obalenia. Etap 86 „progi PEG w typach niestabilne” = niesprawdzone, nie „niepotwierdzone”. Dane autora (szerszy zbiór, prognozy, normalizacja zysków) są lepsze.

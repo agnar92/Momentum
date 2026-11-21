@@ -433,8 +433,8 @@ def ostrzezenia(m, typ=None, rank=None):
 
 
 # dobra cena wg typu spółki (Peter Lynch w ujęciu autora filmu o 6 typach)
-CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %), ale efekt progu PEG niestabilny"),
-             "Szybko rosnąca": (1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); u nas próg PEG bez wyraźnego efektu — kluczowe, czy wzrost się utrzyma"),
+CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"),
+             "Szybko rosnąca": (1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); progu PEG z prognozą analityków nie mogliśmy sprawdzić — kluczowe, czy wzrost się utrzyma"),
              "Wolno rosnąca": (None, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"),
              "Cykliczna": (None, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"),
              "Wychodząca z kłopotów": (None, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"),
