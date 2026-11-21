@@ -221,6 +221,19 @@ def metryki(ex, fv, dzis=None, splity=()):
     if m.get("mcap") and (skup is not None or emis is not None) and ex.get("skup"):
         m["skup_netto_mc"] = ((skup or 0) - (emis or 0)) / m["mcap"]
     m["fcf_aktywa"] = m["fcf_ttm"] / m["aktywa"] if m.get("fcf_ttm") is not None and m.get("aktywa") else None
+    # ROIC (jak w badaniu, etap 87): zysk operacyjny 12 mies. × 0,79 (po podatku) ÷ (kapitał + dług − gotówka); zapas: Finviz (ROI)
+    if ot and m.get("equity") is not None:
+        ic = m["equity"] + (m.get("debt") or 0) - (m.get("cash") or 0)
+        if ic > 0:
+            m["roic_fv"], m["roic"] = m.get("roic"), ot[-1][1] * 0.79 / ic
+    # stabilność zysku (etap 87: wysoki ROIC = zysk w każdym roku i mniejsze wahania): lata z dodatnim zyskiem z 5 i zmienność zysku
+    if nt:
+        e_, n0_ = nt[-1]
+        zl5 = [F.wartosc_lata_temu(nt, e_, k) if k else n0_ for k in range(5)]
+        if all(x is not None for x in zl5):
+            m["zysk_dodatni_lata"] = sum(x > 0 for x in zl5)
+            sr_ = sum(zl5) / 5
+            m["zmiennosc_zysku"] = (sum((x - sr_) ** 2 for x in zl5) / 5) ** 0.5 / abs(sr_) if sr_ else None
     # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
     ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
     if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
@@ -281,9 +294,9 @@ def _pct(x):
 
 # --- oceny względem sektora --------------------------------------------------------------------------------------
 GRUPY = {
-    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1)],
+    "wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("rev_cagr5", 1), ("ni_1y", 1), ("ni_5y", 1), ("eps_next5", 1), ("rev_lata_10", 1), ("zysk_lata", 1), ("przysp", 1)],
     "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("qr", 1), ("net_cash_mc", 1),
-             ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1)],
+             ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1), ("roic", 1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
 
