@@ -36,7 +36,7 @@ def metryki(ex, fv, dzis=None, splity=()):
              de=_f(fv.get("debtEq")), eps=p / pe if p and pe and pe > 0 else None)
     m["peg"] = pe / (100 * m["eps_next5"]) if pe and pe > 0 and m["eps_next5"] and m["eps_next5"] > 0 else None
     hist = dict(q=[], y=[])
-    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex") if ex.get(k)}
+    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc") if ex.get(k)}
     rt = F.ttm(q["rev"]) if "rev" in q else []
     nt = F.ttm(q["ni"]) if "ni" in q else []
     # emitenci zagraniczni (20-F) raportują tylko rocznie: punkty roczne zamiast TTM, jeśli są świeże (<= 15 mies.)
@@ -105,6 +105,15 @@ def metryki(ex, fv, dzis=None, splity=()):
     if ft:
         m["fcf_ttm"] = ft[-1][1]
         m["fcf_margin"] = ft[-1][1] / m["rev_ttm"] if m.get("rev_ttm") else None
+    # wynagrodzenia w akcjach (SBC) — koszt dla akcjonariuszy pominięty w FCF; do ostrożnego DCF (FCF − SBC)
+    st = F.ttm(q["sbc"]) if "sbc" in q else []
+    if st and m.get("rev_ttm") and rt and abs((F.D(st[-1][0]) - F.D(rt[-1][0])).days) <= 100:
+        m["sbc_ttm"] = st[-1][1]
+    elif ex.get("sbc") and m.get("rev_ttm") and rt:
+        sa = F.polacz(ex["sbc"], F.roczne)
+        if sa and abs((F.D(list(sa)[-1]) - F.D(rt[-1][0])).days) <= 200:
+            m["sbc_ttm"] = list(sa.values())[-1]
+    m["sbc_przych"] = m["sbc_ttm"] / m["rev_ttm"] if m.get("sbc_ttm") is not None and m.get("rev_ttm") else None
     # etap 79: capex / przychody (12 mies.; mniej = lżejszy kapitałowo model) — zapas: ostatni rok obrotowy
     ct = F.ttm(q["capex"]) if "capex" in q else []
     if ct and m.get("rev_ttm") and abs((F.D(ct[-1][0]) - F.D(rt[-1][0])).days) <= 100:
@@ -119,6 +128,15 @@ def metryki(ex, fv, dzis=None, splity=()):
         e = list(ch["eq"])[-1]
         m["cash"] = (ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0)
         m["debt"] = F.dlug(ex.get("debt", {}), e)
+        # leasing operacyjny (zobowiązanie) — do długu w DCF
+        ls = {k: F.polacz(ex[k], F.chwilowe) for k in ("lease", "lease_nc", "lease_c") if ex.get(k)}
+
+        def bliskie(k):
+            return next((v for dd_, v in sorted(ls.get(k, {}).items(), reverse=True) if abs((F.D(dd_) - F.D(e)).days) <= 100), None)
+        lt = bliskie("lease")
+        if lt is None and bliskie("lease_nc") is not None:
+            lt = bliskie("lease_nc") + (bliskie("lease_c") or 0)
+        m["leasing"] = lt
         if not m["cash"]:
             m["cash"] = None
         m["equity"] = ch["eq"][e]
@@ -176,19 +194,19 @@ def metryki(ex, fv, dzis=None, splity=()):
                 dil[e_] = v_
         m["akcje_3l"] = zmiana_akcji(dict(sorted(dil.items())), splity)
     s_fv = m["mcap"] / p if m.get("mcap") and p else None
-    m["shares"] = list(sh.values())[-1] if sh else s_fv
-    if s_fv and (not m["shares"] or abs(m["shares"] / s_fv - 1) > 0.35):   # akcje kilku klas / błędny dei (np. FOX = 1) -> kapitalizacja ÷ cena
-        m["shares"] = s_fv
+    # liczba akcji do DCF = kapitalizacja ÷ cena (spójna z ceną: wartość na akcję porównujemy z kursem; dei bywa jedną klasą akcji, ADR ma inny przelicznik —
+    # np. BABA, QSR, UPS); zapas: dei z SEC
+    m["shares"] = s_fv if s_fv else (list(sh.values())[-1] if sh else None)
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
         hist["q"].append([e, _r(q.get("rev", {}).get(e), 0), _r(q.get("ni", {}).get(e), 0), _r(fq.get(e), 0),
                           _r((ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0) if ch.get("cash", {}).get(e) is not None else None, 0),
                           _r(F.dlug(ex.get("debt", {}), e) if ch.get("eq", {}).get(e) is not None else None, 0)])
-    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex") if ex.get(k)}
+    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc") if ex.get(k)}
     for e in list(yr.get("rev", {}))[-12:]:
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
-        hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0)])
+        hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0), _r(yr.get("sbc", {}).get(e), 0)])
     return m, hist
 
 
@@ -408,30 +426,64 @@ def dcf(przychody, marza, g, akcje, gotowka=0.0, dlug=0.0, r=DCF["r"], tg=DCF["t
 
 def dcf_domyslne(m, hist=None):
     """Założenia domyślne (ostrożne): wzrost przychodów = mniejszy z (CAGR przychodów 3 lat, prognoza EPS 5 lat), w [0, 25 %];
-    marża FCF = mediana z marży z ostatnich 12 mies. i rocznych marż FCF z ostatnich 5 lat, w [0, 60 %]."""
+    marża FCF = mediana z marży (FCF − SBC) z ostatnich 12 mies. i rocznych z ostatnich 5 lat, w [0, 60 %]."""
     gs = [x for x in (m.get("rev_cagr3") if m.get("rev_cagr3") is not None else m.get("rev_cagr5"), m.get("eps_next5")) if x is not None]
     g = max(0.0, min(0.25, min(gs))) if gs else None
-    mz = [m["fcf_margin"]] if m.get("fcf_margin") is not None else []
+    # marże FCF po odjęciu wynagrodzeń w akcjach (SBC): FCF − SBC (ostrożniej; SBC to realny koszt dla akcjonariuszy)
+    sbc_m = m.get("sbc_przych") or 0.0
+    mz = [m["fcf_margin"] - sbc_m] if m.get("fcf_margin") is not None else []
     rt = m.get("rev_ttm")
-    for _, rev, _, fcf in (hist or {}).get("y", [])[-5:]:
+    for row in (hist or {}).get("y", [])[-5:]:
+        rev, fcf = row[1], row[3]
+        sbc = row[4] if len(row) > 4 and row[4] is not None else (sbc_m * rev if rev else 0)
         if rev and fcf is not None and rev > 0 and (not rt or 0.3 < rev / rt < 2):   # pomijamy lata z nieporównywalnymi przychodami
-            mz.append(fcf / rev)
+            mz.append((fcf - sbc) / rev)
     mz = sorted(mz)
     mz = max(0.0, min(0.60, mz[len(mz) // 2])) if mz else None
     return g, mz
 
 
+def dcf_wejscie(m, hist=None):
+    """Przychody i marża FCF do DCF z kontrolą zgodności z Finviz: gdy przychody SEC (12 mies.) różnią się od Finviz (kapitalizacja ÷ P/S) o > 25 %
+    (np. raport roczny spółki zagranicznej sprzed roku, przychody z akcyzą, zły znacznik) — przychody z Finviz; gdy FCF z SEC różni się od Finviz
+    (kapitalizacja ÷ P/FCF) ponad 2 × (np. brak znacznika nakładów na flotę URI, ramię finansowe GM / DE) — marża FCF z Finviz, bez historii.
+    Zwraca (przychody, g, marża, uwagi)."""
+    g, mz = dcf_domyslne(m, hist)
+    rev, uw = m.get("rev_ttm"), []
+    rev_fv = m["mcap"] / m["ps"] if m.get("mcap") and m.get("ps") and m["ps"] > 0 else None
+    if rev_fv and (not rev or not 0.8 <= rev / rev_fv <= 1.25):
+        uw.append(f"przychody z Finviz ({rev_fv / 1e9:.1f} mld USD; SEC: {rev / 1e9:.1f} mld)" if rev else "przychody z Finviz (brak w SEC)")
+        rev = rev_fv
+    fcf_fv = m["mcap"] / m["pfcf"] if m.get("mcap") and m.get("pfcf") and m["pfcf"] > 0 else None
+    f_sec = m.get("fcf_ttm")
+    if fcf_fv and rev and (f_sec is None or f_sec <= 0 or not 0.5 <= f_sec / fcf_fv <= 2):
+        nowa = max(0.0, min(0.60, fcf_fv / rev - (m.get("sbc_przych") or 0.0)))
+        if f_sec is not None and f_sec > 0:
+            uw.append(f"marża FCF z Finviz {100 * nowa:.1f} % (SEC: FCF {f_sec / 1e9:.1f} mld vs Finviz {fcf_fv / 1e9:.1f} mld)")
+            mz = nowa
+        elif mz is None or mz <= 0:
+            mz = nowa
+    return rev, g, mz, uw
+
+
 def dcf_scenariusze(m, hist=None, sektor=None):
     if sektor == "Financial":            # banki / ubezpieczyciele: wolne przepływy nie mierzą wartości (depozyty, rezerwy) — bez DCF
         return None
-    g, mz = dcf_domyslne(m, hist)
+    rev, g, mz, uw = dcf_wejscie(m, hist)
+    m["dcf_rev"], m["dcf_uwagi"], m["dcf_g"], m["dcf_marza"] = rev, uw or None, g, mz     # założenia także dla karty, gdy DCF pominięty
     if g is None or not mz:
+        if g is not None and mz is not None:
+            m["dcf_brak"] = "marża wolnych przepływów po odjęciu wynagrodzeń w akcjach ≤ 0 (duże inwestycje lub SBC) — DCF pominięty"
         return None
-    a = (m.get("rev_ttm"), m.get("shares"), m.get("cash") or 0, m.get("debt") or 0)
+    m["dcf_dlug"] = (m.get("debt") or 0) + (m.get("leasing") or 0)        # dług + leasing operacyjny
+    a = (rev, m.get("shares"), m.get("cash") or 0, m["dcf_dlug"])
     out = {}
     for k, fg, fm in (("bear", 0.6, 0.85), ("base", 1.0, 1.0), ("bull", 1.2, 1.1)):
         v = dcf(a[0], mz * fm, g * fg, a[1], a[2], a[3])
         out[k] = dict(g=g * fg, marza=mz * fm, wartosc=v)
+    if out["base"]["wartosc"] is not None and out["base"]["wartosc"] <= 0:   # np. GM: dług banku w grupie > wartość przepływów — DCF bez sensu
+        m["dcf_brak"] = "wartość DCF ujemna (dług z leasingiem większy niż wartość przepływów, np. bank w grupie) — DCF pominięty"
+        return None
     return out if out["base"]["wartosc"] else None
 
 
