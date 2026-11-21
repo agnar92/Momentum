@@ -20,6 +20,7 @@ TAGI = {
     "sbc": ("USD", ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"]),
     "skup": ("USD", ["PaymentsForRepurchaseOfCommonStock"]),
     "emisja": ("USD", ["ProceedsFromIssuanceOfCommonStock"]),
+    "dyw": ("USD", ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]),
     "eps": ("USD/shares", ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted", "EarningsPerShareBasic"]),
 }
 CHWILE = {
@@ -43,6 +44,7 @@ TAGI_IFRS = {
     "sbc": ["AdjustmentsForSharebasedPayments"],
     "skup": ["PaymentsToAcquireOrRedeemEntitysShares"],
     "emisja": ["ProceedsFromIssuingShares"],
+    "dyw": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
     "eps": ["DilutedEarningsLossPerShare", "BasicAndDilutedEarningsLossPerShare", "BasicEarningsLossPerShare"],
 }
 CHWILE_IFRS = {
@@ -162,7 +164,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 4
+    out["v"] = 5
     return out
 
 

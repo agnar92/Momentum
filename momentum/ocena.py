@@ -234,6 +234,22 @@ def metryki(ex, fv, dzis=None, splity=()):
             m["zysk_dodatni_lata"] = sum(x > 0 for x in zl5)
             sr_ = sum(zl5) / 5
             m["zmiennosc_zysku"] = (sum((x - sr_) ** 2 for x in zl5) / 5) ** 0.5 / abs(sr_) if sr_ else None
+    # „Duży zwycięzca (10+ lat)” (użytkownik: duże spółki o dobrych fundamentach rosnące od 10+ lat, np. MSFT, META — PEG 1–2 to cena godziwa)
+    yrev = F.polacz(ex["rev"], F.roczne, True) if ex.get("rev") else {}
+    yv = list(yrev.values())[-11:]
+    if len(yv) == 11 and all(v and v > 0 for v in yv):
+        m["przych_lata_wzrostu_10"] = sum(yv[k + 1] > yv[k] for k in range(10))
+        m["przych_10l"] = yv[-1] / yv[0]
+    # dywidenda: wypłacana w każdym z 5 ostatnich lat obrotowych i bez cięcia o > 20 % (sumy wypłat; skup akcji zmniejsza sumę przy rosnącej dywidendzie na akcję)
+    if ex.get("dyw"):
+        dv = list(F.polacz(ex["dyw"], F.roczne).items())
+        if dv and rt and abs((F.D(dv[-1][0]) - F.D(rt[-1][0])).days) <= 400:
+            d5 = [abs(v) for _, v in dv[-5:]]
+            m["dywidenda_lata"] = sum(v > 0 for v in d5) if len(d5) == 5 else None
+            # lata z dywidendą specjalną (> 1,5 × mediana, np. Costco) pomijamy przy sprawdzaniu cięć
+            med_ = sorted(d5)[2] if len(d5) == 5 else None
+            reg = [v for v in d5 if med_ and v <= 1.5 * med_]
+            m["dywidenda_stabilna"] = bool(len(d5) == 5 and all(v > 0 for v in d5) and all(reg[k + 1] >= 0.8 * reg[k] for k in range(len(reg) - 1)))
     # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
     ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
     if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
@@ -454,7 +470,8 @@ def ostrzezenia(m, typ=None, rank=None):
 
 
 # dobra cena wg typu spółki (Peter Lynch w ujęciu autora filmu o 6 typach)
-CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"),
+CENA_TYPU = {"Duży zwycięzca (10+ lat)": (2.0, "PEG 1–2 to cena godziwa, poniżej 1 okazja, powyżej 2 drogo (zasada użytkownika; nie testowana — brak historii prognoz)"),
+             "Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"),
              "Szybko rosnąca": (1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); progu PEG z prognozą analityków nie mogliśmy sprawdzić — kluczowe, czy wzrost się utrzyma"),
              "Wolno rosnąca": (None, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"),
              "Cykliczna": (None, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"),
@@ -494,7 +511,13 @@ def strategie(m, sektor):
            ("Capex < 35 % przepływów operacyjnych", m.get("capex_ocf"), m.get("capex_ocf") is not None and m["capex_ocf"] < 0.35),
            ("Skup akcji netto > 2 % kapitalizacji (12 mies.)", m.get("skup_netto_mc"), _gt(m.get("skup_netto_mc"), 0.02)),
            ("Wolne przepływy > 12 % aktywów", m.get("fcf_aktywa"), _gt(m.get("fcf_aktywa"), 0.12))]
-    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon, "Zyskowność (4 kryteria)": zys, "Przepływy pieniężne (4 kryteria)": prz}
+    duz = [("Kapitalizacja ≥ 100 mld USD", m.get("mcap"), _gt(m.get("mcap"), 100e9 - 1)),
+           ("Przychody rosły w ≥ 8 z 10 lat", m.get("przych_lata_wzrostu_10"), (m.get("przych_lata_wzrostu_10") or 0) >= 8),
+           ("Przychody ≥ 2 × w 10 lat", m.get("przych_10l"), _gt(m.get("przych_10l"), 2 - 1e-9)),
+           ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
+           ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
+           ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1)]
+    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon, "Duży zwycięzca (10+ lat)": duz, "Zyskowność (4 kryteria)": zys, "Przepływy pieniężne (4 kryteria)": prz}
     if not wykl:
         out = {"7/7 (niskie ryzyko)": lr, **out}
     return out

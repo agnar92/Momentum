@@ -152,3 +152,5 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 .spadek { color: #d92d20; font-weight: 700; }
 .jakosc { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
 .jakosc.duzy { font-size: 13px; padding: 3px 10px; }
+.jakosc.duzy-z { background: #e0e7ff; color: #3730a3; }
+.dyw { font-size: 13px; }

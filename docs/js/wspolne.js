@@ -100,10 +100,15 @@
         return rows.filter((r) => (!q || r.t.toLowerCase().includes(q) || (r.n || "").toLowerCase().includes(q))
             && (!f.sektor || r.s === f.sektor) && (!f.typ || r.typ === f.typ) && (!f.wycena || r.et === f.wycena)
             && (!f.strategia || (r.st[f.strategia] && r.st[f.strategia][0] >= (f.min || r.st[f.strategia][1])))
-            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)));
+            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw));
     }
     // znacznik jakości: spełnia wszystkie 7 kryteriów listy „Jakość” (etapy 74–75, 83)
     const JAKOSC = "Jakość (7 kryteriów)";
+    const DUZY = "Duży zwycięzca (10+ lat)";
+    function duzy(r) {
+        const s = r && r.st && r.st[DUZY];
+        return !!(s && s[0] === s[1] && s[1] > 0);
+    }
     function jakosc77(r) {
         const s = r && r.st && r.st[JAKOSC];
         return !!(s && s[0] === s[1] && s[1] > 0);
@@ -181,7 +186,8 @@
         ["net_cash_mc", "Gotówka − dług, % kapitalizacji", "%"], ["akcje_3l", "Zmiana liczby akcji 3 lata", "%"], ["capex_przych", "Capex / przychody", "%"], ["kapital_3l", "Wzrost kapitału własnego 3 lata, rocznie", "%"], ["pe", "P/E", ""], ["peg", "PEG", ""], ["ps", "P/S", ""], ["pfcf", "P/FCF", ""], ["fcf_yield", "Stopa FCF", "%"]];
 
     // dobra cena wg typu spółki (jak ocena.CENA_TYPU): [próg PEG lub null, opis]
-    const CENA_TYPU = { "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"],
+    const CENA_TYPU = { "Duży zwycięzca (10+ lat)": [2.0, "PEG 1–2 to cena godziwa, poniżej 1 okazja, powyżej 2 drogo (zasada użytkownika; nie testowana — brak historii prognoz)"],
+        "Stabilnie rosnąca": [1.5, "PEG ≤ 1,5 to rozsądna cena (autor); u nas najlepszy typ (mediana 5 lat 83 %); progu PEG z prognozą analityków nie mogliśmy sprawdzić"],
         "Szybko rosnąca": [1.6, "PEG ≤ 1,6, okazja poniżej 1 (autor); progu PEG z prognozą analityków nie mogliśmy sprawdzić — kluczowe, czy wzrost się utrzyma"],
         "Wolno rosnąca": [null, "autor: P/E w okolicach kilkunastu; u nas wolno rosnące z P/E ≤ 18 wypadały gorzej (43 % vs 65 % w 5 lat)"],
         "Cykliczna": [null, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"],
@@ -194,7 +200,7 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
