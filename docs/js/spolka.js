@@ -92,7 +92,8 @@
         const kp = K.kompletnosc;
         const ostrz = kp && kp.niepelne ? `<div class="ostrzezenie">⚠ <b>Niepełne dane:</b> ${kp.liczone} z ${kp.wszystkie} wskaźników${kp.kategorie && kp.kategorie.length ? ` (za mało w kategorii: ${kp.kategorie.map((g) => ({ wzrost: "Wzrost", sila: "Siła finansowa", wycena: "Wycena" })[g]).join(", ")})` : ""} — ocena może być zaburzona (np. młoda spółka bez historii albo spółka zagraniczna bez raportów w SEC). Sprawdź „Jak powstała ocena” przy wskaźnikach.</div>` : "";
         const sp = m.spadek_2l ? `<div class="ostrzezenie">⬇ <b>Fundamenty słabną 2 lata z rzędu:</b> ${esc(m.spadek_2l.join(" i "))} ${m.spadek_2l.length > 1 ? "spadają" : "spada"} rok do roku teraz i rok wcześniej — wg Twojej reguły sygnał do sprzedaży (badanie, etap 77: takie spółki w 5 lat średnio −4 pp względem średniej).</div>` : "";
-        $("liczby").innerHTML = ostrz + sp + wlasne() + `
+        const ow = (K.ostrzezenia || []).length ? `<div class="ostrzezenie">❗ <b>Realność prognozy wzrostu:</b><ul style="margin:4px 0 0 18px;padding:0">${K.ostrzezenia.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+        $("liczby").innerHTML = ostrz + sp + ow + wlasne() + `
           <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle 500 największych spółek</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
           <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} · <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a></div>
@@ -160,13 +161,14 @@
     function strategie() {
         const fv = (n, v) => {
             if (!W.ok(v)) return "–";
+            if (/≥ 30 % długu/.test(n) && v >= 9.9) return "brak długu";
             if (/Dług|PEG/.test(n)) return W.fmtNum(v);
             if (/FCF > 0/.test(n)) return W.fmtUsd(v);
             if (/Lata|≥ 3 z 5/.test(n)) return String(v);
             if (/ROE wyższe/.test(n)) return (n.match(/niż (.*)$/) || ["", ""])[1] + " " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
             return W.fmtPct(v, 1);
         };
-        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/): ile z nich spółka dziś spełnia.</div><div class="kol3">` +
+        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/) i z filmów autora (Zyskowność, Przepływy pieniężne — jeszcze nie sprawdzone u nas w całości): ile z nich spółka dziś spełnia.</div><div class="kol3">` +
             Object.entries(K.strategie).map(([n, kr]) => {
                 const ile = kr.filter((x) => x[2]).length;
                 return `<div class="kol" style="border:1px solid var(--linia);border-radius:10px;padding:10px"><div style="display:flex;justify-content:space-between"><b>${esc(n)}</b>
@@ -213,6 +215,9 @@
           <div class="karta ciemna" style="margin:0">
             <div style="display:flex;gap:14px;align-items:center"><div><div class="mut male">PEG</div><div class="peg-duzy">${W.ok(base) ? W.fmtNum(base) : "–"}</div></div>
               <span class="pill p-${slug(W.etykietaPeg(base) || "")}">${esc(W.etykietaPeg(base) || "–")}</span></div>
+            ${(() => { const typ = K.typy && K.typy[0] && K.typy[0][0], c = typ && W.CENA_TYPU[typ]; if (!c) return "";
+                const ok = c[0] !== null && W.ok(base) && base > 0 ? (base <= c[0] ? ' <b style="color:#5eead4">— spełnia</b>' : ' <b style="color:#fca5a5">— nie spełnia</b>') : "";
+                return `<div class="male" style="margin-top:6px">Typ: <b>${esc(typ)}</b> — ${esc(c[1])}${ok}</div>`; })()}
             ${W.ok(base) && base > 0 ? `<div class="male" style="margin-top:6px">Cena dziś ${W.fmtCena(M.price)} · przy PEG 1: <b>${W.fmtCena(M.price / base)}</b> · przy PEG 2: <b>${W.fmtCena(2 * M.price / base)}</b></div>` : ""}
             ${sc ? `<div class="scen">${["bear", "base", "bull"].map((k) => `<div class="${k}"><div class="t">${{ bear: "Pesymistycznie", base: "Bazowo", bull: "Optymistycznie" }[k]}</div><b style="font-size:20px">${W.fmtPct(sc[k].g, 1)}</b><div class="mut male">wzrost EPS</div><div>PEG ${W.fmtNum(sc[k].peg)}</div></div>`).join("")}</div>` : ""}
             ${poz !== null ? `<div class="peg-skala"><span class="znak" style="left:${poz}%"></span></div><div class="skala mut"><span>0</span><span>1 · nisko</span><span>2 · uczciwie</span><span>3 · drogo</span><span>4+</span></div>` : ""}

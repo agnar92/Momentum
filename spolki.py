@@ -78,7 +78,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 3 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC i leasingu) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 4 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -192,6 +192,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
+        r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"])
     return rows
 
 
@@ -216,9 +217,9 @@ def zapisz(rows, out=OUT, today=None):
         lista.append(dict(t=r["t"], n=r["n"], s=r["sector"], i=r["industry"], rank=r["rank"], c=r["m"].get("price"), mc=r["m"].get("mcap"),
                           o=r["oceny"], typ=r["typy"][0][0] if r["typy"] else None, peg=r["m"].get("peg"), pe=r["m"].get("pe"),
                           dcf_pot=r["m"].get("dcf_pot"), et=r["etykieta"], st=st, zw=r["zw"], rev_1y=r["m"].get("rev_1y"), rev_cagr5=r["m"].get("rev_cagr5"),
-                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"),
+                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None,
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500")}
+        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF

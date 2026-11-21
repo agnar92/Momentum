@@ -36,7 +36,7 @@ def metryki(ex, fv, dzis=None, splity=()):
              de=_f(fv.get("debtEq")), eps=p / pe if p and pe and pe > 0 else None)
     m["peg"] = pe / (100 * m["eps_next5"]) if pe and pe > 0 and m["eps_next5"] and m["eps_next5"] > 0 else None
     hist = dict(q=[], y=[])
-    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc") if ex.get(k)}
+    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc", "skup", "emisja") if ex.get(k)}
     rt = F.ttm(q["rev"]) if "rev" in q else []
     nt = F.ttm(q["ni"]) if "ni" in q else []
     # emitenci zagraniczni (20-F) raportują tylko rocznie: punkty roczne zamiast TTM, jeśli są świeże (<= 15 mies.)
@@ -144,6 +144,7 @@ def metryki(ex, fv, dzis=None, splity=()):
         m["kapital_3l"] = (m["equity"] / e3) ** (1 / 3) - 1 if e3 and e3 > 0 and m["equity"] > 0 else None
         m["net_cash"] = m["cash"] - m["debt"] if m["cash"] is not None else None
         a, lc = ch.get("assets", {}).get(e), ch.get("lc", {}).get(e)
+        m["aktywa"] = a
         if ot and a and lc is not None and a - lc > 0:
             m["roce"] = ot[-1][1] / (a - lc)
         if nt and m["equity"] and m["equity"] > 0:
@@ -197,6 +198,24 @@ def metryki(ex, fv, dzis=None, splity=()):
     # liczba akcji do DCF = kapitalizacja ÷ cena (spójna z ceną: wartość na akcję porównujemy z kursem; dei bywa jedną klasą akcji, ADR ma inny przelicznik —
     # np. BABA, QSR, UPS); zapas: dei z SEC
     m["shares"] = s_fv if s_fv else (list(sh.values())[-1] if sh else None)
+    # wskaźniki przepływów (filmy autora HelloStocks: 4 filtry przepływów pieniężnych) — 12 mies. zgodne z przychodami, zapas: ostatni rok obrotowy
+    def ost12(k):
+        tt = F.ttm(q[k]) if k in q else []
+        if tt and rt and abs((F.D(tt[-1][0]) - F.D(rt[-1][0])).days) <= 100:
+            return tt[-1][1]
+        if ex.get(k) and rt:
+            ya = F.polacz(ex[k], F.roczne)
+            if ya and abs((F.D(list(ya)[-1]) - F.D(rt[-1][0])).days) <= 200:
+                return list(ya.values())[-1]
+        return None
+    ocf, cpx, skup, emis = ost12("ocf"), ost12("capex"), ost12("skup"), ost12("emisja")
+    m["ocf_ttm"] = ocf
+    if ocf is not None and m.get("debt") is not None:
+        m["ocf_dlug"] = ocf / m["debt"] if m["debt"] > 0 else (9.99 if ocf > 0 else None)      # brak długu = spełnione
+    m["capex_ocf"] = cpx / ocf if cpx is not None and ocf and ocf > 0 else None
+    if m.get("mcap") and (skup is not None or emis is not None) and ex.get("skup"):
+        m["skup_netto_mc"] = ((skup or 0) - (emis or 0)) / m["mcap"]
+    m["fcf_aktywa"] = m["fcf_ttm"] / m["aktywa"] if m.get("fcf_ttm") is not None and m.get("aktywa") else None
     # historia do wykresów: ostatnie 40 kwartałów i lata obrotowe
     ends = sorted(set(q.get("rev", {})) | set(q.get("ni", {})))[-40:]
     for e in ends:
@@ -319,6 +338,11 @@ def oceny(rows):
     med = mediany(rows)
     for r in rows:
         r["med500"] = med
+    # stopa bazowa: jaki odsetek spółek z listy miał w ostatnich 5 latach wzrost zysku ≥ prognozie danej spółki
+    hist5 = sorted((1 + r["m"]["ni_5y"]) ** 0.2 - 1 for r in rows if r["m"].get("ni_5y") is not None and r["m"]["ni_5y"] > -1)
+    for r in rows:
+        g = r["m"].get("eps_next5")
+        r["m"]["baza_wzrostu"] = sum(x >= g for x in hist5) / len(hist5) if g is not None and len(hist5) >= 50 else None
 
 
 # --- typ spółki (kategorie Petera Lyncha, reguły własne) -------------------------------------------------------------
@@ -368,6 +392,41 @@ def W_LAT(m):
     return f"{m['hist_lat']:.1f}".replace(".", ",")
 
 
+def _pl(x, d=1):
+    return f"{x:.{d}f}".replace(".", ",")
+
+
+def ostrzezenia(m, typ=None, rank=None):
+    """Realność prognozy wzrostu (film autora o przewidywaniu zysków): lista ostrzeżeń dla karty spółki."""
+    out = []
+    g, r5, lata = m.get("eps_next5"), m.get("rev_cagr5"), [x for x in (m.get("rev_lata") or []) if x is not None]
+    if g is not None and g >= 0.15 and r5 is not None and r5 < 0.05:
+        out.append(f"Prognoza wzrostu EPS {100 * g:.0f} % rocznie przy przychodach rosnących {_pl(100 * r5)} % rocznie przez 5 lat — "
+                   "historycznie mało realne (wzrost przychodów najlepiej przewiduje przyszły wzrost zysku).")
+    if g is not None and g > 0.25 and len(lata) >= 3 and min(lata) < -0.10:
+        out.append(f"Spółka cykliczna (przychody spadały nawet o {100 * -min(lata):.0f} % w roku) z prognozą {100 * g:.0f} % rocznie — prognoza może łapać "
+                   "szczyt cyklu; niski PEG i P/E bywają tu pułapką.")
+    if rank is not None and rank <= 30 and g is not None and g > 0.30:
+        out.append(f"Jedna z 30 największych spółek z prognozą {100 * g:.0f} % rocznie — im większa firma, tym trudniej utrzymać takie tempo; "
+                   "przyjmij ostrożniejszy wzrost w wycenie.")
+    if m.get("ni_1y") is not None and m["ni_1y"] > 1.0 and (m.get("rev_1y") or 0) < 0.30:
+        out.append(f"Zysk netto +{100 * m['ni_1y']:.0f} % r/r przy przychodach +{100 * (m.get('rev_1y') or 0):.0f} % — możliwe jednorazowe zyski "
+                   "(np. przeszacowanie udziałów); P/E i PEG mogą być zaniżone.")
+    if m.get("baza_wzrostu") is not None and g is not None and g > 0.15 and m["baza_wzrostu"] < 0.15:
+        out.append(f"Wzrost zysku ≥ {100 * g:.0f} % rocznie przez ostatnie 5 lat osiągnęło tylko {100 * m['baza_wzrostu']:.0f} % spółek z listy — sprawdź, "
+                   "czy prognoza nie jest zbyt optymistyczna (scenariusz pesymistyczny w PEG).")
+    return out
+
+
+# dobra cena wg typu spółki (Peter Lynch w ujęciu autora filmu o 6 typach)
+CENA_TYPU = {"Stabilnie rosnąca": (1.5, "PEG ≤ 1,5 to rozsądna cena; drożej łatwo przepłacić"),
+             "Szybko rosnąca": (1.6, "PEG ≤ 1,6 (okazja poniżej 1); kluczowe, czy wzrost się utrzyma"),
+             "Wolno rosnąca": (None, "kupuj przy P/E w okolicach kilkunastu; liczy się dywidenda"),
+             "Cykliczna": (None, "nie oceniaj po niskim P/E ani PEG — ważne, w którym miejscu cyklu jest spółka"),
+             "Wychodząca z kłopotów": (None, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"),
+             "Ukryte aktywa": (None, "wartość w aktywach, nie w zyskach — wymaga cierpliwości")}
+
+
 # --- strategie z badania -----------------------------------------------------------------------------------------
 def strategie(m, sektor):
     """{nazwa: [(kryterium, wartość, spełnione)]}."""
@@ -391,7 +450,16 @@ def strategie(m, sektor):
     kon = [("Przychody > 10 % w ≥ 3 z 5 lat" + (f" (przeliczone z {m['rev_lata_n']} lat)" if m.get("rev_lata_n") else ""), m.get("rev_lata_10"), m.get("rev_lata_10") is not None and m["rev_lata_10"] >= 3),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0))]
-    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon}
+    zys = [("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
+           ("ROA > 10 %", m.get("roa"), _gt(m.get("roa"), 0.10)),
+           (f"ROE wyższe niż {_ile_lat(m.get('roe_wcz_lat') or 3)} temu", m.get("roe_wcz"),
+            m.get("roe_sec") is not None and m.get("roe_wcz") is not None and m["roe_sec"] > m["roe_wcz"]),
+           ("ROCE ≥ 30 %", m.get("roce"), m.get("roce") is not None and m["roce"] >= 0.30)]
+    prz = [("Przepływy operacyjne ≥ 30 % długu", m.get("ocf_dlug"), m.get("ocf_dlug") is not None and m["ocf_dlug"] >= 0.30),
+           ("Capex < 35 % przepływów operacyjnych", m.get("capex_ocf"), m.get("capex_ocf") is not None and m["capex_ocf"] < 0.35),
+           ("Skup akcji netto > 2 % kapitalizacji (12 mies.)", m.get("skup_netto_mc"), _gt(m.get("skup_netto_mc"), 0.02)),
+           ("Wolne przepływy > 12 % aktywów", m.get("fcf_aktywa"), _gt(m.get("fcf_aktywa"), 0.12))]
+    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon, "Zyskowność (4 kryteria)": zys, "Przepływy pieniężne (4 kryteria)": prz}
     if not wykl:
         out = {"7/7 (niskie ryzyko)": lr, **out}
     return out

@@ -145,3 +145,12 @@ def test_dcf_ostroznie_sbc_i_leasing():
     m2 = dict(m, mcap=1000.0, ps=10.0, shares=10.0, cash=0.0, debt=50.0, leasing=25.0)
     O.dcf_scenariusze(m2, dict(y=[]))
     assert m2["dcf_dlug"] == 75.0
+
+
+def test_przeplywy_zyskownosc_i_ostrzezenia():
+    m = dict(roe=0.30, roa=0.15, roe_sec=0.30, roe_wcz=0.20, roe_wcz_lat=3, roce=0.35, ocf_dlug=0.8, capex_ocf=0.07, skup_netto_mc=0.031, fcf_aktywa=0.19)
+    s = O.strategie(m, "Technology")
+    assert all(ok for _, _, ok in s["Zyskowność (4 kryteria)"]) and all(ok for _, _, ok in s["Przepływy pieniężne (4 kryteria)"])
+    o = O.ostrzezenia(dict(eps_next5=0.17, rev_cagr5=0.03, rev_lata=[0.02, -0.15, 0.30], ni_1y=1.5, rev_1y=0.05), rank=10)
+    assert len(o) == 2          # prognoza vs przychody, jednorazowy zysk (cykliczna wymaga prognozy > 25 %)
+    assert O.ostrzezenia(dict(eps_next5=0.40, rev_cagr5=0.30, rev_lata=[0.5, -0.2, 0.6]), rank=5)   # cykliczna + duża spółka
