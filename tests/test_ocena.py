@@ -136,3 +136,12 @@ def test_dcf_wejscie_kontrola_z_finviz():
     assert len(uw) == 2
     ok = dict(mcap=100e9, ps=5.0, pfcf=20.0, rev_ttm=21e9, fcf_ttm=5.5e9, fcf_margin=5.5 / 21, rev_cagr3=0.10, eps_next5=0.12)
     assert O.dcf_wejscie(ok)[3] == []
+
+
+def test_dcf_ostroznie_sbc_i_leasing():
+    m = dict(fcf_margin=0.30, sbc_przych=0.10, rev_ttm=100.0, rev_cagr3=0.10, eps_next5=0.10)
+    g, mz = O.dcf_domyslne(m, dict(y=[["2025-12-31", 100.0, 20.0, 30.0, 10.0]]))
+    assert abs(mz - 0.20) < 1e-12               # (FCF − SBC) / przychody
+    m2 = dict(m, mcap=1000.0, ps=10.0, shares=10.0, cash=0.0, debt=50.0, leasing=25.0)
+    O.dcf_scenariusze(m2, dict(y=[]))
+    assert m2["dcf_dlug"] == 75.0

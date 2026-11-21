@@ -17,6 +17,7 @@ TAGI = {
     "gp": ("USD", ["GrossProfit"]),
     "ocf": ("USD", ["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"]),
     "capex": ("USD", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"]),
+    "sbc": ("USD", ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"]),
     "eps": ("USD/shares", ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted", "EarningsPerShareBasic"]),
 }
 CHWILE = {
@@ -25,6 +26,9 @@ CHWILE = {
     "eq": ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
     "assets": ["Assets"],
     "lc": ["LiabilitiesCurrent"],
+    "lease": ["OperatingLeaseLiability"],
+    "lease_nc": ["OperatingLeaseLiabilityNoncurrent"],
+    "lease_c": ["OperatingLeaseLiabilityCurrent"],
 }
 # emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
 TAGI_IFRS = {
@@ -34,6 +38,7 @@ TAGI_IFRS = {
     "gp": ["GrossProfit"],
     "ocf": ["CashFlowsFromUsedInOperatingActivities"],
     "capex": ["PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment"],
+    "sbc": ["AdjustmentsForSharebasedPayments"],
     "eps": ["DilutedEarningsLossPerShare", "BasicAndDilutedEarningsLossPerShare", "BasicEarningsLossPerShare"],
 }
 CHWILE_IFRS = {
@@ -41,6 +46,7 @@ CHWILE_IFRS = {
     "eq": ["EquityAttributableToOwnersOfParent", "Equity"],
     "assets": ["Assets"],
     "lc": ["CurrentLiabilities"],
+    "lease": ["LeaseLiabilities"],
 }
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
@@ -152,7 +158,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 2
+    out["v"] = 3
     return out
 
 

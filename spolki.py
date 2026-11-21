@@ -78,7 +78,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 2 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 3 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC i leasingu) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
