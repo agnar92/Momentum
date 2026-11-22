@@ -365,7 +365,7 @@
             <p style="margin:0" class="mut">Wskaźnik Lyncha z dywidendą = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze.
               ${wsk !== null ? ` Tutaj: <b>${W.fmtNum(wsk)}</b> — ${ocWsk}.` : ""}</p></div>
           <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} sygnał(y) ostrzegawcze</b>` : ""}</div>
-            ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="zd-w" style="grid-template-columns:22px 1fr auto"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut" style="text-align:right">${esc(w)}</span></div>`).join("")}</div>`
+            ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="ly-w"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
               : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
             <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>`;
     }
