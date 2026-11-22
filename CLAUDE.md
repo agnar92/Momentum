@@ -113,4 +113,6 @@ and waiting for cheap prices not better; lump sum beat 12 tranches 5/7), 90 (std
 cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
 `dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
-confirmed). Portfel shows an informational „Skład wg typów Petera Lyncha” table (`typyPf`: user's share by type, Lynch's 20/40/40 split, stage 86 medians).
+confirmed). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): user's share by type vs the USER'S target (`S.celTypy`, editable, default
+60 % stabilnie / 20 % szybko / 10 % wolno rosnące — user: „więcej stabilnych, mniej wychodzących z kłopotów i szybko rosnących”), Lynch's 20/40/40 and stage
+86 medians for reference; informational, dokup rules unchanged.

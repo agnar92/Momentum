@@ -40,18 +40,30 @@
     }
 
     // skład portfela wg typów Lyncha (informacyjnie): udział w wartości akcji, podział Lyncha (10 spółek), wynik typu w etapie 86
-    const LYNCH_PF = [["Stabilnie rosnąca", 20, "+83 %"], ["Szybko rosnąca", 40, "+56 %"], ["Wychodząca z kłopotów", 40, "+58 %"],
-        ["Cykliczna", 0, "+78 %"], ["Wolno rosnąca", 0, "+63 %"], ["Ukryte aktywa", 0, "–"]];
+    // skład portfela wg typów Lyncha: Twój cel (domyślnie 60 / 20 / 10 — użytkownik: „więcej stabilnych, mniej wychodzących z kłopotów i szybko rosnących”),
+    // obok podział Lyncha (10 spółek) i wynik typu w etapie 86; tylko informacja — reguły dokupu bez zmian
+    const TYPY_PF = [["Stabilnie rosnąca", 60, 20, "+83 %"], ["Szybko rosnąca", 20, 40, "+56 %"], ["Wolno rosnąca", 10, 0, "+63 %"],
+        ["Cykliczna", 0, 0, "+78 %"], ["Wychodząca z kłopotów", 0, 40, "+58 %"], ["Ukryte aktywa", 0, 0, "–"]];
+    const celTypu = (t, dom) => (S.celTypy && W.ok(S.celTypy[t]) ? S.celTypy[t] : dom);
     function typyPf() {
         const el = $("typy-pf"); if (!el) return;
         const d = W.dokup(S.pozycje, WIERSZE, { konto: S.konto, kurs: kurs() });
-        if (!S.pozycje.length || !(d.suma > 0)) { el.innerHTML = '<p class="mut male">Wpisz liczbę akcji, żeby zobaczyć skład.</p>'; return; }
         const ud = {}, sp = {};
-        d.pozycje.forEach((x) => { const t = (x.r && x.r.typ) || "brak typu"; ud[t] = (ud[t] || 0) + x.wartosc / d.suma; (sp[t] = sp[t] || []).push(x.t); });
-        el.innerHTML = `<div class="przewin"><table class="male"><thead><tr><th>Typ</th><th>Twoje spółki</th><th class="n">Twój udział</th><th class="n">Lynch (10 spółek)</th><th class="n">Etap 86: mediana 5 lat</th></tr></thead><tbody>
-          ${LYNCH_PF.concat(ud["brak typu"] ? [["brak typu", null, "–"]] : []).map(([t, l, w]) => `<tr><td>${esc(t)}</td><td class="zawin">${esc((sp[t] || []).join(", ") || "–")}</td>
-            <td class="n">${ud[t] ? W.fmtPct(ud[t], 0) : "–"}</td><td class="n">${l === null ? "–" : l + " %"}</td><td class="n">${w}</td></tr>`).join("")}</tbody></table></div>
-          <p class="mut male">Lynch: „najpierw wielkość, potem historia spółki” — duże firmy rosną wolniej. W naszym teście 2012–2026 najlepiej wypadały stabilnie rosnące, a szybko rosnące i wychodzące z kłopotów poniżej mediany; reguła „nie trzymaj stabilnie rosnącej po podwojeniu” się nie potwierdziła (etap 94: po 2× nie gorzej).</p>`;
+        if (d.suma > 0) d.pozycje.forEach((x) => { const t = (x.r && x.r.typ) || "brak typu"; ud[t] = (ud[t] || 0) + x.wartosc / d.suma; (sp[t] = sp[t] || []).push(x.t); });
+        const suma = TYPY_PF.reduce((a, [t, c]) => a + celTypu(t, c), 0);
+        el.innerHTML = `<div class="przewin"><table class="male"><thead><tr><th>Typ</th><th>Twoje spółki</th><th class="n">Teraz</th><th class="n">Twój cel</th><th class="n">Różnica</th><th class="n">Lynch (10 spółek)</th><th class="n">Etap 86: mediana 5 lat</th></tr></thead><tbody>
+          ${TYPY_PF.map(([t, c, l, w]) => { const cel = celTypu(t, c), teraz = ud[t] || 0, roz = teraz - cel / 100;
+            return `<tr><td>${esc(t)}</td><td class="zawin">${esc((sp[t] || []).join(", ") || "–")}</td><td class="n">${d.suma > 0 ? W.fmtPct(teraz, 0) : "–"}</td>
+            <td class="n"><input type="number" min="0" max="100" step="5" data-cel="${esc(t)}" value="${cel}" style="width:64px"> %</td>
+            <td class="n">${d.suma > 0 ? `<span class="${Math.abs(roz) >= 0.05 ? (roz > 0 ? "plus" : "minus") : "mut"}">${W.fmtPct(roz, 0, true)}</span>` : "–"}</td>
+            <td class="n mut">${l} %</td><td class="n mut">${w}</td></tr>`; }).join("")}
+          ${ud["brak typu"] ? `<tr><td>brak typu</td><td>${esc(sp["brak typu"].join(", "))}</td><td class="n">${W.fmtPct(ud["brak typu"], 0)}</td><td></td><td></td><td></td><td></td></tr>` : ""}
+          </tbody></table></div>
+          <p class="male">Cel razem: <b>${suma} %</b>${suma < 100 ? ` — ${100 - suma} % nieprzypisane (np. gotówka albo inne typy)` : suma > 100 ? " — więcej niż 100 %" : ""}.
+            <span class="mut">Tylko informacja — reguły dokupu się nie zmieniają. Lynch: „najpierw wielkość, potem historia spółki”. W naszym teście 2012–2026 najlepiej wypadały stabilnie rosnące; reguła „nie trzymaj stabilnie rosnącej po podwojeniu” się nie potwierdziła (etap 94).</span></p>`;
+        el.querySelectorAll("input[data-cel]").forEach((i) => i.addEventListener("change", () => {
+            S.celTypy = { ...(S.celTypy || {}), [i.dataset.cel]: i.value === "" ? 0 : +i.value }; zapisz(); typyPf();
+        }));
     }
 
     const opis = (x) => { const c = x.czynniki, r = x.r;
