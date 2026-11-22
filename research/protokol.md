@@ -1274,3 +1274,25 @@ Wrażliwość (poza protokołem, r115b): niższe progi (−2σ/−3σ) i kanał 
 5,9–8,2 % (gotówka 0 %) albo 13,2–14,2 % (gotówka w SPY; SPY 14,5 %). Wniosek: sygnał „często ma rację” (sprzedaż z zyskiem w ~9 na 10 przypadków), ale nie dlatego,
 że trafia w spółki lepsze od rynku — kupuje w ogólnych krachach (marzec 2020, 2022), po których rośnie cały rynek; wynik autora nie odtwarza się na regułach z filmu
 (różnice: jego decyzje uznaniowe, częściowe trzymanie po linii regresji, analiza z AI, nieznany wzór wskaźnika).
+
+## Etap 91: kanał odchylenia standardowego na wykresie miesięcznym — siatka wariantów (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „potestuj te odchylenia na miesięcznym wykresie, może coś można zmienić”. Dane i grupa jak w etapie 90 (spółki ≥ 50 mld USD, ceny skorygowane, ze spółkami
+usuniętymi). Zamknięcia miesięczne (ostatnia sesja miesiąca); kanał z ostatnich L miesięcy, sygnał i wyjście sprawdzane tylko na zamknięciu miesiąca; wejście po cenie
+zamknięcia miesiąca sygnału; wyjście: pierwsze zamknięcie miesiąca ≥ linia regresji, najdłużej 36 mies. Siatka (12 wariantów): L ∈ {60, 120} mies. × skala ∈ {cena,
+log-cena} × progi (top 10 / reszta) ∈ {−2σ/−2σ, −2σ/−3σ, −3σ/−4σ}. Warunki jak w filmie: kanał rosnący, (dla skali cena) dolna linia > 0. Portfel: 10 % konta na pozycję,
+najwyżej 10, gotówka 0 % albo w SPY; 2013-01..2026-10 oraz połowy 2013–2019 i 2020–2026 (każda od zera). Miary: liczba sygnałów, odsetek z zyskiem, nadwyżka 12 mies.
+nad SPY (średnia i odsetek > 0), stopa roczna portfela i maxDD, średnie zaangażowanie. Reguła oceny (wiele wariantów = ryzyko dopasowania): wariant uznajemy za lepszy
+od SPY tylko, jeśli z gotówką 0 % bije SPY w obu połowach; jeśli żaden — wniosek „zmiana parametrów nie pomaga”; nadwyżkę 12 mies. uznajemy, gdy jest > 0 w obu połowach.
+Hipotezy: (1) żaden wariant z gotówką 0 % nie bije SPY w obu połowach; (2) z gotówką w SPY warianty w granicach SPY ±2 pp rocznie; (3) trafność (z zyskiem) 80–90 %
+we wszystkich wariantach.
+
+Wynik etapu 91 (2026-11-22). SPY 2013–2026 14,3 % rocznie (2013–2019 13,8 %, 2020–2026 14,9 %), QQQ 19,4 %. Z gotówką 0 % żaden z 12 wariantów nie bije SPY
+w obu połowach (najlepszy: 120 mies., log-cena, −2σ/−2σ — 12,2 % rocznie, maxDD −18 % vs SPY −34 %; 2013–2019 9,2 % < 13,8 %, 2020–2026 21,1 % > 14,9 %; 208 sygnałów,
+zaangażowanie 74 %). Z gotówką w SPY: 11,0–16,1 % (6 wariantów ponad SPY, najwięcej 120 mies. log −3σ/−4σ 16,1 % i log −2σ 15,0–15,1 %). Trafność 73–85 %. Nadwyżka 12 mies.
+nad SPY > 0 w obu połowach tylko w 3 wariantach: 120 mies. cena −2σ/−3σ (+3,3 / +2,7 pp; 82 sygnały), 120 mies. log −2σ/−2σ (+0,8 / +2,4 pp; 208), 120 mies. log −3σ/−4σ
+(+31 / +0,7 pp; 33 — pierwsza połowa z kilku zdarzeń); kanał 60 mies. — gorzej (prawie wszystkie ujemne). Hipotezy: (1) żaden wariant nie bije SPY w obu połowach
+z gotówką 0 % — tak; (2) z gotówką w SPY w granicach ±2 pp — częściowo (kanał 60 mies. 11–12 %, czyli −2 … −3 pp); (3) trafność 80–90 % — prawie (73–85 %).
+Wniosek: 10-letni kanał (120 mies.) działa lepiej niż 5-letni; na log-cenie z progiem −2σ sygnałów jest dużo (ok. 15 rocznie), portfel jest w ok. 3/4 zainwestowany
+i ma o połowę mniejsze obsunięcie niż SPY (−18 % vs −34 %), ale w 2013–2019 przegrał z SPY o 4,6 pp rocznie; przewaga tylko w latach 2020–2026. 12 wariantów =
+duże ryzyko dopasowania; żadna zmiana parametrów nie spełnia reguły zapisanej przed testem.
