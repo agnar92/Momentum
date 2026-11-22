@@ -114,14 +114,19 @@
         return !!(s && s[0] === s[1] && s[1] > 0);
     }
     // --- portfel: podział miesięcznej wpłaty -----------------------------------------------------------------------------
-    // reguła użytkownika: dokupuj tylko przy PEG 0–2 — im niższy, tym większa waga; waga = (2 − PEG) × ocena ogólna × kapitalizacja; pozycja najwyżej 10 % portfela.
-    // Bez dokupu: ⬇ fundamenty słabną 2 lata, spółka spoza ✔ Jakość 7/7 (opcja). Opcja: × 2 po spadku ≥ 15 % od maksimum z 12 mies. (etap 89).
-    const DOKUP = { limit: 0.10, spadek: -0.15, mnoznik: 2, pegMax: 2 };
-    const przytnij = (x, a, b) => Math.min(b, Math.max(a, x));
-    const czynnikOceny = (o) => (ok(o) ? przytnij(o / 6, 0.5, 1.5) : 1);                                    // ocena 6 → 1, 9 → 1,5, ≤ 3 → 0,5
-    const czynnikKap = (mc) => (ok(mc) && mc > 0 ? przytnij(1 + 0.25 * Math.log10(mc / 1e11), 0.5, 1.5) : 1);   // 100 mld → 1, 1 bln → 1,25, 10 mld → 0,75
+    // reguła użytkownika (prosty wzór, bez dopasowania do przeszłości): punkty 0–10 = 10 × średnia z trzech części 0–1:
+    // tanio = (2 − PEG) ÷ 2 (dokup tylko przy PEG 0–2), ocena = ocena ogólna ÷ 10, wielkość = miejsce wg kapitalizacji (największa = 1);
+    // kwota proporcjonalna do punktów, pozycja najwyżej 10 % portfela; bez dokupu: ⬇, spoza ✔ Jakość 7/7 (opcja)
+    const DOKUP = { limit: 0.10, pegMax: 2, n: 500 };
+    function punkty(r) {
+        if (!r || !ok(r.peg) || r.peg <= 0 || r.peg >= DOKUP.pegMax) return null;
+        const tanio = (DOKUP.pegMax - r.peg) / DOKUP.pegMax;
+        const ocena = r.o && ok(r.o.ogolna) ? Math.min(1, Math.max(0, r.o.ogolna / 10)) : 0.5;
+        const wielkosc = ok(r.rank) ? Math.max(0, 1 - (r.rank - 1) / DOKUP.n) : 0.5;
+        return { tanio, ocena, wielkosc, punkty: 10 * (tanio + ocena + wielkosc) / 3 };
+    }
     function dokup(pozycje, wiersze, kwota, opcje) {
-        const o = { tylkoJakosc: true, nowe: [], spadek: false, limit: DOKUP.limit, ...(opcje || {}) };
+        const o = { tylkoJakosc: true, nowe: [], limit: DOKUP.limit, ...(opcje || {}) };
         const rows = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
         const nowe = o.nowe.filter((t) => wiersze[t] && !pozycje.some((p) => p.t === t)).map((t) => ({ t, akcje: 0, koszt: null, r: wiersze[t], nowa: true }));
         const wsz = rows.concat(nowe);
@@ -137,9 +142,7 @@
             if (x.wartosc >= o.limit * po) x.powody.push(`pozycja ≥ ${Math.round(100 * o.limit)} % portfela`);
             if (r.ow) x.uwagi.push(`❗ ostrzeżenia: ${r.ow} — sprawdź kartę`);
             if (x.powody.length) return;
-            const fp = DOKUP.pegMax - r.peg, fo = czynnikOceny(r.o && r.o.ogolna), fm = czynnikKap(r.mc);
-            const fs = o.spadek && ok(r.om) && r.om <= DOKUP.spadek ? DOKUP.mnoznik : 1;
-            x.mn = fp * fo * fm * fs; x.czynniki = { peg: fp, ocena: fo, kap: fm, spadek: fs };
+            x.czynniki = punkty(r); x.mn = x.czynniki.punkty;
         });
         // podział proporcjonalny do wag z limitem pozycji (nadwyżka przechodzi na pozostałe)
         wsz.forEach((x) => { x.kwota = 0; x.max = x.mn > 0 ? Math.max(0, o.limit * po - x.wartosc) : 0; });
@@ -243,7 +246,7 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { dokup, DOKUP, czynnikOceny, czynnikKap, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

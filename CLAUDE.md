@@ -53,11 +53,11 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
 - `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
   0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
-  in localStorage `fundamenta_portfel`; `W.dokup`: only PEG 0–2, weight = (2 − PEG) × `czynnikOceny` (overall score ÷ 6, 0.5–1.5) × `czynnikKap` (1 + 0.25 ·
-  log10(mcap ÷ 100 bn), 0.5–1.5), position cap 10 % with overflow redistributed (leftover = `niewydane`, in the test it waited in SPY), none for ⬇ `sp` or (option,
-  default on) not ✔ Jakość 7/7; option × 2 when ≥ 15 % below the 12-month high (`om`); optional new ✔ stocks with PEG 0–2 by overall score up to N positions;
-  „Kupiłem” adds shares at the current price and recomputes the average cost (`W.sredniKoszt`). Stage 89 (r114): equal amounts 20.1 %; this rule (M7, exploratory,
-  parameters chosen after seeing results) 24.4 %, 5-year windows +1.9 pp [+0.6; +3.1], DD −40 % vs −33 %, wider list +0.6 [−0.1; +1.4].
+  in localStorage `fundamenta_portfel`; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
+  oceną, tym większa waga”): only PEG 0–2; `W.punkty` = 10 × mean of tanio (2 − PEG) ÷ 2, ocena (overall ÷ 10), wielkość (1 − (mcap rank − 1) ÷ 500); amount
+  proportional to points; position cap 10 % with overflow redistributed (leftover = `niewydane`); none for ⬇ `sp` or (option, default on) not ✔ Jakość 7/7;
+  optional new ✔ stocks with PEG 0–2 by overall score up to N positions; „Kupiłem” adds shares at the current price and recomputes the average cost
+  (`W.sredniKoszt`). Do not tune the formula to backtests. Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
 
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.

@@ -14,16 +14,16 @@
 <main class="main">
   <section class="karta">
     <h2>Portfel: budowanie pozycji</h2>
-    <div class="pod">Wpisz swoje spółki i kwotę, którą odkładasz co miesiąc — strona podzieli ją według Twojej reguły (PEG 0–2, ocena, kapitalizacja, limit 10 %), bez prób wyczucia rynku. Dane zostają tylko w tej przeglądarce. Dane rynkowe z <span id="asof">–</span>.</div>
+    <div class="pod">Wpisz swoje spółki i kwotę, którą odkładasz co miesiąc — strona podzieli ją według Twojej reguły (punkty 0–10: tanio wg PEG, ocena, wielkość; limit 10 %), bez prób wyczucia rynku. Dane zostają tylko w tej przeglądarce. Dane rynkowe z <span id="asof">–</span>.</div>
     <details class="objasnienie" open>
       <summary><b>Zasady</b> <span class="mut male">(co wyszło w badaniu 2013–2026)</span></summary>
       <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
-        <li><b>Twoja reguła dokupu:</b> dokupujemy tylko spółki z <b>PEG 0–2</b>; kwota dzielona wg wagi = <b>(2 − PEG) × ocena × kapitalizacja</b>:
-          PEG 0,5 → 1,5, PEG 1 → 1, PEG 1,5 → 0,5; ocena ogólna ÷ 6 (6 → 1, 9 → 1,5, granice 0,5–1,5); kapitalizacja 1 + 0,25 × log10(kapit. ÷ 100 mld) (10 mld → 0,75, 100 mld → 1, 1 bln → 1,25, granice 0,5–1,5).</li>
-        <li><b>Pozycja najwyżej 10 % portfela</b> — nadwyżka przechodzi na pozostałe spółki; czego nie da się wydać, czeka (w teście w SPY) na następny miesiąc.</li>
+        <li><b>Dokupujemy tylko spółki z PEG 0–2.</b> Każda dostaje <b>punkty 0–10</b> — średnia z trzech części (każda 0–1) × 10:
+          <b>tanio</b> = (2 − PEG) ÷ 2 (PEG 0 → 1, PEG 1 → 0,5, PEG 2 → 0) · <b>ocena</b> = ocena ogólna ÷ 10 · <b>wielkość</b> = miejsce wg kapitalizacji wśród 500 spółek (największa → 1, ostatnia → 0).
+          Im tańsza, większa i lepiej oceniana spółka, tym więcej punktów; kwota dzielona proporcjonalnie do punktów. Wzór prosty, nie dopasowany do wyników z przeszłości.</li>
+        <li><b>Pozycja najwyżej 10 % portfela</b> — nadwyżka przechodzi na pozostałe spółki; czego nie da się wydać, zostaje na następny miesiąc.</li>
         <li><b>Nie dokupuj</b>, gdy fundamenty słabną 2 lata z rzędu (⬇, Twoja reguła sprzedaży) i — domyślnie — gdy spółka nie jest na liście ✔ Jakość 7/7.</li>
-        <li><b>Co mówi test</b> (wpłaty co miesiąc 2013–2026 w spółki Jakość 7/7): równe kwoty 20,1 % rocznie; ta reguła 24,4 % (bez NVDA 17,8 % vs 12,5 %), w okresach 5-letnich średnio +1,9 pp rocznie (przedział +0,6 … +3,1, lepiej w 7 z 9). Ale: obsunięcie −40 % zamiast −33 %, na szerszej liście (top 10 % oceny) tylko +0,6 pp (przedział −0,1 … +1,4), a wagi ustaliliśmy po obejrzeniu wyników — mogą być dopasowane do przeszłości. PEG w teście z przeszłego wzrostu zysku (prognoz analityków z przeszłości nie mamy).</li>
-        <li><b>Jednorazowa większa kwota — raczej od razu</b>: od razu było lepiej niż w 12 miesięcznych transzach w 5 z 7 startów.</li>
+        <li><b>Stała kwota co miesiąc</b> (uśrednianie kosztu) — w badaniu (etap 89) czekanie na „okazję” z gotówką nie dawało więcej. Jednorazową większą kwotę raczej od razu (lepiej niż 12 transz w 5 z 7 startów).</li>
       </ul>
     </details>
   </section>
@@ -46,7 +46,6 @@
     <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
       <label class="male">Kwota do zainwestowania (USD)<br><input id="kwota" type="number" step="any" min="0" style="width:150px"></label>
       <label class="male"><input id="o-jak" type="checkbox" checked> tylko spółki z ✔ Jakość 7/7</label>
-      <label class="male"><input id="o-sp" type="checkbox"> × 2 po spadku ≥ 15 % od maksimum z 12 mies.</label>
       <label class="male"><input id="o-nowe" type="checkbox"> dodaj nowe spółki z ✔ Jakość 7/7 (najwyższa ocena) do</label>
       <label class="male"><input id="o-n" type="number" min="1" max="40" value="10" style="width:64px"> spółek w portfelu</label>
     </div>

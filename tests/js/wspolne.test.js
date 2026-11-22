@@ -84,16 +84,17 @@ test("znacznik Jakość 7/7 i filtr", () => {
     assert.deepStrictEqual(W.filtruj([a, b], { jakosc: true }).map((r) => r.t), ["A"]);
 });
 
-test("dokup: PEG 0–2 (niższy = więcej) × ocena × kapitalizacja, limit 10 %, bez ⬇ i spoza 7/7", () => {
+test("dokup: punkty 0–10 = tanio (PEG 0–2) + ocena + wielkość, limit 10 %, bez ⬇ i spoza 7/7", () => {
     const J = { "Jakość (7 kryteriów)": [7, 7] };
-    const w = { A: { t: "A", c: 10, st: J, peg: 1, o: { ogolna: 6 }, mc: 1e11 }, B: { t: "B", c: 20, st: J, peg: 0.5, o: { ogolna: 9 }, mc: 1e12 },
+    const w = { A: { t: "A", c: 10, st: J, peg: 1, o: { ogolna: 6 }, rank: 251 }, B: { t: "B", c: 20, st: J, peg: 0.2, o: { ogolna: 10 }, rank: 1 },
         C: { t: "C", c: 5, st: J, peg: 1, sp: ["przychody"] }, D: { t: "D", c: 10, st: J, peg: 2.5 }, E: { t: "E", c: 10, st: { "Jakość (7 kryteriów)": [6, 7] }, peg: 1 } };
+    assert.ok(Math.abs(W.punkty(w.B).punkty - 29 / 3) < 1e-9 && Math.abs(W.punkty(w.A).punkty - 10 * (0.5 + 0.6 + 0.5) / 3) < 1e-9);
+    assert.strictEqual(W.punkty(w.D), null);
     const p = [{ t: "A", akcje: 10, koszt: 8 }, { t: "B", akcje: 0 }, { t: "C", akcje: 100 }, { t: "D", akcje: 100 }, { t: "E", akcje: 100 }];
     let d = W.dokup(p, w, 30);
     let k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
     assert.strictEqual(k.C, 0); assert.strictEqual(k.D, 0); assert.strictEqual(k.E, 0);
-    const wb = 1.5 * 1.5 * 1.25;                                // (2 − 0,5) × 9/6 × (1 + 0,25 · log10(10))
-    assert.ok(Math.abs(k.B / k.A - wb) < 1e-9);
+    assert.ok(Math.abs(k.B / k.A - 29 / 16) < 1e-9);
     assert.ok(Math.abs(d.pozycje[0].zysk - 0.25) < 1e-9);
     d = W.dokup(p, w, 3000);                                    // limit 10 %: A i B najwyżej 10 % z 5600
     k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
