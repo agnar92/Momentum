@@ -93,7 +93,7 @@
         const kp = K.kompletnosc;
         const ostrz = kp && kp.niepelne ? `<div class="ostrzezenie">⚠ <b>Niepełne dane:</b> ${kp.liczone} z ${kp.wszystkie} wskaźników${kp.kategorie && kp.kategorie.length ? ` (za mało w kategorii: ${kp.kategorie.map((g) => ({ wzrost: "Wzrost", sila: "Siła finansowa", wycena: "Wycena" })[g]).join(", ")})` : ""} — ocena może być zaburzona (np. młoda spółka bez historii albo spółka zagraniczna bez raportów w SEC). Sprawdź „Jak powstała ocena” przy wskaźnikach.</div>` : "";
         const sp = m.spadek_2l ? `<div class="ostrzezenie">⬇ <b>Fundamenty słabną 2 lata z rzędu:</b> ${esc(m.spadek_2l.join(" i "))} ${m.spadek_2l.length > 1 ? "spadają" : "spada"} rok do roku teraz i rok wcześniej — wg Twojej reguły sygnał do sprzedaży (badanie, etap 77: takie spółki w 5 lat średnio −4 pp względem średniej).</div>` : "";
-        const ow = (K.ostrzezenia || []).length ? `<div class="ostrzezenie">❗ <b>Realność prognozy wzrostu:</b><ul style="margin:4px 0 0 18px;padding:0">${K.ostrzezenia.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+        const ow = (K.ostrzezenia || []).length ? `<div class="ostrzezenie">❗ <b>Ostrzeżenia (realność prognozy, jakość zysku, zdarzenia):</b><ul style="margin:4px 0 0 18px;padding:0">${K.ostrzezenia.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
         $("liczby").innerHTML = ostrz + sp + ow + wlasne() + `
           <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle 500 największych spółek</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
@@ -190,7 +190,7 @@
         S.g = d ? d.g : W.ok(M.dcf_g) ? M.dcf_g : (W.ok(M.rev_cagr3) ? Math.max(0, Math.min(0.25, M.rev_cagr3)) : 0.08);
         S.marza = d ? d.marza : W.ok(M.dcf_marza) ? M.dcf_marza : (W.ok(M.fcf_margin) && M.fcf_margin > 0 ? M.fcf_margin : 0.1);
         S.r = p.r; S.tg = p.tg; S.lata = p.lata; S.wyg = p.wygaszanie;
-        S.eps = M.eps; S.geps = W.ok(M.eps_next5) ? M.eps_next5 : (W.ok(M.rev_cagr5) ? M.rev_cagr5 : 0.1);
+        S.eps = M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps; S.geps = W.ok(M.eps_next5) ? M.eps_next5 : (W.ok(M.rev_cagr5) ? M.rev_cagr5 : 0.1);
     }
     const parDcf = () => ({ rev: W.ok(M.dcf_rev) ? M.dcf_rev : M.rev_ttm, marza: S.marza, g: S.g, akcje: M.shares, gotowka: M.cash || 0, dlug: W.ok(M.dcf_dlug) ? M.dcf_dlug : (M.debt || 0), r: S.r, tg: S.tg, lata: S.lata, wyg: S.wyg });
     function margines5() {
@@ -212,7 +212,9 @@
         $("wyc-tresc").innerHTML = `<div class="siatka2">
           <div class="wej">
             <label>Cena<input type="number" value="${W.ok(M.price) ? M.price.toFixed(2) : ""}" disabled><span class="mut">rynek</span></label>
-            <label>EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span></label>
+            <label>EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
+              ${W.ok(M.eps_norm) ? `<div class="chipy"><button data-e="${M.eps}">z raportu (GAAP) ${W.fmtNum(M.eps)}</button><button data-e="${M.eps_norm}">znormalizowany ${W.fmtNum(M.eps_norm)}</button></div>` : ""}
+              ${M.peg_norm_uzyte ? `<div class="male" style="color:#92400e;margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
             <label>Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
               <div class="chipy"><button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button></div></label>
             <label>P/E (wyliczone)<input type="number" value="${W.ok(pe) ? pe.toFixed(2) : ""}" disabled><span class="mut">cena ÷ EPS</span></label>
@@ -230,6 +232,7 @@
           </div></div>`;
         $("w-eps").addEventListener("change", (e) => { S.eps = +e.target.value; peg(); });
         $("w-geps").addEventListener("change", (e) => { S.geps = e.target.value / 100; peg(); });
+        document.querySelectorAll("[data-e]").forEach((b) => b.addEventListener("click", () => { if (W.ok(+b.dataset.e)) { S.eps = +b.dataset.e; peg(); } }));
         document.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => { if (W.ok(+b.dataset.g)) { S.geps = +b.dataset.g; peg(); } }));
     }
     function dcfWidok() {
@@ -276,6 +279,7 @@
         $("d-m").addEventListener("change", (e) => ust("marza", e.target.value / 100));
         $("d-r").addEventListener("change", (e) => ust("r", e.target.value / 100));
         $("d-tg").addEventListener("change", (e) => ust("tg", e.target.value / 100));
+        document.querySelectorAll("[data-e]").forEach((b) => b.addEventListener("click", () => { if (W.ok(+b.dataset.e)) { S.eps = +b.dataset.e; peg(); } }));
         document.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => ust("g", Math.max(-0.2, Math.min(0.6, +b.dataset.g)))));
         document.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => ust("marza", +b.dataset.m)));
         document.querySelectorAll("[data-lata]").forEach((b) => b.addEventListener("click", () => ust("lata", +b.dataset.lata)));
@@ -283,6 +287,36 @@
     }
 
     // --- sprawozdania -------------------------------------------------------------------------------------------------
+    // --- jakość zysku i zdarzenia (fakty z SEC, bez interpretacji) ------------------------------------------------------
+    function zyskZd() {
+        const el = $("zysk-zd"), m = M, zd = K.zdarzenia || [];
+        const wr = (n, v, b) => `<tr><td>${n}</td><td style="text-align:right">${b ? "<b>" + v + "</b>" : v}</td></tr>`;
+        const roz = W.ok(m.eps_norm) && W.ok(m.eps) ? m.eps / m.eps_norm - 1 : null;
+        const jz = W.ok(m.ni_norm) ? `<table class="male" style="width:100%">
+            ${wr("Zysk netto z raportu (GAAP, 12 mies.)", W.fmtUsd(m.ni_ttm))}
+            ${wr("Zysk operacyjny (12 mies.)", W.fmtUsd(m.op_ttm))}
+            ${wr("− koszty odsetek", W.fmtUsd(m.odsetki_ttm || 0))}
+            ${wr(`− podatek (stopa ${W.fmtPct(m.stopa_pod, 0)})`, W.fmtUsd((m.op_ttm - (m.odsetki_ttm || 0)) * m.stopa_pod))}
+            ${wr("= Zysk znormalizowany", W.fmtUsd(m.ni_norm), true)}
+            ${W.ok(m.nonop_ttm) ? wr("Pozycje nieoperacyjne w raporcie (inwestycje, sprzedaż aktywów, odsetki, inne)", W.fmtUsd(m.nonop_ttm)) : ""}
+            ${wr("Różnica: zysk z raportu − znormalizowany", W.fmtUsd(m.roznica_norm))}
+            ${wr("EPS z raportu / znormalizowany", `${W.fmtNum(m.eps)} / ${W.ok(m.eps_norm) ? W.fmtNum(m.eps_norm) : "–"}`, true)}
+            ${W.ok(m.pe_norm) ? wr("P/E z raportu / znormalizowane", `${W.fmtNum(m.pe)} / ${W.fmtNum(m.pe_norm)}`) : ""}
+            ${W.ok(m.peg_norm) ? wr("PEG z raportu / znormalizowany", `${W.fmtNum(W.ok(m.peg_gaap) ? m.peg_gaap : m.peg)} / ${W.fmtNum(m.peg_norm)}`) : ""}
+          </table>
+          <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:#b91c1c">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
+              : Math.abs(roz) > 0.15 ? `<b style="color:#b91c1c">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
+              : '<span style="color:#15803d">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
+        const kol = ["#64748b", "#d97706", "#dc2626"];
+        const lz = zd.length ? `<ul style="list-style:none;margin:0;padding:0">${zd.map((z) => `<li style="padding:6px 0;border-bottom:1px solid var(--linia);font-size:13px">
+            <span class="mut" style="display:inline-block;width:88px">${esc(z.d)}</span>${z.p.map(([k, p, o]) => `<span style="color:${kol[p]};font-weight:${p ? 600 : 400}">● ${esc(o)}</span> <span class="mut male">(${esc(k.includes(".") ? z.f + " pkt " + k : k)})</span>`).join("; ")}
+            · <a href="${esc(z.u)}" target="_blank" rel="noopener">raport</a></li>`).join("")}</ul>`
+            : '<p class="mut male">Brak zgłoszonych istotnych zdarzeń w ostatnich 12 miesiącach (lub spółka zagraniczna bez raportów 8-K).</p>';
+        el.innerHTML = `<h2>Jakość zysku i zdarzenia</h2><div class="pod">Czy zysk z raportu pochodzi z podstawowej działalności, czy z jednorazowych pozycji (np. zyski z wyceny inwestycji), oraz co spółka zgłosiła do SEC w ostatnich 12 miesiącach. Fakty z SEC, bez komentarza.</div>
+          <div class="siatka2"><div><div class="mut male" style="margin-bottom:4px">Zysk z raportu a zysk znormalizowany (zysk operacyjny − odsetki, po podatku)</div>${jz}</div>
+          <div><div class="mut male" style="margin-bottom:4px">Zdarzenia z raportów bieżących SEC (8-K) · <span style="color:${kol[2]}">● poważne</span> <span style="color:${kol[1]}">● istotne</span> <span style="color:${kol[0]}">● informacyjne</span></div>${lz}</div></div>`;
+    }
+
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
         el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">Z raportów SEC (pierwsza publikacja, bez późniejszych korekt).</div></div>
@@ -320,6 +354,6 @@
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); sprawozdania("q");
+        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); sprawozdania("q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
 })();

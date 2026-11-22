@@ -161,3 +161,27 @@ def test_duzy_zwyciezca():
     assert all(ok for _, _, ok in O.strategie(m, "Technology")["Duży zwycięzca (10+ lat)"])
     m["przych_lata_wzrostu_10"] = 7
     assert not all(ok for _, _, ok in O.strategie(m, "Technology")["Duży zwycięzca (10+ lat)"])
+
+
+def test_zysk_znormalizowany_i_peg():
+    def kw(v):      # 4 kwartały 2026 o tej samej wartości
+        return {"X": [[f"2026-{a}", f"2026-{b}", v, f"2026-{b[:2]}-28"] for a, b in
+                      (("01-01", "03-31"), ("04-01", "06-30"), ("07-01", "09-30"), ("10-01", "12-31"))]}
+    ex = {k: kw(v) for k, v in dict(rev=100.0, ni=40.0, op=30.0, odsetki=5.0, przed_pod=50.0, podatek=10.0).items()}
+    fv = dict(price=100.0, PE=25.0, estLTGrowth=20.0, marketCap=1000.0)
+    m, _ = O.metryki(ex, fv, dzis=dt.date(2027, 3, 1))
+    assert abs(m["ni_norm"] - 4 * 25 * 0.8) < 1e-9          # (op − odsetki) × (1 − 20 %)
+    assert abs(m["eps_norm"] - 4.0 * 80 / 160) < 1e-9 and abs(m["peg_gaap"] - 1.25) < 1e-9
+    assert m["peg_norm_uzyte"] and abs(m["peg"] - 2.5) < 1e-9
+    assert any("zawyżony" in x for x in O.ostrzezenia(m))
+
+
+def test_zdarzenia_8k():
+    from momentum import zdarzenia as Z
+    d = {"filings": {"recent": {"form": ["8-K", "8-K", "NT 10-Q", "8-K"], "filingDate": ["2026-11-12", "2026-10-01", "2026-08-01", "2025-01-01"],
+                                "items": ["5.02,9.01", "2.02,9.01", "", "4.02"], "accessionNumber": ["0001-26-1", "0001-26-2", "0001-26-3", "0001-25-4"],
+                                "primaryDocument": ["a.htm", "b.htm", "c.htm", "d.htm"]}}}
+    zd = Z.z_submissions(d, 1045810, dzis=dt.date(2026, 11, 22))
+    assert [z["f"] for z in zd] == ["8-K", "NT 10-Q"]       # wyniki kwartalne (2.02) pominięte, zdarzenie sprzed roku też
+    assert zd[0]["poz"] == 1 and zd[1]["poz"] == 2 and zd[0]["u"].endswith("/1045810/0001261/a.htm")
+    assert len(Z.ostrzezenia(zd)) == 1
