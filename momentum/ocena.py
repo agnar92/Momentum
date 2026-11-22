@@ -36,7 +36,8 @@ def metryki(ex, fv, dzis=None, splity=()):
              de=_f(fv.get("debtEq")), eps=p / pe if p and pe and pe > 0 else None)
     m["peg"] = pe / (100 * m["eps_next5"]) if pe and pe > 0 and m["eps_next5"] and m["eps_next5"] > 0 else None
     hist = dict(q=[], y=[])
-    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc", "skup", "emisja") if ex.get(k)}
+    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc", "skup", "emisja", "nonop", "odsetki", "przed_pod", "podatek")
+         if ex.get(k)}
     rt = F.ttm(q["rev"]) if "rev" in q else []
     nt = F.ttm(q["ni"]) if "ni" in q else []
     # emitenci zagraniczni (20-F) raportują tylko rocznie: punkty roczne zamiast TTM, jeśli są świeże (<= 15 mies.)
@@ -234,6 +235,30 @@ def metryki(ex, fv, dzis=None, splity=()):
             m["zysk_dodatni_lata"] = sum(x > 0 for x in zl5)
             sr_ = sum(zl5) / 5
             m["zmiennosc_zysku"] = (sum((x - sr_) ** 2 for x in zl5) / 5) ** 0.5 / abs(sr_) if sr_ else None
+    # zysk znormalizowany (jak „partially normalized EPS”): zysk operacyjny − odsetki, po podatku (efektywna stopa 10–30 %, zapas 21 %);
+    # pomija zyski / straty z inwestycji, sprzedaży aktywów i inne pozycje nieoperacyjne, które zawyżają lub zaniżają zysk z raportu (GAAP)
+    op12, ods12, pp12, pod12, no12 = ost12("op"), ost12("odsetki"), ost12("przed_pod"), ost12("podatek"), ost12("nonop")
+    if op12 is not None and m.get("ni_ttm") is not None:
+        st_ = pod12 / pp12 if pod12 is not None and pp12 and pp12 > 0 else 0.21
+        st_ = min(0.30, max(0.10, st_))
+        ni_n = (op12 - (ods12 or 0)) * (1 - st_)
+        m["ni_norm"], m["stopa_pod"], m["op_ttm"], m["odsetki_ttm"] = ni_n, st_, op12, ods12
+        m["roznica_norm"] = m["ni_ttm"] - ni_n                       # o ile zysk z raportu różni się od znormalizowanego
+        if no12 is not None:
+            m["nonop_ttm"] = no12
+        if m.get("eps") and m["ni_ttm"] > 0 and ni_n > 0:
+            m["eps_norm"] = m["eps"] * ni_n / m["ni_ttm"]            # ta sama liczba akcji co w EPS z Finviz
+            if m.get("price"):
+                m["pe_norm"] = m["price"] / m["eps_norm"]
+                if m.get("eps_next5") and m["eps_next5"] > 0:
+                    m["peg_norm"] = m["pe_norm"] / (100 * m["eps_next5"])
+        # PEG z zysku znormalizowanego, gdy zysk z raportu różni się o > 15 % (np. AMZN: zysk z wyceny udziałów) — etykieta, 7/7 i ocena wyceny
+        # nie pokazują wtedy fałszywie taniej spółki; PEG z zysku z raportu zostaje jako peg_gaap
+        if m.get("eps") and m["eps"] > 0 and m.get("peg") is not None:
+            if m.get("eps_norm") and abs(m["eps"] / m["eps_norm"] - 1) > 0.15 and m.get("peg_norm"):
+                m["peg_gaap"], m["peg"], m["peg_norm_uzyte"] = m["peg"], m["peg_norm"], True
+            elif ni_n <= 0:
+                m["peg_gaap"], m["peg"], m["peg_norm_uzyte"] = m["peg"], None, True
     # „Duży zwycięzca (10+ lat)” (użytkownik: duże spółki o dobrych fundamentach rosnące od 10+ lat, np. MSFT, META — PEG 1–2 to cena godziwa)
     yrev = F.polacz(ex["rev"], F.roczne, True) if ex.get("rev") else {}
     yv = list(yrev.values())[-11:]
@@ -452,6 +477,14 @@ def ostrzezenia(m, typ=None, rank=None):
     if rank is not None and rank <= 30 and g is not None and g > 0.30:
         out.append(f"Jedna z 30 największych spółek z prognozą {100 * g:.0f} % rocznie — im większa firma, tym trudniej utrzymać takie tempo; "
                    "przyjmij ostrożniejszy wzrost w wycenie.")
+    if m.get("eps_norm") and m.get("eps") and abs(m["eps"] / m["eps_norm"] - 1) > 0.25:
+        k_ = "zawyżony" if m["eps"] > m["eps_norm"] else "zaniżony"
+        out.append(f"Zysk z raportu (EPS {_pl(m['eps'], 2)}) jest {k_} względem zysku z podstawowej działalności (EPS znormalizowany {_pl(m['eps_norm'], 2)}) — "
+                   f"pozycje nieoperacyjne (np. zyski z inwestycji, sprzedaż aktywów, jednorazowy podatek). P/E po normalizacji {_pl(m['pe_norm'])} zamiast "
+                   f"{_pl(m['pe']) if m.get('pe') else '–'}" + (f", PEG {_pl(m['peg_norm'], 2)} zamiast {_pl(m['peg_gaap'], 2)} (na stronie liczymy PEG ze znormalizowanego)." if m.get("peg_norm") and m.get("peg_gaap") else "."))
+    elif m.get("eps") and m["eps"] > 0 and m.get("ni_norm") is not None and m["ni_norm"] <= 0:
+        out.append("Zysk z raportu jest dodatni tylko dzięki pozycjom nieoperacyjnym (np. zyski z inwestycji) — zysk z podstawowej działalności po odsetkach "
+                   "i podatku jest ujemny, więc P/E i PEG nie mają sensu.")
     if m.get("ni_1y") is not None and m["ni_1y"] > 1.0 and (m.get("rev_1y") or 0) < 0.30:
         out.append(f"Zysk netto +{100 * m['ni_1y']:.0f} % r/r przy przychodach +{100 * (m.get('rev_1y') or 0):.0f} % — możliwe jednorazowe zyski "
                    "(np. przeszacowanie udziałów); P/E i PEG mogą być zaniżone.")

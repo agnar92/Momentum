@@ -21,6 +21,12 @@ TAGI = {
     "skup": ("USD", ["PaymentsForRepurchaseOfCommonStock"]),
     "emisja": ("USD", ["ProceedsFromIssuanceOfCommonStock"]),
     "dyw": ("USD", ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]),
+    # do zysku znormalizowanego (bez zysków z inwestycji i innych pozycji nieoperacyjnych)
+    "nonop": ("USD", ["NonoperatingIncomeExpense"]),
+    "odsetki": ("USD", ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt"]),
+    "przed_pod": ("USD", ["IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+                          "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments"]),
+    "podatek": ("USD", ["IncomeTaxExpenseBenefit"]),
     "eps": ("USD/shares", ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted", "EarningsPerShareBasic"]),
 }
 CHWILE = {
@@ -45,6 +51,9 @@ TAGI_IFRS = {
     "skup": ["PaymentsToAcquireOrRedeemEntitysShares"],
     "emisja": ["ProceedsFromIssuingShares"],
     "dyw": ["DividendsPaidClassifiedAsFinancingActivities", "DividendsPaid"],
+    "odsetki": ["FinanceCosts"],
+    "przed_pod": ["ProfitLossBeforeTax"],
+    "podatek": ["IncomeTaxExpenseContinuingOperations"],
     "eps": ["DilutedEarningsLossPerShare", "BasicAndDilutedEarningsLossPerShare", "BasicEarningsLossPerShare"],
 }
 CHWILE_IFRS = {
@@ -164,7 +173,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 5
+    out["v"] = 6
     return out
 
 

@@ -14,7 +14,7 @@ import time
 
 import requests
 
-from momentum import fundamenty, ocena
+from momentum import fundamenty, ocena, zdarzenia
 
 OUT = os.path.join("docs", "data")
 URL = "https://finviz.com/screener/stocks"
@@ -66,8 +66,39 @@ def sec_get(url, tries=5):
     return None
 
 
-def sec_wyciagi(tickers, cache=None, log=print, watki=4):
-    mapa = {v["ticker"].upper().replace(".", "-"): int(v["cik_str"]) for v in (sec_get("https://www.sec.gov/files/company_tickers.json") or {}).values()}
+def cik_mapa():
+    return {v["ticker"].upper().replace(".", "-"): int(v["cik_str"]) for v in (sec_get("https://www.sec.gov/files/company_tickers.json") or {}).values()}
+
+
+def sec_zdarzenia(tickers, mapa, cache=None, log=print, watki=4):
+    """Zdarzenia z raportów 8-K / spóźnionych i poprawionych raportów okresowych (momentum/zdarzenia.py), ostatnie 12 miesięcy."""
+    zad = [t for t in tickers if t in mapa]
+    out, lock = {}, threading.Lock()
+    def praca():
+        while True:
+            with lock:
+                if not zad:
+                    return
+                t = zad.pop()
+            p = os.path.join(cache, f"{t}.zd.json") if cache else None
+            d = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 2 * 86400 else None
+            if d is None:
+                d = sec_get(f"https://data.sec.gov/submissions/CIK{mapa[t]:010d}.json")
+                d = {"filings": {"recent": (d or {}).get("filings", {}).get("recent", {})}} if d else None
+                if p and d:
+                    json.dump(d, open(p, "w"))
+                time.sleep(0.25)
+            with lock:
+                out[t] = zdarzenia.z_submissions(d, mapa[t])
+    th = [threading.Thread(target=praca) for _ in range(watki)]
+    [x.start() for x in th]
+    [x.join() for x in th]
+    log(f"Zdarzenia SEC: {len(out)} spółek, poważne w {sum(1 for v in out.values() if any(z['poz'] == 2 for z in v))}")
+    return out
+
+
+def sec_wyciagi(tickers, cache=None, log=print, watki=4, mapa=None):
+    mapa = mapa or cik_mapa()
     zad = [t for t in tickers if t in mapa]
     out, lock = {}, threading.Lock()
     def praca():
@@ -78,7 +109,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 5 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 6 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -163,7 +194,7 @@ def notowana_5_lat(c, dzis=None):
     return dt.date.fromisoformat(c[0][0]) <= (dzis or dt.date.today()) - dt.timedelta(days=round(4.9 * 365.25))
 
 
-def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
+def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
     """500 największych wg kapitalizacji (bez wykluczonych sektorów) spośród spółek notowanych co najmniej 5 lat (użytkownik: „top 500 po kapitalizacji,
     które są minimum 5 lat na rynku”); `kandydaci` = tickery z pobranymi danymi (domyślnie top wg kapitalizacji). Brak kursów (błąd yfinance) -> wiek
     ze sprawozdań: przychody sprzed 5 lat w SEC."""
@@ -184,7 +215,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
         m["dcf"] = sc["base"]["wartosc"] if sc else None
         m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None
         rows.append(dict(t=t, n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
-                         rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t))))
+                         rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t)), zdarzenia=(zd or {}).get(t)))
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     ocena.oceny(rows)
     pes = sorted(r["m"]["pe"] for r in rows if r["m"].get("pe") and r["m"]["pe"] > 0)
@@ -199,7 +230,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print):
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
-        r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"])
+        r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"]) + zdarzenia.ostrzezenia(r["zdarzenia"])
     return rows
 
 
@@ -225,8 +256,9 @@ def zapisz(rows, out=OUT, today=None):
                           o=r["oceny"], typ=r["typy"][0][0] if r["typy"] else None, peg=r["m"].get("peg"), pe=r["m"].get("pe"),
                           dcf_pot=r["m"].get("dcf_pot"), et=r["etykieta"], st=st, zw=r["zw"], rev_1y=r["m"].get("rev_1y"), rev_cagr5=r["m"].get("rev_cagr5"),
                           roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None,
+                          zd=sum(1 for z in r["zdarzenia"] or [] if z["poz"] == 2) or None,
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia")}
+        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF
@@ -249,12 +281,14 @@ def main(argv=None):
     top = [r["ticker"] for r in wybierz(fv, a.top + 200)]       # zapas: część spółek odpada (krócej niż 5 lat na rynku)
     if a.cache:
         os.makedirs(a.cache, exist_ok=True)
-    ex = sec_wyciagi(top, a.cache)
+    mapa = cik_mapa()
+    ex = sec_wyciagi(top, a.cache, mapa=mapa)
     if sum(1 for v in ex.values() if v.get("rev")) < 0.7 * len(top):
         print("Za mało danych SEC — nic nie zapisuję.")
         return 1
     px = ceny(top)
-    rows = buduj(fv, ex, px, a.top, kandydaci=top)
+    zd = sec_zdarzenia(top, mapa, a.cache)
+    rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd)
     zapisz(rows, a.out)
     print(f"Zapisano {len(rows)} spółek; z danymi SEC {sum(1 for v in ex.values() if v.get('rev'))}, z cenami {len(px)}.")
     return 0
