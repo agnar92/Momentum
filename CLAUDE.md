@@ -59,7 +59,8 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   momentach”): target position 10 % of portfolio built in `transze` purchases (default 10, input on the page) — one purchase ≤ target × points/10 ÷ transze (10 pts reach the target in `transze` cheap moments, 5 pts in twice as many), overflow to other
   stocks, leftover = `niewydane` waits for the next cheap moment; none for ⬇ `sp`. The USER picks the stocks (user: „tylko ja
   wybieram spółki, nie automat”) — no automatic additions, no Jakość 7/7 filter on the page (`tylkoJakosc` option of `W.dokup` defaults to false); „Kupiłem” adds shares at the current price and recomputes the average cost
-  (`W.sredniKoszt`). Do not tune the formula to backtests. Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
+  (`W.sredniKoszt`). Do not tune the formula to backtests. Leftover stays in cash, shown neutrally — do NOT suggest ETFs, more stocks or changing the
+  rules (user: „rób to co mówię … ja decyduję co, gdzie i jak … muszę zarządzać emocjami”; retirement account, prefers stability over max return). Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
 
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.

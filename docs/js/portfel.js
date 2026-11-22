@@ -43,7 +43,7 @@
         if (!W.ok(S.kwota) || S.kwota <= 0) { el.innerHTML = '<p class="mut">Wpisz kwotę, żeby zobaczyć podział.</p>'; return; }
         const d = W.dokup(S.pozycje, WIERSZE, S.kwota, { transze: S.transze });
         const kup = d.pozycje.filter((x) => x.kwota > 0), nie = d.pozycje.filter((x) => x.kwota === 0);
-        el.innerHTML = (d.niewydane ? `<div class="ostrzezenie">Do wydania zostaje <b>${zl(d.niewydane)}</b> — ${kup.length ? `pozycje budujemy powoli — jeden zakup to najwyżej cel (10 % portfela) × punkty/10 ÷ ${S.transze}` : "żadna z Twoich spółek nie ma PEG 0–2 (albo ma ⬇)"}. Zostaje na kolejny tani moment — albo dopisz następną wybraną przez siebie spółkę (liczba akcji 0) lub zmniejsz liczbę zakupów.</div>` : "")
+        el.innerHTML = (d.niewydane ? `<p class="male"><b>W gotówce na kolejny tani moment: ${zl(d.niewydane)}</b> <span class="mut">(${kup.length ? "pozycje budowane powoli — limit jednego zakupu" : "żadna z Twoich spółek nie ma teraz PEG 0–2"})</span></p>` : "")
             + (kup.length ? `<div class="przewin"><table class="male"><thead><tr><th>Spółka</th><th class="n">Punkty</th><th class="n">Kwota</th><th class="n">≈ akcji</th><th>Dlaczego</th><th></th></tr></thead><tbody>
               ${kup.map((x) => `<tr><td><a href="spolka.html?t=${encodeURIComponent(x.t)}"><b>${esc(x.t)}</b></a>${znaczki(x.r)}${x.nowa ? ' <span class="mut">(nowa)</span>' : ""}</td>
                 <td class="n">${W.fmtNum(x.mn, 1)}</td><td class="n"><b>${zl(x.kwota)}</b></td><td class="n">${W.fmtNum(x.akcjeKup, x.akcjeKup < 10 ? 2 : 1)}</td>
