@@ -1236,3 +1236,10 @@ M1 +0,11 [−0,28; +0,47], M2 +0,25 [−0,04; +0,58] (5/9), M3 −0,52 [−0,86;
 (2) czekanie na okazję — nie lepsze, większe obsunięcia, na szerszej liście −2 pp rocznie — tak; (3) od razu częściej lepiej — tak (5/7, nie 2/3 z 9, bo 2 starty bez listy).
 Wniosek dla strony (wg reguły zapisanej przed testem): stałe kwoty co miesiąc w spółki z listy; dodatkowo × 2 dla spółki ≥ 15 % poniżej maksimum z 12 mies. (M2, mały efekt
 +0,3–0,8 pp/rok); bez czekania na okazję; PEG tylko do wyboru spółek i ostrzeżenia „drogo” (przechył wg PEG nie przeszedł); limit 15 % na spółkę; wolne środki jednorazowo — od razu.
+
+Dopisek do etapu 89 (2026-11-22, PO teście — reguły użytkownika, nie były zapisane przed uruchomieniem, więc to wynik eksploracyjny): użytkownik: „dokupować, kiedy PEG
+między 0–2, im niższy, tym większa waga, ale nie więcej niż 10 % portfela”, potem „włóż w to score i market cap”. M6: waga 2 − PEG przy PEG 0–2, limit 10 %, brak okazji → gotówka
+czeka w SPY: 24,1 % (M0 20,1 %), maxDD −39 % (−33 %), bez NVDA 17,5 % (12,5 %); okna 5 lat +1,56 pp [+0,37; +2,73] 6/9; szersza lista +0,55 [−0,32; +1,51]. M7 (strona):
+waga (2 − PEG) × ocena ogólna ÷ 6 (0,5–1,5) × (1 + 0,25 log10(kapit. ÷ 100 mld)) (0,5–1,5): 24,4 %, maxDD −40 %, bez NVDA 17,8 %; okna +1,92 pp [+0,61; +3,09] 7/9;
+szersza lista +0,62 [−0,13; +1,41] 6/9. Wniosek: na liście Jakość 7/7 reguła użytkownika wypada lepiej niż równe kwoty, ale za cenę większych obsunięć, a na szerszej
+liście przewaga jest w granicach szumu; parametry (próg 2, wzór wag) wybrane po obejrzeniu wyników etapu 89 — ryzyko dopasowania.

@@ -5,7 +5,7 @@
     const KLUCZ = "fundamenta_portfel";
     let WIERSZE = {}, LISTA = [];
     const czytaj = () => { try { return JSON.parse(localStorage.getItem(KLUCZ)) || {}; } catch (e) { return {}; } };
-    let S = { pozycje: [], kwota: null, tylkoJakosc: true, nowe: false, n: 10, ...czytaj() };
+    let S = { pozycje: [], kwota: null, tylkoJakosc: true, spadek: false, nowe: false, n: 10, ...czytaj() };
     const zapisz = () => { try { localStorage.setItem(KLUCZ, JSON.stringify(S)); } catch (e) { /* tryb prywatny */ } };
     const zl = (x) => (W.ok(x) ? W.fmtCena(x) : "–");
     const pct = (x) => (W.ok(x) ? `<span class="${x > 0 ? "plus" : x < 0 ? "minus" : ""}">${W.fmtPct(x, 1, true)}</span>` : "–");
@@ -16,7 +16,7 @@
     function nowe() {
         if (!S.nowe) return [];
         const mam = new Set(S.pozycje.map((p) => p.t)), ile = Math.max(0, (S.n || 10) - S.pozycje.length);
-        return LISTA.filter((r) => W.jakosc77(r) && !r.sp && !mam.has(r.t)).sort((a, b) => ((b.o && b.o.ogolna) || 0) - ((a.o && a.o.ogolna) || 0)).slice(0, ile).map((r) => r.t);
+        return LISTA.filter((r) => W.jakosc77(r) && !r.sp && !mam.has(r.t) && W.ok(r.peg) && r.peg > 0 && r.peg < 2).sort((a, b) => ((b.o && b.o.ogolna) || 0) - ((a.o && a.o.ogolna) || 0)).slice(0, ile).map((r) => r.t);
     }
 
     function rysuj() {
@@ -41,16 +41,19 @@
         sugestie();
     }
 
+    const opis = (x) => { const c = x.czynniki, r = x.r; if (!c) return "";
+        return `PEG ${W.fmtNum(r.peg)} → ${W.fmtNum(c.peg)} × ocena ${W.ok(r.o && r.o.ogolna) ? W.fmtNum(r.o.ogolna, 1) : "–"} → ${W.fmtNum(c.ocena)} × kapit. ${W.fmtUsd(r.mc)} → ${W.fmtNum(c.kap)}`
+            + (c.spadek > 1 ? ` × 2 (kurs ${W.fmtPct(r.om, 0)} od szczytu)` : "") + (x.kwota < x.max - 0.005 ? "" : " · limit 10 %"); };
     function sugestie() {
         const el = $("sugestie");
         if (!W.ok(S.kwota) || S.kwota <= 0) { el.innerHTML = '<p class="mut">Wpisz kwotę, żeby zobaczyć podział.</p>'; return; }
-        const d = W.dokup(S.pozycje, WIERSZE, S.kwota, { tylkoJakosc: S.tylkoJakosc, nowe: nowe() });
+        const d = W.dokup(S.pozycje, WIERSZE, S.kwota, { tylkoJakosc: S.tylkoJakosc, spadek: S.spadek, nowe: nowe() });
         const kup = d.pozycje.filter((x) => x.kwota > 0), nie = d.pozycje.filter((x) => x.kwota === 0);
-        el.innerHTML = (d.niewydane ? '<div class="ostrzezenie">Żadna spółka nie spełnia warunków dokupu — dodaj spółki z ✔ Jakość 7/7 albo odznacz „tylko spółki z ✔ Jakość 7/7”. Nie czekaj z gotówką na okazję: w badaniu czekanie nie pomagało.</div>' : "")
+        el.innerHTML = (d.niewydane ? `<div class="ostrzezenie">Do wydania zostaje <b>${zl(d.niewydane)}</b> — ${kup.length ? "pozostałe spółki doszły do limitu 10 % portfela" : "żadna spółka nie spełnia warunków (PEG 0–2, bez ⬇, ✔ Jakość 7/7)"}. W teście ta kwota czekała w SPY (ETF na S&P 500) do następnego miesiąca; zaznacz „dodaj nowe spółki”, żeby rozłożyć ją szerzej.</div>` : "")
             + (kup.length ? `<div class="przewin"><table class="male"><thead><tr><th>Spółka</th><th class="n">Kwota</th><th class="n">≈ akcji</th><th>Dlaczego</th><th></th></tr></thead><tbody>
               ${kup.map((x) => `<tr><td><a href="spolka.html?t=${encodeURIComponent(x.t)}"><b>${esc(x.t)}</b></a>${znaczki(x.r)}${x.nowa ? ' <span class="mut">(nowa)</span>' : ""}</td>
                 <td class="n"><b>${zl(x.kwota)}</b></td><td class="n">${W.fmtNum(x.akcjeKup, x.akcjeKup < 10 ? 2 : 1)}</td>
-                <td class="zawin">${esc([x.mn > 1 ? x.powody.join("; ") : "równa część", ...x.uwagi].join(" · "))}</td>
+                <td class="zawin">${esc([opis(x), ...x.uwagi].join(" · "))}</td>
                 <td><button data-kup="${esc(x.t)}" data-a="${x.akcjeKup}" data-c="${x.cena}" title="Dopisz zakup po bieżącej cenie — przeliczy średni koszt">Kupiłem</button></td></tr>`).join("")}</tbody></table></div>` : "")
             + (nie.length ? `<details style="margin-top:8px"><summary class="mut male" style="cursor:pointer">Bez dokupu w tym miesiącu (${nie.length})</summary><ul class="male" style="margin:6px 0 0 18px;padding:0">
               ${nie.map((x) => `<li><b>${esc(x.t)}</b> — ${esc(x.powody.join("; "))}${x.uwagi.length ? " · " + esc(x.uwagi.join(" · ")) : ""}</li>`).join("")}</ul></details>` : "")
@@ -75,9 +78,10 @@
         zapisz(); rysuj();
     });
     $("kwota").value = W.ok(S.kwota) ? S.kwota : "";
-    $("o-jak").checked = S.tylkoJakosc; $("o-nowe").checked = S.nowe; $("o-n").value = S.n || 10;
+    $("o-jak").checked = S.tylkoJakosc; $("o-sp").checked = !!S.spadek; $("o-nowe").checked = S.nowe; $("o-n").value = S.n || 10;
     $("kwota").addEventListener("input", (e) => { S.kwota = e.target.value === "" ? null : +e.target.value; zapisz(); sugestie(); });
     $("o-jak").addEventListener("change", (e) => { S.tylkoJakosc = e.target.checked; zapisz(); rysuj(); });
+    $("o-sp").addEventListener("change", (e) => { S.spadek = e.target.checked; zapisz(); sugestie(); });
     $("o-nowe").addEventListener("change", (e) => { S.nowe = e.target.checked; zapisz(); sugestie(); });
     $("o-n").addEventListener("change", (e) => { S.n = +e.target.value || 10; zapisz(); sugestie(); });
 

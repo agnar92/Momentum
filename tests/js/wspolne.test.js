@@ -84,15 +84,19 @@ test("znacznik Jakość 7/7 i filtr", () => {
     assert.deepStrictEqual(W.filtruj([a, b], { jakosc: true }).map((r) => r.t), ["A"]);
 });
 
-test("dokup: równe kwoty, × 2 po spadku, bez ⬇ i ponad limit 15 %", () => {
+test("dokup: PEG 0–2 (niższy = więcej) × ocena × kapitalizacja, limit 10 %, bez ⬇ i spoza 7/7", () => {
     const J = { "Jakość (7 kryteriów)": [7, 7] };
-    const w = { A: { t: "A", c: 10, st: J }, B: { t: "B", c: 20, st: J, om: -0.2 }, C: { t: "C", c: 5, st: J, sp: ["przychody"] },
-        D: { t: "D", c: 100, st: J }, E: { t: "E", c: 10, st: { "Jakość (7 kryteriów)": [6, 7] } } };
-    const p = [{ t: "A", akcje: 10, koszt: 8 }, { t: "B", akcje: 5, koszt: 25 }, { t: "C", akcje: 10 }, { t: "D", akcje: 10 }, { t: "E", akcje: 1 }];
-    const d = W.dokup(p, w, 300);
-    const k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
-    assert.strictEqual(k.C, 0); assert.strictEqual(k.D, 0); assert.strictEqual(k.E, 0);   // ⬇, D = 1000 z 1360 > 15 %, poza listą
-    assert.ok(Math.abs(k.A - 100) < 1e-9 && Math.abs(k.B - 200) < 1e-9);
+    const w = { A: { t: "A", c: 10, st: J, peg: 1, o: { ogolna: 6 }, mc: 1e11 }, B: { t: "B", c: 20, st: J, peg: 0.5, o: { ogolna: 9 }, mc: 1e12 },
+        C: { t: "C", c: 5, st: J, peg: 1, sp: ["przychody"] }, D: { t: "D", c: 10, st: J, peg: 2.5 }, E: { t: "E", c: 10, st: { "Jakość (7 kryteriów)": [6, 7] }, peg: 1 } };
+    const p = [{ t: "A", akcje: 10, koszt: 8 }, { t: "B", akcje: 0 }, { t: "C", akcje: 100 }, { t: "D", akcje: 100 }, { t: "E", akcje: 100 }];
+    let d = W.dokup(p, w, 30);
+    let k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.strictEqual(k.C, 0); assert.strictEqual(k.D, 0); assert.strictEqual(k.E, 0);
+    const wb = 1.5 * 1.5 * 1.25;                                // (2 − 0,5) × 9/6 × (1 + 0,25 · log10(10))
+    assert.ok(Math.abs(k.B / k.A - wb) < 1e-9);
     assert.ok(Math.abs(d.pozycje[0].zysk - 0.25) < 1e-9);
+    d = W.dokup(p, w, 3000);                                    // limit 10 %: A i B najwyżej 10 % z 5600
+    k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.ok(Math.abs(k.A - 460) < 1e-6 && Math.abs(k.B - 560) < 1e-6 && Math.abs(d.niewydane - 1980) < 1e-6);
     assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
 });

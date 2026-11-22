@@ -51,11 +51,13 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
-- `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu, sugestie dokupu po PEG, average costing, bez time the market”): positions
-  (ticker, shares, average cost) and monthly amount in localStorage `fundamenta_portfel`; `W.dokup` splits the amount by stage 89 (research/wyniki/r114_etap89.md):
-  equal per stock (DCA), × 2 when ≥ 15 % below the 12-month high (`om` = `od_maks_12m` in lista), 0 for ⬇ `sp`, position > 15 % of portfolio, or (option, default on)
-  not ✔ Jakość 7/7; PEG does NOT change amounts (PEG tilt failed the pre-registered rule; PEG ≥ 3 only a note); optional new ✔ stocks by overall score up to N
-  positions; „Kupiłem” adds shares at the current price and recomputes the average cost (`W.sredniKoszt`). Waiting for PEG < 1 was not better (bigger drawdowns).
+- `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
+  0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
+  in localStorage `fundamenta_portfel`; `W.dokup`: only PEG 0–2, weight = (2 − PEG) × `czynnikOceny` (overall score ÷ 6, 0.5–1.5) × `czynnikKap` (1 + 0.25 ·
+  log10(mcap ÷ 100 bn), 0.5–1.5), position cap 10 % with overflow redistributed (leftover = `niewydane`, in the test it waited in SPY), none for ⬇ `sp` or (option,
+  default on) not ✔ Jakość 7/7; option × 2 when ≥ 15 % below the 12-month high (`om`); optional new ✔ stocks with PEG 0–2 by overall score up to N positions;
+  „Kupiłem” adds shares at the current price and recomputes the average cost (`W.sredniKoszt`). Stage 89 (r114): equal amounts 20.1 %; this rule (M7, exploratory,
+  parameters chosen after seeing results) 24.4 %, 5-year windows +1.9 pp [+0.6; +3.1], DD −40 % vs −33 %, wider list +0.6 [−0.1; +1.4].
 
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.

@@ -8,6 +8,10 @@ LISTA = (J7k == 7) & ZB                       # Jakość 7/7 (bez kryterium wyce
 PE_ = np.where(np.nan_to_num(X['pe'], nan=-1) > 0, X['pe'], np.nan)
 PE_MED = pd.DataFrame(PE_).rolling(60, min_periods=36).median().to_numpy()
 MAX12 = pd.DataFrame(Cv).rolling(12, min_periods=6).max().to_numpy()
+_mc = np.exp(X['log_kap'])
+MCUSD = _mc * (1e6 if np.nanmedian(_mc[im_[pd.Period('2026-06', 'M')]]) < 1e7 else 1)   # kapitalizacja w USD (w danych mln lub USD)
+FO = np.clip(np.where(np.isfinite(OG), OG / 6, 1.0), 0.5, 1.5)                          # jak W.czynnikOceny na stronie
+FM = np.clip(np.where(np.isfinite(MCUSD) & (MCUSD > 0), 1 + 0.25 * np.log10(np.where(MCUSD > 0, MCUSD, 1) / 1e11), 1.0), 0.5, 1.5)
 MM = [m for m in MI if pd.Period('2013-01', 'M') <= m <= pd.Period('2026-09', 'M')]
 KOSZT = 0.999
 
@@ -24,6 +28,12 @@ def wagi(metoda, i, k_):
     if metoda == 'M3':
         r = PE_[i, k_] / PE_MED[i, k_]
         return np.where(r < 0.8, 2.0, np.where(r > 1.2, 0.5, 1.0))
+    if metoda == 'M7':                             # strona: (2 − PEG) × ocena × kapitalizacja, PEG 0–2
+        pg = PEG[i, k_]
+        return np.where((pg > 0) & (pg < 2), (2 - pg) * FO[i, k_] * FM[i, k_], 0.0)
+    if metoda == 'M6':                             # reguła użytkownika: PEG 0–2, im niższy, tym większa waga (2 − PEG); brak okazji -> gotówka w SPY czeka
+        pg = PEG[i, k_]
+        return np.where((pg > 0) & (pg < 2), 2 - pg, 0.0)
     pg = PEG[i, k_]                                # M4 / M5: tylko okazje PEG 0–1
     return np.where((pg > 0) & (pg < 1), 1.0, 0.0)
 
@@ -49,15 +59,15 @@ def symuluj(metoda, od, do, bez=()):
         V = sum(poz.values()) + czeka + wolne + 1
         k_ = np.flatnonzero(LISTA[i] & ~wyl & np.isfinite(Cv[i]) & (Cv[i] > 0))
         do_wyd = 1 + wolne; wolne = 0.0
-        if metoda in ('M4', 'M5'):
+        if metoda in ('M4', 'M5', 'M6', 'M7'):
             do_wyd += czeka; czeka = 0.0
         if len(k_):
             for j in k_:
                 kosz_c.setdefault(j, []).append(Cv[i, j])
-            pod_lim = np.array([poz.get(j, 0) <= 0.15 * V for j in k_])
+            pod_lim = np.array([poz.get(j, 0) <= (0.10 if metoda in ('M6', 'M7') else 0.15) * V for j in k_])
             w = wagi(metoda, i, k_) * (pod_lim if pod_lim.any() else 1)
             if w.sum() == 0:
-                if metoda in ('M4', 'M5'):
+                if metoda in ('M4', 'M5', 'M6', 'M7'):
                     czeka, do_wyd = do_wyd, 0.0
                 else:
                     w = np.ones(len(k_))
@@ -75,7 +85,7 @@ def symuluj(metoda, od, do, bez=()):
                 poz[j] *= Cv[i1, j] / Cv[i, j]
             else:
                 wolne += poz.pop(j) * KOSZT
-        if metoda == 'M5' and czeka:
+        if metoda in ('M5', 'M6', 'M7') and czeka:
             czeka *= spy[mm[a + 1]] / spy[m]
         po = sum(poz.values()) + czeka + wolne
         twr.append(twr[-1] * (po / przed if przed > 0 else 1))
@@ -88,14 +98,16 @@ def symuluj(metoda, od, do, bez=()):
 
 
 MET = {'M0': 'M0 równe kwoty (uśrednianie)', 'M1': 'M1 przechył wg PEG', 'M2': 'M2 przechył wg spadku ≥ 15 %', 'M3': 'M3 przechył wg P/E vs własna mediana 5 lat',
-       'M4': 'M4 czekanie na PEG < 1 (gotówka 0 %)', 'M5': 'M5 czekanie na PEG < 1 (gotówka w SPY)'}
+       'M4': 'M4 czekanie na PEG < 1 (gotówka 0 %)', 'M5': 'M5 czekanie na PEG < 1 (gotówka w SPY)',
+       'M6': 'M6 reguła użytkownika (po etapie 89): PEG 0–2, waga 2 − PEG, limit 10 %, czekanie w SPY',
+       'M7': 'M7 strona (użytkownik): waga (2 − PEG) × ocena × kapitalizacja, PEG 0–2, limit 10 %, czekanie w SPY'}
 out = ['# Etap 89: budowanie pozycji — wpłata 1 jednostki co miesiąc w spółki Jakość 7/7, różne sposoby podziału wpłaty', '',
        'Spółek nie sprzedajemy; wpłaty tylko do spółek na liście w danym miesiącu; limit 15 % portfela; koszt 0,1 %. PEG historyczny (P/E ÷ przeszły wzrost EPS).', '']
 rows = []
 for k, nm in MET.items():
     rows.append(dict(sposób=nm, **symuluj(k, '2013-01', '2026-09'))); print(k, flush=True)
 print('lista (spółek w styczniu):', {y: int(LISTA[im_[pd.Period(f'{y}-01', 'M')]].sum()) for y in range(2013, 2027)})
-for k in ('M0', 'M1', 'M2'):
+for k in ('M0', 'M1', 'M2', 'M6', 'M7'):
     rows.append(dict(sposób=MET[k] + ', BEZ NVDA', **symuluj(k, '2013-01', '2026-09', bez=('NVDA',))))
 out += ['## Cały okres 2013-01..2026-09', '', pd.DataFrame(rows).round(3).to_markdown(index=False), '']
 # okna 5-letnie

@@ -113,35 +113,46 @@
         const s = r && r.st && r.st[JAKOSC];
         return !!(s && s[0] === s[1] && s[1] > 0);
     }
-    // --- portfel: podział miesięcznej wpłaty (badanie, etap 89) -------------------------------------------------------
-    // równe kwoty na spółki (uśrednianie), × 2 dla spółki ≥ 15 % poniżej maksimum z 12 mies. (jedyny przechył, który przeszedł test),
-    // bez dokupowania: fundamenty słabną 2 lata (⬇), pozycja > 15 % portfela, spółka poza listą ✔ Jakość 7/7 (opcja); PEG tylko jako uwaga „drogo”
-    const DOKUP = { limit: 0.15, spadek: -0.15, mnoznik: 2 };
+    // --- portfel: podział miesięcznej wpłaty -----------------------------------------------------------------------------
+    // reguła użytkownika: dokupuj tylko przy PEG 0–2 — im niższy, tym większa waga; waga = (2 − PEG) × ocena ogólna × kapitalizacja; pozycja najwyżej 10 % portfela.
+    // Bez dokupu: ⬇ fundamenty słabną 2 lata, spółka spoza ✔ Jakość 7/7 (opcja). Opcja: × 2 po spadku ≥ 15 % od maksimum z 12 mies. (etap 89).
+    const DOKUP = { limit: 0.10, spadek: -0.15, mnoznik: 2, pegMax: 2 };
+    const przytnij = (x, a, b) => Math.min(b, Math.max(a, x));
+    const czynnikOceny = (o) => (ok(o) ? przytnij(o / 6, 0.5, 1.5) : 1);                                    // ocena 6 → 1, 9 → 1,5, ≤ 3 → 0,5
+    const czynnikKap = (mc) => (ok(mc) && mc > 0 ? przytnij(1 + 0.25 * Math.log10(mc / 1e11), 0.5, 1.5) : 1);   // 100 mld → 1, 1 bln → 1,25, 10 mld → 0,75
     function dokup(pozycje, wiersze, kwota, opcje) {
-        const o = { tylkoJakosc: true, nowe: [], ...(opcje || {}) };
+        const o = { tylkoJakosc: true, nowe: [], spadek: false, limit: DOKUP.limit, ...(opcje || {}) };
         const rows = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
         const nowe = o.nowe.filter((t) => wiersze[t] && !pozycje.some((p) => p.t === t)).map((t) => ({ t, akcje: 0, koszt: null, r: wiersze[t], nowa: true }));
         const wsz = rows.concat(nowe);
         wsz.forEach((x) => { x.cena = x.r && ok(x.r.c) ? x.r.c : null; x.wartosc = x.cena !== null ? x.cena * (x.akcje || 0) : 0; });
         const suma = wsz.reduce((a, x) => a + x.wartosc, 0), po = suma + (kwota || 0);
         wsz.forEach((x) => {
-            x.waga = suma > 0 ? x.wartosc / suma : 0; x.powody = []; x.uwagi = []; x.mn = 1;
+            x.waga = suma > 0 ? x.wartosc / suma : 0; x.powody = []; x.uwagi = []; x.mn = 0; x.czynniki = null;
             const r = x.r;
-            if (!r || x.cena === null) { x.mn = 0; x.powody.push("brak danych (spółka spoza listy 500)"); return; }
-            if (r.sp) { x.mn = 0; x.powody.push("⬇ fundamenty słabną 2 lata z rzędu — nie dokupuj (Twoja reguła sprzedaży)"); }
-            if (o.tylkoJakosc && !jakosc77(r)) { x.mn = 0; x.powody.push("poza listą ✔ Jakość 7/7"); }
-            if (x.wartosc > DOKUP.limit * po) { x.mn = 0; x.powody.push(`pozycja > ${Math.round(100 * DOKUP.limit)} % portfela`); }
-            if (x.mn > 0 && ok(r.om) && r.om <= DOKUP.spadek) { x.mn = DOKUP.mnoznik; x.powody.push(`× 2: kurs ${fmtPct(r.om, 0)} od maksimum z 12 mies.`); }
-            if (ok(r.peg) && r.peg >= 3) x.uwagi.push(`drogo: PEG ${fmtNum(r.peg)}`);
+            if (!r || x.cena === null) { x.powody.push("brak danych (spółka spoza listy 500)"); return; }
+            if (r.sp) x.powody.push("⬇ fundamenty słabną 2 lata z rzędu — nie dokupuj (Twoja reguła sprzedaży)");
+            if (o.tylkoJakosc && !jakosc77(r)) x.powody.push("poza listą ✔ Jakość 7/7");
+            if (!(ok(r.peg) && r.peg > 0 && r.peg < DOKUP.pegMax)) x.powody.push(`PEG ${ok(r.peg) ? fmtNum(r.peg) : "brak"} — dokup tylko przy PEG 0–2`);
+            if (x.wartosc >= o.limit * po) x.powody.push(`pozycja ≥ ${Math.round(100 * o.limit)} % portfela`);
             if (r.ow) x.uwagi.push(`❗ ostrzeżenia: ${r.ow} — sprawdź kartę`);
+            if (x.powody.length) return;
+            const fp = DOKUP.pegMax - r.peg, fo = czynnikOceny(r.o && r.o.ogolna), fm = czynnikKap(r.mc);
+            const fs = o.spadek && ok(r.om) && r.om <= DOKUP.spadek ? DOKUP.mnoznik : 1;
+            x.mn = fp * fo * fm * fs; x.czynniki = { peg: fp, ocena: fo, kap: fm, spadek: fs };
         });
-        const sw = wsz.reduce((a, x) => a + x.mn, 0);
-        wsz.forEach((x) => {
-            x.kwota = sw > 0 ? (kwota || 0) * x.mn / sw : 0;
-            x.akcjeKup = x.cena ? x.kwota / x.cena : 0;
-            x.zysk = x.koszt && x.cena ? x.cena / x.koszt - 1 : null;
-        });
-        return { pozycje: wsz, suma, niewydane: sw > 0 ? 0 : (kwota || 0) };
+        // podział proporcjonalny do wag z limitem pozycji (nadwyżka przechodzi na pozostałe)
+        wsz.forEach((x) => { x.kwota = 0; x.max = x.mn > 0 ? Math.max(0, o.limit * po - x.wartosc) : 0; });
+        let reszta = kwota || 0;
+        for (let k = 0; k < 20 && reszta > 1e-9; k++) {
+            const akt = wsz.filter((x) => x.mn > 0 && x.kwota < x.max - 1e-9), sw = akt.reduce((a, x) => a + x.mn, 0);
+            if (!sw) break;
+            let wyd = 0;
+            akt.forEach((x) => { const d = Math.min(reszta * x.mn / sw, x.max - x.kwota); x.kwota += d; wyd += d; });
+            reszta -= wyd;
+        }
+        wsz.forEach((x) => { x.akcjeKup = x.cena ? x.kwota / x.cena : 0; x.zysk = x.koszt && x.cena ? x.cena / x.koszt - 1 : null; });
+        return { pozycje: wsz, suma, niewydane: reszta > 1e-9 ? reszta : 0 };
     }
     // średni koszt po dokupieniu (average costing)
     const sredniKoszt = (akcje, koszt, kup, cena) => (akcje + kup > 0 ? ((akcje || 0) * (koszt || 0) + kup * cena) / ((akcje || 0) + kup) : null);
@@ -232,7 +243,7 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
-    const W = { dokup, DOKUP, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { dokup, DOKUP, czynnikOceny, czynnikKap, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
