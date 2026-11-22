@@ -210,12 +210,12 @@
         const sc = W.pegScen(pe, S.geps), base = sc && sc.base.peg;
         const poz = W.ok(base) ? Math.min(100, 100 * base / 4) : null;
         $("wyc-tresc").innerHTML = `<div class="siatka2">
-          <div class="wej">
+          <div class="wej wej-peg">
             <label>Cena<input type="number" value="${W.ok(M.price) ? M.price.toFixed(2) : ""}" disabled><span class="mut">rynek</span></label>
-            <label>EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
+            <label class="szer">EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
               ${W.ok(M.eps_norm) ? `<div class="chipy"><button data-e="${M.eps}">z raportu (GAAP) ${W.fmtNum(M.eps)}</button><button data-e="${M.eps_norm}">znormalizowany ${W.fmtNum(M.eps_norm)}</button></div>` : ""}
               ${M.peg_norm_uzyte ? `<div class="male" style="color:#92400e;margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
-            <label>Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
+            <label class="szer">Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
               <div class="chipy"><button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button></div></label>
             <label>P/E (wyliczone)<input type="number" value="${W.ok(pe) ? pe.toFixed(2) : ""}" disabled><span class="mut">cena ÷ EPS</span></label>
           </div>
@@ -290,27 +290,30 @@
     // --- jakość zysku i zdarzenia (fakty z SEC, bez interpretacji) ------------------------------------------------------
     function zyskZd() {
         const el = $("zysk-zd"), m = M, zd = K.zdarzenia || [];
-        const wr = (n, v, b) => `<tr><td>${n}</td><td style="text-align:right">${b ? "<b>" + v + "</b>" : v}</td></tr>`;
+        const wr = (n, v, b) => `<div class="jz-w${b ? " jz-suma" : ""}"><span>${n}</span><b>${v}</b></div>`;
+        const wr3 = (n, a, b) => `<div class="jz-w jz-3"><span>${n}</span><b>${a}</b><b>${b}</b></div>`;
         const roz = W.ok(m.eps_norm) && W.ok(m.eps) ? m.eps / m.eps_norm - 1 : null;
-        const jz = W.ok(m.ni_norm) ? `<table class="male" style="width:100%">
+        const jz = W.ok(m.ni_norm) ? `<div class="jz">
             ${wr("Zysk netto z raportu (GAAP, 12 mies.)", W.fmtUsd(m.ni_ttm))}
             ${wr("Zysk operacyjny (12 mies.)", W.fmtUsd(m.op_ttm))}
             ${wr("− koszty odsetek", W.fmtUsd(m.odsetki_ttm || 0))}
             ${wr(`− podatek (stopa ${W.fmtPct(m.stopa_pod, 0)})`, W.fmtUsd((m.op_ttm - (m.odsetki_ttm || 0)) * m.stopa_pod))}
             ${wr("= Zysk znormalizowany", W.fmtUsd(m.ni_norm), true)}
-            ${W.ok(m.nonop_ttm) ? wr("Pozycje nieoperacyjne w raporcie (inwestycje, sprzedaż aktywów, odsetki, inne)", W.fmtUsd(m.nonop_ttm)) : ""}
             ${wr("Różnica: zysk z raportu − znormalizowany", W.fmtUsd(m.roznica_norm))}
-            ${wr("EPS z raportu / znormalizowany", `${W.fmtNum(m.eps)} / ${W.ok(m.eps_norm) ? W.fmtNum(m.eps_norm) : "–"}`, true)}
-            ${W.ok(m.pe_norm) ? wr("P/E z raportu / znormalizowane", `${W.fmtNum(m.pe)} / ${W.fmtNum(m.pe_norm)}`) : ""}
-            ${W.ok(m.peg_norm) ? wr("PEG z raportu / znormalizowany", `${W.fmtNum(W.ok(m.peg_gaap) ? m.peg_gaap : m.peg)} / ${W.fmtNum(m.peg_norm)}`) : ""}
-          </table>
+            ${W.ok(m.nonop_ttm) ? wr("w tym pozycje nieoperacyjne (inwestycje, sprzedaż aktywów, inne)", W.fmtUsd(m.nonop_ttm)) : ""}
+            </div><div class="jz" style="margin-top:10px"><div class="jz-w jz-3 jz-nag"><span></span><span>z raportu</span><span>znormaliz.</span></div>
+            ${wr3("EPS", W.fmtNum(m.eps), W.ok(m.eps_norm) ? W.fmtNum(m.eps_norm) : "–")}
+            ${W.ok(m.pe_norm) ? wr3("P/E", W.fmtNum(m.pe), W.fmtNum(m.pe_norm)) : ""}
+            ${W.ok(m.peg_norm) ? wr3("PEG", W.fmtNum(W.ok(m.peg_gaap) ? m.peg_gaap : m.peg), W.fmtNum(m.peg_norm)) : ""}
+          </div>
           <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:#b91c1c">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
               : Math.abs(roz) > 0.15 ? `<b style="color:#b91c1c">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
               : '<span style="color:#15803d">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
         const kol = ["#64748b", "#d97706", "#dc2626"];
-        const lz = zd.length ? `<ul style="list-style:none;margin:0;padding:0">${zd.map((z) => `<li style="padding:6px 0;border-bottom:1px solid var(--linia);font-size:13px">
-            <span class="mut" style="display:inline-block;width:88px">${esc(z.d)}</span>${z.p.map(([k, p, o]) => `<span style="color:${kol[p]};font-weight:${p ? 600 : 400}">● ${esc(o)}</span> <span class="mut male">(${esc(k.includes(".") ? z.f + " pkt " + k : k)})</span>`).join("; ")}
-            · <a href="${esc(z.u)}" target="_blank" rel="noopener">raport</a></li>`).join("")}</ul>`
+        const li = (z) => `<li class="zd-w"><span class="mut">${esc(z.d)}</span><span>${z.p.map(([k, p, o]) => `<span style="color:${kol[p]};font-weight:${p ? 600 : 400}">● ${esc(o)}</span> <span class="mut male">(${esc(k.includes(".") ? z.f + " pkt " + k : k)})</span>`).join("; ")}
+            · <a href="${esc(z.u)}" target="_blank" rel="noopener">raport</a></span></li>`;
+        const ul = (a) => `<ul style="list-style:none;margin:0;padding:0">${a.map(li).join("")}</ul>`;
+        const lz = zd.length ? ul(zd.slice(0, 6)) + (zd.length > 6 ? `<details><summary class="mut male" style="cursor:pointer;padding:6px 0">Pokaż starsze (${zd.length - 6})</summary>${ul(zd.slice(6))}</details>` : "")
             : '<p class="mut male">Brak zgłoszonych istotnych zdarzeń w ostatnich 12 miesiącach (lub spółka zagraniczna bez raportów 8-K).</p>';
         el.innerHTML = `<h2>Jakość zysku i zdarzenia</h2><div class="pod">Czy zysk z raportu pochodzi z podstawowej działalności, czy z jednorazowych pozycji (np. zyski z wyceny inwestycji), oraz co spółka zgłosiła do SEC w ostatnich 12 miesiącach. Fakty z SEC, bez komentarza.</div>
           <div class="siatka2"><div><div class="mut male" style="margin-bottom:4px">Zysk z raportu a zysk znormalizowany (zysk operacyjny − odsetki, po podatku)</div>${jz}</div>
