@@ -83,3 +83,16 @@ test("znacznik Jakość 7/7 i filtr", () => {
     assert.strictEqual(W.jakosc77(b), false);
     assert.deepStrictEqual(W.filtruj([a, b], { jakosc: true }).map((r) => r.t), ["A"]);
 });
+
+test("dokup: równe kwoty, × 2 po spadku, bez ⬇ i ponad limit 15 %", () => {
+    const J = { "Jakość (7 kryteriów)": [7, 7] };
+    const w = { A: { t: "A", c: 10, st: J }, B: { t: "B", c: 20, st: J, om: -0.2 }, C: { t: "C", c: 5, st: J, sp: ["przychody"] },
+        D: { t: "D", c: 100, st: J }, E: { t: "E", c: 10, st: { "Jakość (7 kryteriów)": [6, 7] } } };
+    const p = [{ t: "A", akcje: 10, koszt: 8 }, { t: "B", akcje: 5, koszt: 25 }, { t: "C", akcje: 10 }, { t: "D", akcje: 10 }, { t: "E", akcje: 1 }];
+    const d = W.dokup(p, w, 300);
+    const k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.strictEqual(k.C, 0); assert.strictEqual(k.D, 0); assert.strictEqual(k.E, 0);   // ⬇, D = 1000 z 1360 > 15 %, poza listą
+    assert.ok(Math.abs(k.A - 100) < 1e-9 && Math.abs(k.B - 200) < 1e-9);
+    assert.ok(Math.abs(d.pozycje[0].zysk - 0.25) < 1e-9);
+    assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
+});

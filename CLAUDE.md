@@ -51,6 +51,12 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
+- `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu, sugestie dokupu po PEG, average costing, bez time the market”): positions
+  (ticker, shares, average cost) and monthly amount in localStorage `fundamenta_portfel`; `W.dokup` splits the amount by stage 89 (research/wyniki/r114_etap89.md):
+  equal per stock (DCA), × 2 when ≥ 15 % below the 12-month high (`om` = `od_maks_12m` in lista), 0 for ⬇ `sp`, position > 15 % of portfolio, or (option, default on)
+  not ✔ Jakość 7/7; PEG does NOT change amounts (PEG tilt failed the pre-registered rule; PEG ≥ 3 only a note); optional new ✔ stocks by overall score up to N
+  positions; „Kupiłem” adds shares at the current price and recomputes the average cost (`W.sredniKoszt`). Waiting for PEG < 1 was not better (bigger drawdowns).
+
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.
 - `js/wykresy.js` (window.WY): SVG bars (`slupki`, hatched = forecast) and line (`linia`) with hover tooltips.
@@ -82,4 +88,5 @@ cd docs && python3 -m http.server
 
 Pre-registered backtests (protocol in `research/protokol.md` BEFORE each run, results in `research/rejestr.csv` and `research/wyniki/`), data in the
 session's `/home/user/ndx` (not in the repo). Key results behind the site: stages 58 (consistent revenue growth predicts 5-year returns), 67–68 (7/7
-screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE).
+screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE), 89 (position building: DCA + × 2 after a ≥ 15 % drop; PEG tilt
+and waiting for cheap prices not better; lump sum beat 12 tranches 5/7).

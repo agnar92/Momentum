@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfel · Fundamenta</title>
+<link rel="stylesheet" href="css/styl.css">
+<link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+<header class="gora"><div class="w">
+  <a class="logo" href="index.html">Funda<span>menta</span></a>
+  <nav><a href="index.html">Spółki</a><a href="porownaj.html">Porównaj</a><a class="akt" href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
+</div></header>
+<main class="main">
+  <section class="karta">
+    <h2>Portfel: budowanie pozycji</h2>
+    <div class="pod">Wpisz swoje spółki i kwotę, którą odkładasz co miesiąc — strona podzieli ją według zasad z badania (etap 89), bez prób wyczucia rynku. Dane zostają tylko w tej przeglądarce. Dane rynkowe z <span id="asof">–</span>.</div>
+    <details class="objasnienie" open>
+      <summary><b>Zasady</b> <span class="mut male">(co wyszło w badaniu 2013–2026)</span></summary>
+      <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
+        <li><b>Stała kwota co miesiąc, po równo na spółki</b> (uśrednianie kosztu). Czekanie na „okazję” (PEG &lt; 1) nie dało więcej, a obsunięcia były większe (−44 % zamiast −33 %; na szerszej liście −2 pp rocznie).</li>
+        <li><b>× 2 dla spółki, której kurs jest ≥ 15 % poniżej maksimum z 12 miesięcy</b> — jedyny przechył, który przeszedł test: +0,8 pp rocznie, lepiej w 9 z 9 okresów 5-letnich (na szerszej liście +0,25 pp — efekt mały).</li>
+        <li><b>PEG nie zmienia kwot</b> — przechył wg PEG nie przeszedł testu (+0,5 pp, przedział od −0,8 do +1,9). PEG służy do wyboru spółek; PEG ≥ 3 → uwaga „drogo”.</li>
+        <li><b>Nie dokupuj</b>, gdy fundamenty słabną 2 lata z rzędu (⬇, Twoja reguła sprzedaży), gdy pozycja przekracza 15 % portfela, i — domyślnie — gdy spółka wypadła z listy ✔ Jakość 7/7 (w badaniu wpłaty szły tylko do spółek z listy; posiadanych nie sprzedawaliśmy).</li>
+        <li><b>Jednorazowa większa kwota — raczej od razu</b>: od razu było lepiej niż w 12 miesięcznych transzach w 5 z 7 startów; transze dają spokój, ale zwykle kosztują.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="karta">
+    <h2>Moje pozycje</h2>
+    <div class="pod">Średni koszt = średnia cena zakupu jednej akcji (po kliknięciu „Kupiłem” liczy się sam).</div>
+    <form id="dodaj" class="narzedzia" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+      <label class="male">Spółka<br><input id="d-t" type="text" list="tickery" placeholder="np. MSFT" autocomplete="off" style="width:120px"></label>
+      <label class="male">Liczba akcji<br><input id="d-a" type="number" step="any" min="0" style="width:110px"></label>
+      <label class="male">Średni koszt (USD)<br><input id="d-k" type="number" step="any" min="0" style="width:120px"></label>
+      <button type="submit" class="akt">Dodaj</button>
+    </form>
+    <datalist id="tickery"></datalist>
+    <div id="pozycje" style="margin-top:12px"></div>
+  </section>
+
+  <section class="karta">
+    <h2>Ile dokupić w tym miesiącu</h2>
+    <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+      <label class="male">Kwota do zainwestowania (USD)<br><input id="kwota" type="number" step="any" min="0" style="width:150px"></label>
+      <label class="male"><input id="o-jak" type="checkbox" checked> tylko spółki z ✔ Jakość 7/7</label>
+      <label class="male"><input id="o-nowe" type="checkbox"> dodaj nowe spółki z ✔ Jakość 7/7 (najwyższa ocena) do</label>
+      <label class="male"><input id="o-n" type="number" min="1" max="40" value="10" style="width:64px"> spółek w portfelu</label>
+    </div>
+    <div id="sugestie" style="margin-top:12px"></div>
+  </section>
+  <div class="stopka">Informacyjnie, nie rekomendacja. Zasady pochodzą z testu historycznego (research/wyniki/r114_etap89.md) — przyszłość może wyglądać inaczej.</div>
+</main>
+<script src="js/wspolne.js"></script>
+<script src="js/portfel.js"></script>
+</body>
+</html>

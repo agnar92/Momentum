@@ -1204,3 +1204,35 @@ nie rozstrzyga; wolno rosnące P/E ≤ 18 − > 25: −22 [−46; −6] — sprz
 +16 [+10; +25] i OCF ≥ 30 % długu +19 [+4; +34] — zgodne z autorem; przyspieszające przychody +9 [−9; +22] — nie rozstrzyga. Hipoteza (sporne głównie „nie rozstrzygają”) — tak
 dla 4 z 6; sprzeczne 2 (ROIC 10 lat — słaba podstawa, wolno rosnące z niskim P/E). Wniosek: przy 10 latach startowych większość różnic rzędu ±10–20 pp mieści się w szumie;
 nawet przyspieszenie przychodów (dodane do oceny w etapie 87 na prośbę użytkownika) nie jest statystycznie pewne.
+
+## Etap 89: jak budować pozycję — wpłaty co miesiąc, dokupowanie wg wyceny a stałe kwoty (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „metoda budowania pozycji w portfelu, sugestie dokupu po PEG, jak robić average costing, żeby nie próbować wyczuć rynku”. Badamy SAM sposób kupowania, przy tym
+samym wyborze spółek. Dane i zbiór jak w etapach 80–85 (top 500 USA PIT, bez wykluczonych sektorów, spółki ≥ 5 lat na giełdzie, ceny miesięczne, koszt 0,1 %).
+Lista do dokupowania w miesiącu = spółki spełniające Jakość 7/7 (bez kryterium wyceny; J7 z etapu 83, braki = niespełnione). Spółek nie sprzedajemy (raz kupione zostają);
+spółka, która wypadła z listy, nie dostaje nowych wpłat. Limit pozycji: wpłata nie trafia do spółki, która ma > 15 % portfela (jeśli wszystkie powyżej — równo).
+Inwestor wpłaca 1 jednostkę co miesiąc. Sposoby podziału wpłaty (wszystkie wydają całą wpłatę w miesiącu, chyba że zaznaczono):
+- M0 równe kwoty (klasyczne uśrednianie): wpłata po równo na spółki z listy;
+- M1 przechył wg PEG (historyczny PEG = P/E ÷ przeszły wzrost EPS, prognoz analityków w danych nie mamy): waga × 2 przy PEG 0–1, × 1 przy 1–2, × 0,5 przy 2–3, × 0 przy > 3 lub braku;
+  gdy wszystkie wagi 0 — równo;
+- M2 przechył wg spadku: waga × 2, gdy kurs ≥ 15 % poniżej maksimum z 12 mies., inaczej × 1;
+- M3 przechył wg P/E względem własnej mediany z 5 lat: × 2 gdy P/E < 0,8 × mediana, × 0,5 gdy > 1,2 ×, inaczej × 1;
+- M4 czekanie na okazję (próba wyczucia rynku): kupujemy tylko spółki z listy z PEG 0–1; jeśli żadnej nie ma — gotówka (0 %) czeka i trafia do pierwszej okazji;
+- M5 czekanie w SPY: jak M4, ale czekająca gotówka w SPY.
+Okresy: cały 2013-01..2026-09 oraz okna 5-letnie startujące w styczniu 2013..2021 (od zera, osobno). Miary: wartość końcowa ÷ suma wpłat, roczna stopa zwrotu ważona
+kapitałem (IRR), maxDD wartości portfela, średni koszt zakupu względem średniej ceny (w %, dla M0–M3), bez NVDA (kontrola koncentracji). Drugie pytanie (jednorazowa kwota):
+na starcie każdego stycznia 2013..2021 kwota 12 jednostek w spółki z listy (równo) — od razu (L) vs 12 równych miesięcznych transz (D12, czekająca gotówka 0 %); wynik po 5 latach.
+Statystyka: różnica (Mk − M0) w IRR okien 5-letnich, bootstrap po latach startowych (B = 2000), 95 % przedział.
+Hipotezy: (1) przechyły M1–M3 zmieniają IRR o < 1 pp rocznie względem M0 (przedział zawiera 0); (2) czekanie M4 jest gorsze od M0 (gotówka czeka, a dobre spółki rosną),
+M5 bliżej M0; (3) jednorazowo od razu (L) daje więcej niż D12 w ≥ 2/3 startów, D12 ma mniejsze najgorsze wyniki. Reguła dla strony: przechył wg wyceny dodajemy jako sugestię
+tylko, jeśli dolna granica przedziału > 0 albo różnica ≥ 0 przy mniejszym maxDD; inaczej strona zaleca stałe kwoty, a PEG służy tylko do wyboru spółek i ostrzeżenia „drogo”.
+
+Wynik etapu 89 (2026-11-22). Lista Jakość 7/7 jest mała na początku (0 spółek w 2013–2014, 1–10 w 2015–2019, 15–24 od 2020), więc okna 2013–2015 są słabo
+obsadzone. Cały okres 2013–2026 (IRR wpłat): M0 równe kwoty 20,1 %, M1 PEG 21,9 %, M2 spadek 20,3 %, M3 P/E vs mediana 17,4 %, M4 czekanie 22,5 % (maxDD −44 % vs −33 %),
+M5 22,9 % (−45 %); bez NVDA M0 12,5 %, M1 13,8 %, M2 13,0 %. Okna 5 lat (9 startów), różnica IRR vs M0: M1 +0,51 pp [−0,84; +1,92] (5/9), M2 +0,80 [+0,37; +1,30] (9/9),
+M3 +0,09 [−0,34; +0,58], M4 +0,02 [−3,19; +3,31] (najgorsze okno −1,4 % vs +4,7 %), M5 +0,54 [−2,62; +3,52]. Kontrolnie (poza protokołem, top 10 % oceny ogólnej, ok. 40 spółek):
+M1 +0,11 [−0,28; +0,47], M2 +0,25 [−0,04; +0,58] (5/9), M3 −0,52 [−0,86; −0,26], M4 −2,08 [−5,15; +0,05] (2/9), M5 −1,87. Jednorazowa kwota: od razu lepiej niż 12 transz w 5/7 startów
+(najgorszy wynik po 5 latach 1,63× vs 1,52×). Hipotezy: (1) przechyły < 1 pp — tak; M2 jako jedyny ma przedział > 0 na liście z protokołu (na szerszej liście na granicy);
+(2) czekanie na okazję — nie lepsze, większe obsunięcia, na szerszej liście −2 pp rocznie — tak; (3) od razu częściej lepiej — tak (5/7, nie 2/3 z 9, bo 2 starty bez listy).
+Wniosek dla strony (wg reguły zapisanej przed testem): stałe kwoty co miesiąc w spółki z listy; dodatkowo × 2 dla spółki ≥ 15 % poniżej maksimum z 12 mies. (M2, mały efekt
++0,3–0,8 pp/rok); bez czekania na okazję; PEG tylko do wyboru spółek i ostrzeżenia „drogo” (przechył wg PEG nie przeszedł); limit 15 % na spółkę; wolne środki jednorazowo — od razu.
