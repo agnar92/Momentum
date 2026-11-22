@@ -1335,3 +1335,11 @@ wydzielenie, nisza, odbiorcy > 25 % sprzedaży, plotki, zakupy insiderów, udzia
 patenty, straty podatkowe), struktura długu (bankowy vs obligacje), przejęcia („diworsyfikacja”), okładki gazet, „następny IBM”.
 Reguła dla strony jak w etapie 92: potwierdzony, jeśli różnica 36 mies. ma kierunek Lyncha i przedział go wyklucza 0 (albo 12 mies. przy tym samym znaku 36 mies.).
 Hipoteza: potwierdzą się co najwyżej 2–3 reguły (najpewniej L9 skup akcji i L2 niski dług), reszta nie rozstrzyga.
+
+Wynik etapu 93 (2026-11-22). A − B, 36 mies. [95 % przedział]: L1 gotówka netto +5,8 [−4,5; +15,6]; L2 mały dług −0,5 [−6,0; +7,2]; L3 wskaźnik z dywidendą −12,7
+[−20,4; +3,8] (raczej wbrew Lynchowi); L4 za mało spółek (7 vs 30); L5 „najgorętsze” −8,1 [−58; +31] (najgorętsze nie gorsze); L6 P/E poniżej własnej normy −6,7
+[−18,1; +6,1]; L7 stabilnie rosnące z wysoką marżą netto +28,0 [+7,1; +53,3] — potwierdzona; L8 wolno rosnące z dywidendą rosnącą 5 lat +10,8 [+2,1; +20,9]
+(12 mies. +3,6) — potwierdzona; L9 skup akcji vs rozwadnianie −12,1 [−17,7; −8,8] — SPRZECZNA z Lynchem (rozwadniające spółki, głównie technologiczne z wynagrodzeniami
+w akcjach, wypadały lepiej w 2012–2026; uwaga: w ocenie „Siła” liczba akcji 3 lata liczy się „mniej = lepiej” na podstawie etapu 76 — inna miara, IC całego zbioru);
+L10 P/FCF ≤ 15 −3,5 [−14,9; +6,9]. Hipoteza (2–3 potwierdzone, w tym skup i mały dług) — liczba tak (2), ale potwierdziły się marża u stabilnych i rosnąca dywidenda
+u wolno rosnących, a skup wyszedł odwrotnie. Strona: dwie nowe pozycje listy kontrolnej (potwierdzone), reszta opisana w metodzie jako niepotwierdzona / nietestowana.

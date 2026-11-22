@@ -198,7 +198,10 @@ def test_lynch_fazy_i_sygnaly():
     s = dict(pe=30.0, pe_med5=20.0, rev_1y=0.08, rev_cagr5=0.10)
     assert {k: v for k, _, v, _ in O.lynch(s, "Stabilnie rosnąca")["lista"]}["P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"] is False
     assert all(st == "niepotwierdzony" for *_, st in lis[:4]) and lis[-1][3] == "nietestowany"
-    assert O.lynch(dict(spadek_2l=["przychody"]), "Wolno rosnąca")["lista"][2][3] == "potwierdzony"
+    wl = {k: (s_, st) for k, _, s_, st in O.lynch(dict(spadek_2l=["przychody"], div=0.02, dyw_rosnie_5=True), "Wolno rosnąca")["lista"]}
+    assert wl["Sprzedaż nie spada 2 lata z rzędu (utrata rynku)"] == (False, "potwierdzony") and wl["Dywidenda rośnie 5 lat z rzędu"] == (True, "potwierdzony")
+    st = {k: (s_, x) for k, _, s_, x in O.lynch(dict(nm=0.3, nm_gorna_tercyla_stab=True), "Stabilnie rosnąca")["lista"]}
+    assert st["Wysoka marża netto (górna 1/3 stabilnie rosnących)"] == (True, "potwierdzony")
     assert abs(O.lynch(dict(eps_next5=0.15, div=0.02, pe=17.0), "Wolno rosnąca")["wskaznik"] - 1.0) < 1e-9
     h = dict(q=[[f"2025-{mm:02d}-28", 0, 10, 0, 0, 0] for mm in range(1, 13)])
     assert abs(O.pe_mediana(h, (["2024-01-01"], [100.0]), 4) - 10.0) < 1e-9    # 100 × 4 ÷ 40

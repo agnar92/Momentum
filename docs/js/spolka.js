@@ -369,7 +369,7 @@
           <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} potwierdzony sygnał ostrzegawczy</b>` : ""}${inne ? ` · ${inne} sygnał(y) Lyncha niepotwierdzone w teście` : ""}</div>
             ${lista.length ? `<div class="jz">${lista.map(([co, w, s, st]) => `<div class="ly-w"><span>${ikona(s, st)}</span><span>${esc(co)}<br><span class="mut" style="font-size:11px">${esc(stTxt[st] || "")}</span></span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
               : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
-            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Z 12 sprawdzonych sygnałów potwierdził się tylko jeden: u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata).</p></div></div>`;
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Potwierdzone w testach 2012–2026 (etapy 92–93): u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata) i dywidenda rosnąca 5 lat (+11 pp), u stabilnie rosnących wysoka marża netto (+28 pp). Pozostałe reguły Lyncha — w metodzie.</p></div></div>`;
     }
 
     function sprawozdania(tryb) {

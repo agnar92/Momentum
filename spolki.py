@@ -231,8 +231,16 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
-        r["lynch"] = ocena.lynch(r["m"], r["typy"][0][0] if r["typy"] else None, r.get("zdarzenia"))
         r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"]) + zdarzenia.ostrzezenia(r["zdarzenia"])
+    # etap 93 (Lynch): marża netto w górnej 1/3 stabilnie rosnących
+    stab = [r for r in rows if r["typy"] and r["typy"][0][0] == "Stabilnie rosnąca" and r["m"].get("nm") is not None]
+    nms = sorted(r["m"]["nm"] for r in stab)
+    if len(nms) >= 15:
+        prog = nms[int(len(nms) * 2 / 3)]
+        for r in stab:
+            r["m"]["nm_gorna_tercyla_stab"] = r["m"]["nm"] >= prog
+    for r in rows:
+        r["lynch"] = ocena.lynch(r["m"], r["typy"][0][0] if r["typy"] else None, r.get("zdarzenia"))
     return rows
 
 

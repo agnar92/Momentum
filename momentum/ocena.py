@@ -280,6 +280,8 @@ def metryki(ex, fv, dzis=None, splity=()):
             med_ = sorted(d5)[2] if len(d5) == 5 else None
             reg = [v for v in d5 if med_ and v <= 1.5 * med_]
             m["dywidenda_stabilna"] = bool(len(d5) == 5 and all(v > 0 for v in d5) and all(reg[k + 1] >= 0.8 * reg[k] for k in range(len(reg) - 1)))
+            d6 = [abs(v) for _, v in dv[-6:]]                 # etap 93 (Lynch): dywidenda rośnie 5 lat z rzędu — u wolno rosnących +11 pp w 3 lata
+            m["dyw_rosnie_5"] = bool(len(d6) == 6 and d6[0] > 0 and all(d6[k + 1] > d6[k] for k in range(5))) if len(d6) == 6 else None
     # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
     ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
     if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
@@ -596,10 +598,13 @@ def lynch(m, typ, zd=None):
         lista += [("P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)", f"P/E {pe:.1f} vs mediana {pm:.1f}".replace(".", ",") if pe and pm else "–",
                    None if not (pe and pm) else pe <= 1.3 * pm),
                   ("Wzrost przychodów nie hamuje (ostatni rok ≥ średnia 5 lat − 5 pp)", f"{pct(g1)} vs {pct(g5)} rocznie", None if g1 is None or g5 is None else g1 >= g5 - 0.05),
-                  ("Fundamenty nie słabną 2 lata z rzędu", "przychody i zysk", not m.get("spadek_2l"))]
+                  ("Fundamenty nie słabną 2 lata z rzędu", "przychody i zysk", not m.get("spadek_2l")),
+                  ("Wysoka marża netto (górna 1/3 stabilnie rosnących)", f"{100 * m['nm']:.0f} %" if m.get("nm") is not None else "–", m.get("nm_gorna_tercyla_stab"))]
     elif typ == "Wolno rosnąca":
         dyw_ok = None if not m.get("div") else bool(m.get("dywidenda_stabilna"))
         wypl = m["div"] * m["mcap"] / m["ni_ttm"] if m.get("div") and m.get("mcap") and m.get("ni_ttm") and m["ni_ttm"] > 0 else None
+        lista += [("Dywidenda rośnie 5 lat z rzędu", "tak" if m.get("dyw_rosnie_5") else ("brak dywidendy" if not m.get("div") else "nie"),
+                   None if not m.get("div") or m.get("dyw_rosnie_5") is None else bool(m["dyw_rosnie_5"]))]
         lista += [("Dywidenda bez cięć przez 5 lat", "tak" if m.get("dywidenda_stabilna") else ("brak dywidendy" if not m.get("div") else "było cięcie / przerwa"), dyw_ok),
                   ("Zysk pokrywa dywidendę (wypłata < 100 % zysku)", f"{100 * wypl:.0f} % zysku" if wypl else "–", None if wypl is None else wypl < 1),
                   ("Sprzedaż nie spada 2 lata z rzędu (utrata rynku)", "przychody i zysk", not m.get("spadek_2l"))]
@@ -639,6 +644,8 @@ TEST_LYNCH = {
     ("Stabilnie rosnąca", "Wzrost przychodów nie hamuje (ostatni rok ≥ średnia 5 lat − 5 pp)"): _NP,
     ("Stabilnie rosnąca", "Fundamenty nie słabną 2 lata z rzędu"): _NP,
     ("Wolno rosnąca", "Sprzedaż nie spada 2 lata z rzędu (utrata rynku)"): "potwierdzony",
+    ("Wolno rosnąca", "Dywidenda rośnie 5 lat z rzędu"): "potwierdzony",                       # etap 93: +10,8 pp w 3 lata
+    ("Stabilnie rosnąca", "Wysoka marża netto (górna 1/3 stabilnie rosnących)"): "potwierdzony",  # etap 93: +28 pp w 3 lata
     ("Cykliczna", "Zapasy nie rosną szybciej niż sprzedaż (koniec cyklu)"): _NP,
     ("Cykliczna", "Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)"): _NP,
     ("Cykliczna", "Sprzedaż w ostatnim kwartale rośnie r/r"): _NP,

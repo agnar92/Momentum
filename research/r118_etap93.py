@@ -2,9 +2,9 @@
 Protokół: etap 93."""
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
-_s = open(os.path.join(HERE, 'r117_etap92.py')).read()
-exec(_s[:_s.index("SYG = [")])
-exec(_s[_s.index("def nadw(h):"):_s.index("rows = []")])
+_s92 = open(os.path.join(HERE, 'r117_etap92.py')).read()
+exec(_s92[:_s92.index("SYG = [")])
+exec(_s92[_s92.index("def nadw(h):"):_s92.index("rows = []")])
 rng = np.random.default_rng(93)
 D = {n: np.full((NT, NS), np.nan) for n in ('yld', 'dyw_rosnie')}
 for j in range(NS):
