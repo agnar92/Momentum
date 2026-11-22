@@ -83,3 +83,25 @@ test("znacznik Jakość 7/7 i filtr", () => {
     assert.strictEqual(W.jakosc77(b), false);
     assert.deepStrictEqual(W.filtruj([a, b], { jakosc: true }).map((r) => r.t), ["A"]);
 });
+
+test("dokup: punkty 0–10 = tanio (PEG 0–2) + ocena + wielkość, limit 10 %, bez ⬇ i spoza 7/7", () => {
+    const J = { "Jakość (7 kryteriów)": [7, 7] };
+    const w = { A: { t: "A", c: 10, st: J, peg: 1, o: { ogolna: 6 }, rank: 251 }, B: { t: "B", c: 20, st: J, peg: 0.2, o: { ogolna: 10 }, rank: 1 },
+        C: { t: "C", c: 5, st: J, peg: 1, sp: ["przychody"] }, D: { t: "D", c: 10, st: J, peg: 2.5 }, E: { t: "E", c: 10, st: { "Jakość (7 kryteriów)": [6, 7] }, peg: 1 } };
+    assert.ok(Math.abs(W.punkty(w.B).punkty - 29 / 3) < 1e-9 && Math.abs(W.punkty(w.A).punkty - 10 * (0.5 + 0.6 + 0.5) / 3) < 1e-9);
+    assert.strictEqual(W.punkty(w.D), null);
+    const p = [{ t: "A", akcje: 10, koszt: 8 }, { t: "B", akcje: 0 }, { t: "C", akcje: 100 }, { t: "D", akcje: 100 }, { t: "E", akcje: 100 }];
+    let d = W.dokup(p, w, 30, { tylkoJakosc: true, transze: 1 });
+    let k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.strictEqual(k.C, 0); assert.strictEqual(k.D, 0); assert.strictEqual(k.E, 0);
+    assert.ok(Math.abs(k.B / k.A - 29 / 16) < 1e-9);
+    assert.ok(Math.abs(d.pozycje[0].zysk - 0.25) < 1e-9);
+    d = W.dokup(p, w, 3000, { tylkoJakosc: true, transze: 1 });   // 1 zakup: najwyżej 10 % z 5600 × punkty/10
+    k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.ok(Math.abs(k.A - 560 * 16 / 30) < 1e-6 && Math.abs(k.B - 560 * 29 / 30) < 1e-6 && Math.abs(d.niewydane - (3000 - 560 * 45 / 30)) < 1e-6);
+    assert.ok(Math.abs(W.dokup([{ t: "E", akcje: 0 }], w, 30, { transze: 1 }).pozycje[0].kwota - 3 * W.punkty(w.E).punkty / 10) < 1e-9);   // bez filtra 7/7; 1 spółka, 1 zakup = 10 % z 30 × punkty/10
+    d = W.dokup(p, w, 3000, { tylkoJakosc: true });            // domyślnie 10 zakupów: jeden zakup ≤ 10 % × 5600 × punkty/10 ÷ 10
+    k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.ok(Math.abs(k.A - 56 * 16 / 30) < 1e-6 && Math.abs(k.B - 56 * 29 / 30) < 1e-6);   // domyślnie bez filtra 7/7 — spółki wybiera użytkownik
+    assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
+});

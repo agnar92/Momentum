@@ -51,6 +51,17 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
+- `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
+  0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
+  in localStorage `fundamenta_portfel`; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
+  oceną, tym większa waga”): only PEG 0–2; `W.punkty` = 10 × mean of tanio (2 − PEG) ÷ 2, ocena (overall ÷ 10), wielkość (1 − (mcap rank − 1) ÷ 500); amount
+  proportional to points, ONLY the amount the user enters (user: „nie rozdzielaj całego kapitału … pozycję buduje się powoli w kilku lub kilkunastu tanich
+  momentach”): target position 10 % of portfolio built in `transze` purchases (default 10, input on the page) — one purchase ≤ target × points/10 ÷ transze (10 pts reach the target in `transze` cheap moments, 5 pts in twice as many), overflow to other
+  stocks, leftover = `niewydane` waits for the next cheap moment; none for ⬇ `sp`. The USER picks the stocks (user: „tylko ja
+  wybieram spółki, nie automat”) — no automatic additions, no Jakość 7/7 filter on the page (`tylkoJakosc` option of `W.dokup` defaults to false); „Kupiłem” adds shares at the current price and recomputes the average cost
+  (`W.sredniKoszt`). Do not tune the formula to backtests. Leftover stays in cash, shown neutrally — do NOT suggest ETFs, more stocks or changing the
+  rules (user: „rób to co mówię … ja decyduję co, gdzie i jak … muszę zarządzać emocjami”; retirement account, prefers stability over max return). Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
+
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.
 - `js/wykresy.js` (window.WY): SVG bars (`slupki`, hatched = forecast) and line (`linia`) with hover tooltips.
@@ -82,4 +93,5 @@ cd docs && python3 -m http.server
 
 Pre-registered backtests (protocol in `research/protokol.md` BEFORE each run, results in `research/rejestr.csv` and `research/wyniki/`), data in the
 session's `/home/user/ndx` (not in the repo). Key results behind the site: stages 58 (consistent revenue growth predicts 5-year returns), 67–68 (7/7
-screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE).
+screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE), 89 (position building: DCA + × 2 after a ≥ 15 % drop; PEG tilt
+and waiting for cheap prices not better; lump sum beat 12 tranches 5/7).

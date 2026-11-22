@@ -46,7 +46,7 @@ tbody tr:hover { background: #f8fafc; cursor: pointer; }
 .ciemna .mut, .ciemna .pod { color: var(--ciemny-tekst2); }
 .ciemna .pole { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; }
 .naglowek { text-align: center; margin-bottom: 14px; }
-.naglowek h1 { margin: 0; font-size: 30px; display: inline-flex; gap: 10px; align-items: center; }
+.naglowek h1 { margin: 0; font-size: 30px; display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; align-items: center; }
 .tick { font-size: 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 8px; padding: 2px 8px; }
 .siatka3 { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 12px; }
 .siatka2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -154,3 +154,17 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 .jakosc.duzy { font-size: 13px; padding: 3px 10px; }
 .jakosc.duzy-z { background: #e0e7ff; color: #3730a3; }
 .dyw { font-size: 13px; }
+/* jakość zysku i zdarzenia */
+.siatka2 > *, .siatka3 > * { min-width: 0; }
+.jz { font-size: 13px; }
+.jz-w { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 6px 0; border-bottom: 1px solid var(--linia); align-items: baseline; }
+.jz-w b { font-weight: 600; text-align: right; white-space: nowrap; }
+.jz-3 { grid-template-columns: 1fr 90px 90px; }
+.jz-nag span { font-size: 11px; color: var(--tekst2); text-transform: uppercase; text-align: right; }
+.jz-suma b { font-weight: 800; }
+.zd-w { display: grid; grid-template-columns: 84px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--linia); font-size: 13px; }
+@media (max-width: 600px) { .jz-3 { grid-template-columns: 1fr 72px 72px; } .wej-peg { grid-template-columns: 1fr 1fr; grid-auto-flow: dense; } .wej-peg label.szer { grid-column: span 2; } .zd-w { grid-template-columns: 1fr; gap: 0; } }
+/* portfel */
+.przewin { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.przewin td input { padding: 4px 6px; font-size: 13px; }
+td.zawin { white-space: normal; min-width: 180px; }
