@@ -116,8 +116,8 @@
     // --- portfel: podział miesięcznej wpłaty -----------------------------------------------------------------------------
     // reguła użytkownika (prosty wzór, bez dopasowania do przeszłości): punkty 0–10 = 10 × średnia z trzech części 0–1:
     // tanio = (2 − PEG) ÷ 2 (dokup tylko przy PEG 0–2), ocena = ocena ogólna ÷ 10, wielkość = miejsce wg kapitalizacji (największa = 1);
-    // kwota proporcjonalna do punktów, pozycja najwyżej 10 % portfela; bez dokupu: ⬇, spoza ✔ Jakość 7/7 (opcja)
-    const DOKUP = { limit: 0.10, pegMax: 2, n: 500 };
+    // dzielimy tylko podaną kwotę, proporcjonalnie do punktów; pozycja najwyżej 10 % portfela, budowana w `transze` zakupach (jeden zakup ≤ cel × punkty/10 ÷ transze); bez dokupu przy ⬇; spółki wybiera użytkownik (strona nic nie dobiera)
+    const DOKUP = { limit: 0.10, pegMax: 2, n: 500, transze: 10 };
     function punkty(r) {
         if (!r || !ok(r.peg) || r.peg <= 0 || r.peg >= DOKUP.pegMax) return null;
         const tanio = (DOKUP.pegMax - r.peg) / DOKUP.pegMax;
@@ -126,7 +126,7 @@
         return { tanio, ocena, wielkosc, punkty: 10 * (tanio + ocena + wielkosc) / 3 };
     }
     function dokup(pozycje, wiersze, kwota, opcje) {
-        const o = { tylkoJakosc: true, nowe: [], limit: DOKUP.limit, ...(opcje || {}) };
+        const o = { tylkoJakosc: false, nowe: [], limit: DOKUP.limit, transze: DOKUP.transze, ...(opcje || {}) };
         const rows = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
         const nowe = o.nowe.filter((t) => wiersze[t] && !pozycje.some((p) => p.t === t)).map((t) => ({ t, akcje: 0, koszt: null, r: wiersze[t], nowa: true }));
         const wsz = rows.concat(nowe);
@@ -145,7 +145,10 @@
             x.czynniki = punkty(r); x.mn = x.czynniki.punkty;
         });
         // podział proporcjonalny do wag z limitem pozycji (nadwyżka przechodzi na pozostałe)
-        wsz.forEach((x) => { x.kwota = 0; x.max = x.mn > 0 ? Math.max(0, o.limit * po - x.wartosc) : 0; });
+        // pozycję budujemy powoli: jeden zakup to najwyżej 1/transze docelowej pozycji (cel = limit × portfel po wpłacie), łącznie do limitu
+        // limit jednego zakupu = cel × (punkty ÷ 10) ÷ transze: spółka z 10 pkt dochodzi do celu w `transze` tanich momentach, z 5 pkt — w dwa razy większej liczbie
+        const cel = o.limit * po;
+        wsz.forEach((x) => { x.kwota = 0; x.cel = cel; x.transza = cel * x.mn / 10 / Math.max(1, o.transze); x.max = x.mn > 0 ? Math.max(0, Math.min(x.transza, cel - x.wartosc)) : 0; });
         let reszta = kwota || 0;
         for (let k = 0; k < 20 && reszta > 1e-9; k++) {
             const akt = wsz.filter((x) => x.mn > 0 && x.kwota < x.max - 1e-9), sw = akt.reduce((a, x) => a + x.mn, 0);

@@ -3,9 +3,9 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const KLUCZ = "fundamenta_portfel";
-    let WIERSZE = {}, LISTA = [];
+    let WIERSZE = {};
     const czytaj = () => { try { return JSON.parse(localStorage.getItem(KLUCZ)) || {}; } catch (e) { return {}; } };
-    let S = { pozycje: [], kwota: null, tylkoJakosc: true, nowe: false, n: 10, ...czytaj() };
+    let S = { pozycje: [], kwota: null, transze: 10, ...czytaj() };
     const zapisz = () => { try { localStorage.setItem(KLUCZ, JSON.stringify(S)); } catch (e) { /* tryb prywatny */ } };
     const zl = (x) => (W.ok(x) ? W.fmtCena(x) : "–");
     const pct = (x) => (W.ok(x) ? `<span class="${x > 0 ? "plus" : x < 0 ? "minus" : ""}">${W.fmtPct(x, 1, true)}</span>` : "–");
@@ -13,14 +13,8 @@
     const znaczki = (r) => !r ? "" : (W.jakosc77(r) ? ' <span class="jakosc" title="Jakość 7/7">✔</span>' : "") + (r.sp ? ' <span class="spadek" title="Fundamenty słabną 2 lata z rzędu">⬇</span>' : "")
         + (r.ow ? ` <span title="Ostrzeżenia na karcie">❗${r.ow}</span>` : "");
 
-    function nowe() {
-        if (!S.nowe) return [];
-        const mam = new Set(S.pozycje.map((p) => p.t)), ile = Math.max(0, (S.n || 10) - S.pozycje.length);
-        return LISTA.filter((r) => W.jakosc77(r) && !r.sp && !mam.has(r.t) && W.ok(r.peg) && r.peg > 0 && r.peg < 2).sort((a, b) => ((b.o && b.o.ogolna) || 0) - ((a.o && a.o.ogolna) || 0)).slice(0, ile).map((r) => r.t);
-    }
-
     function rysuj() {
-        const d = W.dokup(S.pozycje, WIERSZE, 0, { tylkoJakosc: S.tylkoJakosc });
+        const d = W.dokup(S.pozycje, WIERSZE, 0);
         const koszt = S.pozycje.reduce((a, p) => a + (p.koszt || 0) * (p.akcje || 0), 0);
         $("pozycje").innerHTML = S.pozycje.length ? `<div class="przewin"><table class="male">
             <thead><tr><th>Spółka</th><th class="n">Akcje</th><th class="n">Śr. koszt</th><th class="n">Cena</th><th class="n">Wartość</th><th class="n">Udział</th><th class="n">Zysk</th><th>Wycena</th><th></th></tr></thead>
@@ -33,7 +27,7 @@
               <td><button data-usun="${k}" title="Usuń">✕</button></td></tr>`; }).join("")}</tbody></table></div>
             <div class="liczby" style="margin-top:10px"><div><small>Wartość</small><b>${zl(d.suma)}</b></div><div><small>Koszt zakupu</small><b>${zl(koszt)}</b></div>
               <div><small>Zysk</small><b>${koszt > 0 ? pct(d.suma / koszt - 1) : "–"}</b></div><div><small>Spółek</small><b>${S.pozycje.length}</b></div></div>`
-            : '<p class="mut">Brak pozycji — dodaj spółki, które masz (albo zaznacz niżej „dodaj nowe spółki z ✔ Jakość 7/7”).</p>';
+            : '<p class="mut">Brak pozycji — dodaj spółki, które masz albo chcesz zacząć kupować (liczba akcji 0).</p>';
         document.querySelectorAll("#pozycje input[data-k]").forEach((el) => el.addEventListener("change", () => {
             const v = el.value === "" ? null : +el.value; S.pozycje[+el.dataset.k][el.dataset.p] = v; zapisz(); rysuj();
         }));
@@ -43,13 +37,13 @@
 
     const opis = (x) => { const c = x.czynniki, r = x.r; if (!c) return "";
         return `tanio ${W.fmtNum(c.tanio)} (PEG ${W.fmtNum(r.peg)}) · ocena ${W.fmtNum(c.ocena)} · wielkość ${W.fmtNum(c.wielkosc)} (#${r.rank})`
-            + (x.kwota < x.max - 0.005 ? "" : " · limit 10 %"); };
+            + ` · pozycja ${W.fmtPct((x.wartosc + x.kwota) / x.cel * 0.1, 1)} z celu 10 %` + (x.kwota < x.max - 0.005 ? "" : x.max < x.cel - x.wartosc - 0.005 ? ` · limit zakupu ${zl(x.transza)}` : " · cel osiągnięty"); };
     function sugestie() {
         const el = $("sugestie");
         if (!W.ok(S.kwota) || S.kwota <= 0) { el.innerHTML = '<p class="mut">Wpisz kwotę, żeby zobaczyć podział.</p>'; return; }
-        const d = W.dokup(S.pozycje, WIERSZE, S.kwota, { tylkoJakosc: S.tylkoJakosc, nowe: nowe() });
+        const d = W.dokup(S.pozycje, WIERSZE, S.kwota, { transze: S.transze });
         const kup = d.pozycje.filter((x) => x.kwota > 0), nie = d.pozycje.filter((x) => x.kwota === 0);
-        el.innerHTML = (d.niewydane ? `<div class="ostrzezenie">Do wydania zostaje <b>${zl(d.niewydane)}</b> — ${kup.length ? "pozostałe spółki doszły do limitu 10 % portfela" : "żadna spółka nie spełnia warunków (PEG 0–2, bez ⬇, ✔ Jakość 7/7)"}. W teście ta kwota czekała w SPY (ETF na S&P 500) do następnego miesiąca; zaznacz „dodaj nowe spółki”, żeby rozłożyć ją szerzej.</div>` : "")
+        el.innerHTML = (d.niewydane ? `<div class="ostrzezenie">Do wydania zostaje <b>${zl(d.niewydane)}</b> — ${kup.length ? `pozycje budujemy powoli — jeden zakup to najwyżej cel (10 % portfela) × punkty/10 ÷ ${S.transze}` : "żadna z Twoich spółek nie ma PEG 0–2 (albo ma ⬇)"}. Zostaje na kolejny tani moment — albo dopisz następną wybraną przez siebie spółkę (liczba akcji 0) lub zmniejsz liczbę zakupów.</div>` : "")
             + (kup.length ? `<div class="przewin"><table class="male"><thead><tr><th>Spółka</th><th class="n">Punkty</th><th class="n">Kwota</th><th class="n">≈ akcji</th><th>Dlaczego</th><th></th></tr></thead><tbody>
               ${kup.map((x) => `<tr><td><a href="spolka.html?t=${encodeURIComponent(x.t)}"><b>${esc(x.t)}</b></a>${znaczki(x.r)}${x.nowa ? ' <span class="mut">(nowa)</span>' : ""}</td>
                 <td class="n">${W.fmtNum(x.mn, 1)}</td><td class="n"><b>${zl(x.kwota)}</b></td><td class="n">${W.fmtNum(x.akcjeKup, x.akcjeKup < 10 ? 2 : 1)}</td>
@@ -78,14 +72,12 @@
         zapisz(); rysuj();
     });
     $("kwota").value = W.ok(S.kwota) ? S.kwota : "";
-    $("o-jak").checked = S.tylkoJakosc; $("o-nowe").checked = S.nowe; $("o-n").value = S.n || 10;
+    $("transze").value = S.transze || 10;
+    $("transze").addEventListener("change", (e) => { S.transze = Math.max(1, +e.target.value || 10); zapisz(); sugestie(); });
     $("kwota").addEventListener("input", (e) => { S.kwota = e.target.value === "" ? null : +e.target.value; zapisz(); sugestie(); });
-    $("o-jak").addEventListener("change", (e) => { S.tylkoJakosc = e.target.checked; zapisz(); rysuj(); });
-    $("o-nowe").addEventListener("change", (e) => { S.nowe = e.target.checked; zapisz(); sugestie(); });
-    $("o-n").addEventListener("change", (e) => { S.n = +e.target.value || 10; zapisz(); sugestie(); });
 
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => r.json()).then((d) => {
-        LISTA = d.rows; WIERSZE = Object.fromEntries(d.rows.map((r) => [r.t, r]));
+        WIERSZE = Object.fromEntries(d.rows.map((r) => [r.t, r]));
         $("asof").textContent = d.generated_at;
         $("tickery").innerHTML = d.rows.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join("");
         rysuj();

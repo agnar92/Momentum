@@ -55,8 +55,10 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
   in localStorage `fundamenta_portfel`; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
   oceną, tym większa waga”): only PEG 0–2; `W.punkty` = 10 × mean of tanio (2 − PEG) ÷ 2, ocena (overall ÷ 10), wielkość (1 − (mcap rank − 1) ÷ 500); amount
-  proportional to points; position cap 10 % with overflow redistributed (leftover = `niewydane`); none for ⬇ `sp` or (option, default on) not ✔ Jakość 7/7;
-  optional new ✔ stocks with PEG 0–2 by overall score up to N positions; „Kupiłem” adds shares at the current price and recomputes the average cost
+  proportional to points, ONLY the amount the user enters (user: „nie rozdzielaj całego kapitału … pozycję buduje się powoli w kilku lub kilkunastu tanich
+  momentach”): target position 10 % of portfolio built in `transze` purchases (default 10, input on the page) — one purchase ≤ target × points/10 ÷ transze (10 pts reach the target in `transze` cheap moments, 5 pts in twice as many), overflow to other
+  stocks, leftover = `niewydane` waits for the next cheap moment; none for ⬇ `sp`. The USER picks the stocks (user: „tylko ja
+  wybieram spółki, nie automat”) — no automatic additions, no Jakość 7/7 filter on the page (`tylkoJakosc` option of `W.dokup` defaults to false); „Kupiłem” adds shares at the current price and recomputes the average cost
   (`W.sredniKoszt`). Do not tune the formula to backtests. Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
 
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes

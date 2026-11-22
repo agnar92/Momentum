@@ -21,8 +21,8 @@
         <li><b>Dokupujemy tylko spółki z PEG 0–2.</b> Każda dostaje <b>punkty 0–10</b> — średnia z trzech części (każda 0–1) × 10:
           <b>tanio</b> = (2 − PEG) ÷ 2 (PEG 0 → 1, PEG 1 → 0,5, PEG 2 → 0) · <b>ocena</b> = ocena ogólna ÷ 10 · <b>wielkość</b> = miejsce wg kapitalizacji wśród 500 spółek (największa → 1, ostatnia → 0).
           Im tańsza, większa i lepiej oceniana spółka, tym więcej punktów; kwota dzielona proporcjonalnie do punktów. Wzór prosty, nie dopasowany do wyników z przeszłości.</li>
-        <li><b>Pozycja najwyżej 10 % portfela</b> — nadwyżka przechodzi na pozostałe spółki; czego nie da się wydać, zostaje na następny miesiąc.</li>
-        <li><b>Nie dokupuj</b>, gdy fundamenty słabną 2 lata z rzędu (⬇, Twoja reguła sprzedaży) i — domyślnie — gdy spółka nie jest na liście ✔ Jakość 7/7.</li>
+        <li><b>Dzielimy tylko kwotę, którą podasz</b> — nie cały kapitał. <b>Pozycję budujemy powoli</b>: docelowo najwyżej 10 % portfela, zbierane w kilku–kilkunastu tanich momentach (domyślnie 10 zakupów): jeden zakup to najwyżej cel × punkty/10 ÷ 10 — spółka z 10 pkt dochodzi do 10 % w 10 tanich momentach, z 5 pkt w 20 — średni koszt wejścia się wyrównuje. Czego nie da się wydać, czeka na kolejny tani moment.</li>
+        <li><b>Spółki wybierasz sam</b> — strona niczego nie dobiera, tylko dzieli kwotę między Twoje spółki (nową dopisz z liczbą akcji 0). <b>Nie dokupuje</b>, gdy fundamenty słabną 2 lata z rzędu (⬇, Twoja reguła sprzedaży).</li>
         <li><b>Stała kwota co miesiąc</b> (uśrednianie kosztu) — w badaniu (etap 89) czekanie na „okazję” z gotówką nie dawało więcej. Jednorazową większą kwotę raczej od razu (lepiej niż 12 transz w 5 z 7 startów).</li>
       </ul>
     </details>
@@ -45,9 +45,7 @@
     <h2>Ile dokupić w tym miesiącu</h2>
     <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
       <label class="male">Kwota do zainwestowania (USD)<br><input id="kwota" type="number" step="any" min="0" style="width:150px"></label>
-      <label class="male"><input id="o-jak" type="checkbox" checked> tylko spółki z ✔ Jakość 7/7</label>
-      <label class="male"><input id="o-nowe" type="checkbox"> dodaj nowe spółki z ✔ Jakość 7/7 (najwyższa ocena) do</label>
-      <label class="male"><input id="o-n" type="number" min="1" max="40" value="10" style="width:64px"> spółek w portfelu</label>
+      <label class="male">Pozycję buduję w<br><input id="transze" type="number" min="1" max="50" value="10" style="width:70px"> zakupach</label>
     </div>
     <div id="sugestie" style="margin-top:12px"></div>
   </section>
