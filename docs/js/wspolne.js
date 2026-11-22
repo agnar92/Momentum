@@ -113,11 +113,11 @@
         const s = r && r.st && r.st[JAKOSC];
         return !!(s && s[0] === s[1] && s[1] > 0);
     }
-    // --- portfel: podział miesięcznej wpłaty -----------------------------------------------------------------------------
-    // reguła użytkownika (prosty wzór, bez dopasowania do przeszłości): punkty 0–10 = 10 × średnia z trzech części 0–1:
-    // tanio = (2 − PEG) ÷ 2 (dokup tylko przy PEG 0–2), ocena = ocena ogólna ÷ 10, wielkość = miejsce wg kapitalizacji (największa = 1);
-    // dzielimy tylko podaną kwotę, proporcjonalnie do punktów; pozycja najwyżej 10 % portfela, budowana w `transze` zakupach (jeden zakup ≤ cel × punkty/10 ÷ transze); bez dokupu przy ⬇; spółki wybiera użytkownik (strona nic nie dobiera)
-    const DOKUP = { limit: 0.10, pegMax: 2, n: 500, transze: 10 };
+    // --- portfel: budowanie pozycji wg reguły użytkownika ---------------------------------------------------------------
+    // na spółkę najwyżej 10 % konta (cel); pierwszy zakup = 20 % celu, każdy kolejny = 10 % celu — najwyżej raz w miesiącu, tylko gdy spółka jest tania
+    // (PEG 0–2) i kurs zmienił się o co najmniej ±7 % od ostatniego zakupu; drogo albo za mały ruch kursu → czekamy. Bez dokupu przy ⬇.
+    // Punkty 0–10 (tanio, ocena, wielkość) ustalają kolejność, gdy budżet miesiąca nie wystarcza na wszystko.
+    const DOKUP = { limit: 0.10, pierwszy: 0.20, kolejny: 0.10, ruch: 0.07, pegMax: 2, n: 500 };
     function punkty(r) {
         if (!r || !ok(r.peg) || r.peg <= 0 || r.peg >= DOKUP.pegMax) return null;
         const tanio = (DOKUP.pegMax - r.peg) / DOKUP.pegMax;
@@ -125,40 +125,37 @@
         const wielkosc = ok(r.rank) ? Math.max(0, 1 - (r.rank - 1) / DOKUP.n) : 0.5;
         return { tanio, ocena, wielkosc, punkty: 10 * (tanio + ocena + wielkosc) / 3 };
     }
-    function dokup(pozycje, wiersze, kwota, opcje) {
-        const o = { tylkoJakosc: false, nowe: [], limit: DOKUP.limit, transze: DOKUP.transze, ...(opcje || {}) };
-        const rows = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
-        const nowe = o.nowe.filter((t) => wiersze[t] && !pozycje.some((p) => p.t === t)).map((t) => ({ t, akcje: 0, koszt: null, r: wiersze[t], nowa: true }));
-        const wsz = rows.concat(nowe);
+    function dokup(pozycje, wiersze, opcje) {
+        const o = { konto: null, budzet: null, dzis: new Date().toISOString().slice(0, 10), ...(opcje || {}) };
+        const wsz = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
         wsz.forEach((x) => { x.cena = x.r && ok(x.r.c) ? x.r.c : null; x.wartosc = x.cena !== null ? x.cena * (x.akcje || 0) : 0; });
-        const suma = wsz.reduce((a, x) => a + x.wartosc, 0), po = suma + (kwota || 0);
+        const suma = wsz.reduce((a, x) => a + x.wartosc, 0), konto = ok(o.konto) && o.konto > 0 ? o.konto : suma, cel = DOKUP.limit * konto;
         wsz.forEach((x) => {
-            x.waga = suma > 0 ? x.wartosc / suma : 0; x.powody = []; x.uwagi = []; x.mn = 0; x.czynniki = null;
-            const r = x.r;
-            if (!r || x.cena === null) { x.powody.push("brak danych (spółka spoza listy 500)"); return; }
-            if (r.sp) x.powody.push("⬇ fundamenty słabną 2 lata z rzędu — nie dokupuj (Twoja reguła sprzedaży)");
-            if (o.tylkoJakosc && !jakosc77(r)) x.powody.push("poza listą ✔ Jakość 7/7");
-            if (!(ok(r.peg) && r.peg > 0 && r.peg < DOKUP.pegMax)) x.powody.push(`PEG ${ok(r.peg) ? fmtNum(r.peg) : "brak"} — dokup tylko przy PEG 0–2`);
-            if (x.wartosc >= o.limit * po) x.powody.push(`pozycja ≥ ${Math.round(100 * o.limit)} % portfela`);
-            if (r.ow) x.uwagi.push(`❗ ostrzeżenia: ${r.ow} — sprawdź kartę`);
-            if (x.powody.length) return;
-            x.czynniki = punkty(r); x.mn = x.czynniki.punkty;
+            x.waga = konto > 0 ? x.wartosc / konto : 0; x.kwota = 0; x.plan = 0; x.powod = ""; x.uwagi = []; x.czynniki = punkty(x.r); x.mn = x.czynniki ? x.czynniki.punkty : 0;
+            x.zysk = x.koszt && x.cena ? x.cena / x.koszt - 1 : null; x.cel = cel;
+            const r = x.r, ref = x.ost && ok(x.ost.c) ? x.ost.c : x.koszt;
+            x.ruch = ref && x.cena ? x.cena / ref - 1 : null;
+            if (r && r.ow) x.uwagi.push(`❗ ostrzeżenia: ${r.ow} — sprawdź kartę`);
+            if (!r || x.cena === null) { x.powod = "brak danych (spółka spoza listy 500)"; return; }
+            if (r.sp) { x.powod = "⬇ fundamenty słabną 2 lata z rzędu — nie dokupuj"; return; }
+            if (!x.czynniki) { x.powod = `drogo (PEG ${ok(r.peg) ? fmtNum(r.peg) : "brak"}, dokup przy 0–2) — czekam`; return; }
+            if (cel <= 0) { x.powod = "podaj wartość konta"; return; }
+            if (x.wartosc >= cel - 0.005) { x.powod = "pozycja pełna (10 % konta)"; return; }
+            const pierwszy = !(x.akcje > 0);
+            if (!pierwszy && x.ost && x.ost.d && x.ost.d.slice(0, 7) === o.dzis.slice(0, 7)) { x.powod = `już kupione w tym miesiącu (${x.ost.d})`; return; }
+            if (!pierwszy && x.ruch !== null && Math.abs(x.ruch) < DOKUP.ruch) { x.powod = `kurs ${fmtPct(x.ruch, 1, true)} od ostatniego zakupu — czekam na ruch ±${Math.round(100 * DOKUP.ruch)} %`; return; }
+            x.pierwszy = pierwszy;
+            x.plan = Math.min((pierwszy ? DOKUP.pierwszy : DOKUP.kolejny) * cel, cel - x.wartosc);
         });
-        // podział proporcjonalny do wag z limitem pozycji (nadwyżka przechodzi na pozostałe)
-        // pozycję budujemy powoli: jeden zakup to najwyżej 1/transze docelowej pozycji (cel = limit × portfel po wpłacie), łącznie do limitu
-        // limit jednego zakupu = cel × (punkty ÷ 10) ÷ transze: spółka z 10 pkt dochodzi do celu w `transze` tanich momentach, z 5 pkt — w dwa razy większej liczbie
-        const cel = o.limit * po;
-        wsz.forEach((x) => { x.kwota = 0; x.cel = cel; x.transza = cel * x.mn / 10 / Math.max(1, o.transze); x.max = x.mn > 0 ? Math.max(0, Math.min(x.transza, cel - x.wartosc)) : 0; });
-        let reszta = kwota || 0;
-        for (let k = 0; k < 20 && reszta > 1e-9; k++) {
-            const akt = wsz.filter((x) => x.mn > 0 && x.kwota < x.max - 1e-9), sw = akt.reduce((a, x) => a + x.mn, 0);
-            if (!sw) break;
-            let wyd = 0;
-            akt.forEach((x) => { const d = Math.min(reszta * x.mn / sw, x.max - x.kwota); x.kwota += d; wyd += d; });
-            reszta -= wyd;
-        }
-        wsz.forEach((x) => { x.akcjeKup = x.cena ? x.kwota / x.cena : 0; x.zysk = x.koszt && x.cena ? x.cena / x.koszt - 1 : null; });
-        return { pozycje: wsz, suma, niewydane: reszta > 1e-9 ? reszta : 0 };
+        // budżet miesiąca (opcjonalnie): najpierw spółki z największą liczbą punktów
+        let zostalo = ok(o.budzet) && o.budzet >= 0 ? o.budzet : Infinity;
+        wsz.filter((x) => x.plan > 0).sort((a, b) => b.mn - a.mn).forEach((x) => {
+            x.kwota = Math.min(x.plan, zostalo); zostalo -= x.kwota;
+            if (x.kwota < x.plan - 0.005) x.uwagi.push(x.kwota > 0 ? "część zakupu — skończył się budżet" : "brak budżetu w tym miesiącu");
+        });
+        wsz.forEach((x) => { x.akcjeKup = x.cena ? x.kwota / x.cena : 0; });
+        const potrzeba = wsz.reduce((a, x) => a + x.plan, 0), razem = wsz.reduce((a, x) => a + x.kwota, 0);
+        return { pozycje: wsz, suma, konto, cel, potrzeba, razem, zostaje: Number.isFinite(zostalo) ? zostalo : 0 };
     }
     // średni koszt po dokupieniu (average costing)
     const sredniKoszt = (akcje, koszt, kup, cena) => (akcje + kup > 0 ? ((akcje || 0) * (koszt || 0) + kup * cena) / ((akcje || 0) + kup) : null);

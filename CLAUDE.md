@@ -54,14 +54,14 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 - `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
   0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
   in localStorage `fundamenta_portfel` — stocks are added with the „＋ Dodaj do portfela” button on the card (`przyciskPortfela` in spolka.js; user: „zamiast wpisywać daj
-  przycisk dodaj do portfela w widoku spółki”), shares / average cost edited in the portfel table; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
-  oceną, tym większa waga”): only PEG 0–2; `W.punkty` = 10 × mean of tanio (2 − PEG) ÷ 2, ocena (overall ÷ 10), wielkość (1 − (mcap rank − 1) ÷ 500); amount
-  proportional to points, ONLY the amount the user enters (user: „nie rozdzielaj całego kapitału … pozycję buduje się powoli w kilku lub kilkunastu tanich
-  momentach”): target position 10 % of portfolio built in `transze` purchases (default 10, input on the page) — one purchase ≤ target × points/10 ÷ transze (10 pts reach the target in `transze` cheap moments, 5 pts in twice as many), overflow to other
-  stocks, leftover = `niewydane` waits for the next cheap moment; none for ⬇ `sp`. The USER picks the stocks (user: „tylko ja
-  wybieram spółki, nie automat”) — no automatic additions, no Jakość 7/7 filter on the page (`tylkoJakosc` option of `W.dokup` defaults to false); „Kupiłem” adds shares at the current price and recomputes the average cost
-  (`W.sredniKoszt`). Do not tune the formula to backtests. Leftover stays in cash, shown neutrally — do NOT suggest ETFs, more stocks or changing the
-  rules (user: „rób to co mówię … ja decyduję co, gdzie i jak … muszę zarządzać emocjami”; retirement account, prefers stability over max return). Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
+  przycisk dodaj do portfela w widoku spółki”), shares / average cost edited in the portfel table; `W.dokup` = the USER'S position-building rule (user: „na spółkę max 10 % … pierwszy raz 20 % z tych 10 %,
+  potem za każdym razem, kiedy robi się tania, raz w miesiącu kolejne 10 % z tych 10 % … najlepiej ruch kursu o 7 % na plus lub minus”): target = 10 % of the
+  account value (`konto` input: shares + cash; fallback = value of shares), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
+  month (`ost` = {c, d} saved by „Kupiłem”), only when PEG 0–2 and the price moved ≥ ±7 % since the last purchase (reference: `ost.c`, else average cost);
+  otherwise wait; none for ⬇ `sp`; optional monthly budget — priority by `W.punkty` (10 × mean of tanio (2 − PEG) ÷ 2, overall ÷ 10, size 1 − (rank − 1) ÷ 500).
+  The USER picks the stocks (user: „tylko ja wybieram spółki, nie automat”), no automatic additions or filters. Do not tune to backtests; do NOT suggest ETFs,
+  more stocks or changing the rules (user: „rób to co mówię … ja decyduję co, gdzie i jak … muszę zarządzać emocjami”; retirement account, prefers
+  stability over max return). Stage 89 (r114): DCA 20.1 %; waiting for cheap prices not better.
 
 - `js/wspolne.js` (window.W / module.exports): formatting (Polish decimals), `dcf`, `prognoza`, `implikowane` (bisection: growth or FCF margin that makes
   DCF = price), `scenariusze`, `pegScen`, `etykieta`, `pozycjaWyceny`, `opisPercentyla`, `klasaOceny`, `filtruj`, `sortuj`, `ttmSeria`.

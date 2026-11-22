@@ -14,16 +14,15 @@
 <main class="main">
   <section class="karta">
     <h2>Portfel: budowanie pozycji</h2>
-    <div class="pod">Wpisz swoje spółki i kwotę, którą odkładasz co miesiąc — strona podzieli ją według Twojej reguły (punkty 0–10: tanio wg PEG, ocena, wielkość; limit 10 %), bez prób wyczucia rynku. Dane zostają tylko w tej przeglądarce. Dane rynkowe z <span id="asof">–</span>.</div>
+    <div class="pod">Pozycję budujesz powoli, w tanich momentach, żeby wyrównać koszt wejścia. Spółki wybierasz sam (przycisk „＋ Dodaj do portfela” na karcie spółki). Dane zostają tylko w tej przeglądarce. Dane rynkowe z <span id="asof">–</span>.</div>
     <details class="objasnienie" open>
-      <summary><b>Zasady</b> <span class="mut male">(co wyszło w badaniu 2013–2026)</span></summary>
+      <summary><b>Zasady</b></summary>
       <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
-        <li><b>Dokupujemy tylko spółki z PEG 0–2.</b> Każda dostaje <b>punkty 0–10</b> — średnia z trzech części (każda 0–1) × 10:
-          <b>tanio</b> = (2 − PEG) ÷ 2 (PEG 0 → 1, PEG 1 → 0,5, PEG 2 → 0) · <b>ocena</b> = ocena ogólna ÷ 10 · <b>wielkość</b> = miejsce wg kapitalizacji wśród 500 spółek (największa → 1, ostatnia → 0).
-          Im tańsza, większa i lepiej oceniana spółka, tym więcej punktów; kwota dzielona proporcjonalnie do punktów. Wzór prosty, nie dopasowany do wyników z przeszłości.</li>
-        <li><b>Dzielimy tylko kwotę, którą podasz</b> — nie cały kapitał. <b>Pozycję budujemy powoli</b>: docelowo najwyżej 10 % portfela, zbierane w kilku–kilkunastu tanich momentach (domyślnie 10 zakupów): jeden zakup to najwyżej cel × punkty/10 ÷ 10 — spółka z 10 pkt dochodzi do 10 % w 10 tanich momentach, z 5 pkt w 20 — średni koszt wejścia się wyrównuje. Czego nie da się wydać, czeka na kolejny tani moment.</li>
-        <li><b>Spółki wybierasz sam</b> — strona niczego nie dobiera, tylko dzieli kwotę między Twoje spółki (nową dopisz z liczbą akcji 0). <b>Nie dokupuje</b>, gdy fundamenty słabną 2 lata z rzędu (⬇, Twoja reguła sprzedaży).</li>
-        <li><b>Czego nie wydamy, zostaje w gotówce</b> i czeka na kolejny tani moment Twoich spółek.</li>
+        <li><b>Na jedną spółkę najwyżej 10 % konta.</b> Przy koncie 10 000 USD to 1000 USD.</li>
+        <li><b>Pierwszy zakup: 20 % z tych 10 %</b> (200 USD). <b>Każdy kolejny: 10 % z tych 10 %</b> (100 USD), aż pozycja dojdzie do 10 % konta.</li>
+        <li><b>Dokup najwyżej raz w miesiącu i tylko, gdy spółka jest tania</b> — PEG 0–2 — <b>a kurs zmienił się o co najmniej ±7 %</b> od ostatniego zakupu (w dół lub w górę). Drogo albo za mały ruch kursu → czekamy.</li>
+        <li><b>Nie dokupujemy</b>, gdy fundamenty słabną 2 lata z rzędu (⬇).</li>
+        <li>Jeśli podasz budżet miesiąca i nie starczy na wszystko, pierwszeństwo mają spółki z większą liczbą <b>punktów 0–10</b>: średnia z „tanio” ((2 − PEG) ÷ 2), oceny ogólnej ÷ 10 i wielkości (miejsce wg kapitalizacji wśród 500, największa = 1).</li>
       </ul>
     </details>
   </section>
@@ -38,12 +37,12 @@
   <section class="karta">
     <h2>Ile dokupić w tym miesiącu</h2>
     <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
-      <label class="male">Kwota do zainwestowania (USD)<br><input id="kwota" type="number" step="any" min="0" style="width:150px"></label>
-      <label class="male">Pozycję buduję w<br><input id="transze" type="number" min="1" max="50" value="10" style="width:70px"> zakupach</label>
+      <label class="male">Wartość konta (akcje + gotówka, USD)<br><input id="konto" type="number" step="any" min="0" style="width:170px"></label>
+      <label class="male">Budżet w tym miesiącu (opcjonalnie)<br><input id="budzet" type="number" step="any" min="0" style="width:150px"></label>
     </div>
     <div id="sugestie" style="margin-top:12px"></div>
   </section>
-  <div class="stopka">Informacyjnie, nie rekomendacja. Zasady pochodzą z testu historycznego (research/wyniki/r114_etap89.md) — przyszłość może wyglądać inaczej.</div>
+  <div class="stopka">Informacyjnie, nie rekomendacja. Zasady budowania pozycji ustalasz Ty — strona tylko je liczy.</div>
 </main>
 <script src="js/wspolne.js"></script>
 <script src="js/portfel.js"></script>
