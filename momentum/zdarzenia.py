@@ -15,7 +15,7 @@ PUNKTY = {
     "2.04": (2, "Zdarzenie przyspieszające spłatę zadłużenia"),
     "2.05": (1, "Koszty restrukturyzacji lub wyjścia z działalności"),
     "2.06": (1, "Istotny odpis wartości aktywów"),
-    "3.01": (2, "Zawiadomienie giełdy o niespełnianiu warunków notowania / wycofaniu z obrotu"),
+    "3.01": (1, "Notowanie na giełdzie: niespełnianie warunków, wycofanie lub przeniesienie na inną giełdę (często dobrowolne)"),
     "3.02": (0, "Sprzedaż akcji bez rejestracji"),
     "3.03": (1, "Istotna zmiana praw akcjonariuszy"),
     "4.01": (2, "Zmiana audytora"),

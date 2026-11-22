@@ -42,7 +42,7 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    `odsetki`, `przed_pod`, `podatek`, cache v6), `eps_norm` = EPS × ni_norm / ni_ttm, `pe_norm`, `peg_norm`; when EPS differs > 15 % `m.peg` = peg_norm
    (`peg_gaap` kept, `peg_norm_uzyte`) so label / 7/7 / score don't show false cheapness; normalized ≤ 0 with GAAP > 0 → no PEG; > 25 % → ❗.
    **8-K events** (`momentum/zdarzenia.py`, `spolki.sec_zdarzenia`: data.sec.gov/submissions, cache `<T>.zd.json` 2 days): last 12 months, Polish item
-   descriptions, level 2 (1.03, 1.05, 2.04, 3.01, 4.01, 4.02, NT 10-K/Q → ❗ warning, `zd` count in lista) / 1 (5.02, 2.06, 2.05, 1.02, 5.01, 3.03, 10-K/A)
+   descriptions, level 2 (1.03, 1.05, 2.04, 4.01, 4.02, NT 10-K/Q → ❗ warning, `zd` count in lista) / 1 (3.01 — often a voluntary exchange move, 5.02, 2.06, 2.05, 1.02, 5.01, 3.03, 10-K/A)
    / 0; routine 2.02 / 7.01 / 9.01 / 5.07 skipped; card section `#zysk-zd` „Jakość zysku i zdarzenia”, PEG panel EPS chips GAAP / normalized.
    `spadek_2l` = revenue or net income TTM y/y < 0 now and a year ago (user's sell rule; stage 77: −4 pp over 5 years) → ⬇ on list and warning on card.
 Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, sila, wycena, ogolna}, typ, peg, pe, dcf_pot, et, st{strategy: [passed,
