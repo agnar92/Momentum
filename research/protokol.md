@@ -1320,3 +1320,18 @@ wzrost hamuje +2,1 [−15,6; +20,8], ⬇ −0,9 [−34,3; +31,7]; wolno rosnące
 szybko +3,3, stabilne +0,1, cykliczne −3,6 pp (wszystkie przedziały obejmują 0). Hipoteza (większość nie rozstrzyga, potwierdzi się ⬇) — tak, ale ⬇ tylko u wolno
 rosnących; P/E ponad własną normą u stabilnych — nie. Strona: ⚠ tylko dla potwierdzonego sygnału, pozostałe szare ○ „niepotwierdzony w teście”, sygnały bez historii
 — „nietestowany”.
+
+## Etap 93: pozostałe reguły Lyncha z „One Up on Wall Street” (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „nie masz wszystkich reguł Petera Lyncha z jego książki”. Spis reguł (rozdz. 7–10, 13, 15, 17) i to, co da się odtworzyć historycznie (dane, zbiór, starty,
+miara i bootstrap jak w etapie 92; porównanie grupa A vs grupa B, różnica median nadwyżki nad medianą zbioru, 12 i 36 mies.):
+L1 gotówka netto ≥ 10 % kapitalizacji vs dług netto (gotówka netto < 0) — „poduszka gotówkowa”, rozdz. 13; L2 dług / kapitał ≤ 0,33 vs > 1 — „normalnie 75 % kapitału,
+25 % długu”; L3 wskaźnik Lyncha z dywidendą (wzrost zysku 5 lat rocznie % + stopa dywidendy %) ÷ P/E ≥ 2 vs < 1 — historyczny wzrost zamiast prognozy; L4 szybko
+rosnące: wzrost zysku 20–25 % rocznie (5 lat) vs > 50 % („za gorące”); L5 „najgorętsza spółka”: zwrot 12 mies. i P/E w górnych 10 % zbioru vs reszta; L6 P/E poniżej
+własnej mediany z 5 lat vs > 1,3 × (wszystkie typy; rozdz. 10); L7 stabilnie rosnące: marża netto w górnej vs dolnej tercyli; L8 wolno rosnące płacące dywidendę:
+dywidenda (suma wypłat) wyższa niż rok wcześniej w każdym z 5 lat vs nie; L9 skup akcji (liczba akcji 3 lata ≤ −2 %) vs rozwadnianie (> +5 %) — „idealna spółka” cecha 13;
+L10 P/FCF ≤ 15 vs > 30 (rozdz. 13: przepływy). Nietestowalne (brak danych historycznych lub reguła jakościowa): udział produktu w sprzedaży, nudna nazwa / branża,
+wydzielenie, nisza, odbiorcy > 25 % sprzedaży, plotki, zakupy insiderów, udział instytucji i liczba analityków, zobowiązania emerytalne, ukryte aktywa (nieruchomości,
+patenty, straty podatkowe), struktura długu (bankowy vs obligacje), przejęcia („diworsyfikacja”), okładki gazet, „następny IBM”.
+Reguła dla strony jak w etapie 92: potwierdzony, jeśli różnica 36 mies. ma kierunek Lyncha i przedział go wyklucza 0 (albo 12 mies. przy tym samym znaku 36 mies.).
+Hipoteza: potwierdzą się co najwyżej 2–3 reguły (najpewniej L9 skup akcji i L2 niski dług), reszta nie rozstrzyga.
