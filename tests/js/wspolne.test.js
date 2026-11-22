@@ -98,6 +98,8 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
     d = W.dokup(p, w, { konto: 10000, dzis: "2026-12-05", budzet: 300 });                   // budżet: najpierw najwięcej punktów (B, potem A …)
     assert.strictEqual(k(d).B, 200); assert.strictEqual(k(d).A + k(d).E + k(d).G, 100);
     assert.ok(Math.abs(W.punkty(w.B).punkty - 29 / 3) < 1e-9); assert.strictEqual(W.punkty(w.D), null);
+    d = W.dokup(p, w, { konto: 40000, kurs: 4, dzis: "2026-12-05" });                   // konto w PLN: cel 4000 zł, pierwszy zakup 800 zł = 2 akcje A po 100 USD
+    assert.strictEqual(k(d).A, 800); assert.strictEqual(d.pozycje[0].akcjeKup, 2);
     assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
 });
 

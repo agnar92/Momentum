@@ -18,8 +18,8 @@
     <details class="objasnienie" open>
       <summary><b>Zasady</b></summary>
       <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
-        <li><b>Na jedną spółkę najwyżej 10 % konta.</b> Przy koncie 10 000 USD to 1000 USD.</li>
-        <li><b>Pierwszy zakup: 20 % z tych 10 %</b> (200 USD). <b>Każdy kolejny: 10 % z tych 10 %</b> (100 USD), aż pozycja dojdzie do 10 % konta.</li>
+        <li><b>Na jedną spółkę najwyżej 10 % konta</b> (IKE w złotówkach). Przy koncie 10 000 zł to 1000 zł.</li>
+        <li><b>Pierwszy zakup: 20 % z tych 10 %</b> (200 zł). <b>Każdy kolejny: 10 % z tych 10 %</b> (100 zł), aż pozycja dojdzie do 10 % konta. Liczbę akcji przeliczamy kursem USD/PLN (z cotygodniowych danych albo wpisanym przez Ciebie); ceny akcji i średni koszt — w USD.</li>
         <li><b>Dokup najwyżej raz w miesiącu i tylko, gdy spółka jest tania</b> — PEG 0–2 — <b>a kurs zmienił się o co najmniej ±7 %</b> od ostatniego zakupu (w dół lub w górę). Drogo albo za mały ruch kursu → czekamy.</li>
         <li><b>Nie dokupujemy</b>, gdy fundamenty słabną 2 lata z rzędu (⬇).</li>
         <li>Jeśli podasz budżet miesiąca i nie starczy na wszystko, pierwszeństwo mają spółki z większą liczbą <b>punktów 0–10</b>: średnia z „tanio” ((2 − PEG) ÷ 2), oceny ogólnej ÷ 10 i wielkości (miejsce wg kapitalizacji wśród 500, największa = 1).</li>
@@ -37,8 +37,9 @@
   <section class="karta">
     <h2>Ile dokupić w tym miesiącu</h2>
     <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
-      <label class="male">Wartość konta (akcje + gotówka, USD)<br><input id="konto" type="number" step="any" min="0" style="width:170px"></label>
-      <label class="male">Budżet w tym miesiącu (opcjonalnie)<br><input id="budzet" type="number" step="any" min="0" style="width:150px"></label>
+      <label class="male">Wartość konta IKE (akcje + gotówka, PLN)<br><input id="konto" type="number" step="any" min="0" style="width:170px"></label>
+      <label class="male">Budżet w tym miesiącu (PLN, opcjonalnie)<br><input id="budzet" type="number" step="any" min="0" style="width:150px"></label>
+      <label class="male">Kurs USD/PLN<br><input id="kurs" type="number" step="any" min="0" style="width:150px"></label>
     </div>
     <div id="sugestie" style="margin-top:12px"></div>
   </section>

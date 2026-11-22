@@ -56,7 +56,8 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   in localStorage `fundamenta_portfel` — stocks are added with the „＋ Dodaj do portfela” button on the card (`przyciskPortfela` in spolka.js; user: „zamiast wpisywać daj
   przycisk dodaj do portfela w widoku spółki”), shares / average cost edited in the portfel table; `W.dokup` = the USER'S position-building rule (user: „na spółkę max 10 % … pierwszy raz 20 % z tych 10 %,
   potem za każdym razem, kiedy robi się tania, raz w miesiącu kolejne 10 % z tych 10 % … najlepiej ruch kursu o 7 % na plus lub minus”): target = 10 % of the
-  account value (`konto` input: shares + cash; fallback = value of shares), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
+  account value IN PLN (IKE; user: „waluta na IKE jest w PLN, więc tam też sizing”; `konto` input: shares + cash; fallback = value of shares; amounts in PLN,
+  shares = PLN ÷ (USD price × USD/PLN), rate `usdpln` in lista.json from yfinance PLNUSD=X weekly, editable `kurs` input; prices / average cost stay in USD), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
   month (`ost` = {c, d} saved by „Kupiłem”), only when PEG 0–2 and the price moved ≥ ±7 % since the last purchase (reference: `ost.c`, else average cost);
   otherwise wait; none for ⬇ `sp`; optional monthly budget — priority by `W.punkty` (10 × mean of tanio (2 − PEG) ÷ 2, overall ÷ 10, size 1 − (rank − 1) ÷ 500).
   The USER picks the stocks (user: „tylko ja wybieram spółki, nie automat”), no automatic additions or filters. Do not tune to backtests; do NOT suggest ETFs,

@@ -244,7 +244,7 @@ def _czysc(x):
     return x
 
 
-def zapisz(rows, out=OUT, today=None):
+def zapisz(rows, out=OUT, today=None, usdpln=None):
     today = today or dt.date.today()
     os.makedirs(os.path.join(out, "spolki"), exist_ok=True)
     for f in os.listdir(os.path.join(out, "spolki")):
@@ -264,7 +264,7 @@ def zapisz(rows, out=OUT, today=None):
         karta["dcf_param"] = ocena.DCF
         json.dump(_czysc(karta), open(os.path.join(out, "spolki", f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     json.dump(_czysc(ocena.rozklady(rows)), open(os.path.join(out, "sektory.json"), "w"), ensure_ascii=False, separators=(",", ":"))
-    json.dump(_czysc(dict(generated_at=today.isoformat(), n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
+    json.dump(_czysc(dict(generated_at=today.isoformat(), usdpln=usdpln, n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
               open(os.path.join(out, "lista.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 
 
@@ -289,7 +289,8 @@ def main(argv=None):
     px = ceny(top)
     zd = sec_zdarzenia(top, mapa, a.cache)
     rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd)
-    zapisz(rows, a.out)
+    pln = kursy(["PLN"]).get("PLN")                       # USD za 1 PLN -> kurs USD/PLN do portfela (IKE w złotówkach)
+    zapisz(rows, a.out, usdpln=1 / pln if pln else None)
     print(f"Zapisano {len(rows)} spółek; z danymi SEC {sum(1 for v in ex.values() if v.get('rev'))}, z cenami {len(px)}.")
     return 0
 
