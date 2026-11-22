@@ -1296,3 +1296,19 @@ z gotówką 0 % — tak; (2) z gotówką w SPY w granicach ±2 pp — częściow
 Wniosek: 10-letni kanał (120 mies.) działa lepiej niż 5-letni; na log-cenie z progiem −2σ sygnałów jest dużo (ok. 15 rocznie), portfel jest w ok. 3/4 zainwestowany
 i ma o połowę mniejsze obsunięcie niż SPY (−18 % vs −34 %), ale w 2013–2019 przegrał z SPY o 4,6 pp rocznie; przewaga tylko w latach 2020–2026. 12 wariantów =
 duże ryzyko dopasowania; żadna zmiana parametrów nie spełnia reguły zapisanej przed testem.
+
+## Etap 92: test sygnałów Lyncha z karty spółki (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „to są reguły Lyncha, czemu dodałeś to bez backtestu?” — słusznie: lista kontrolna Lyncha (karta spółki, sekcja „Peter Lynch”) trafiła na stronę
+bez testu. Sprawdzamy każdy sygnał ostrzegawczy (⚠), który da się odtworzyć historycznie. Dane i zbiór jak w etapach 86–88: top 500 USA PIT bez wykluczonych sektorów,
+starty w styczniu 2012–2023 (12 mies.) i 2012–2023 do 2023-09 (36 mies.), cechy z raportów dostępnych na dany dzień. Typ (przybliżenie strony bez prognozy EPS, której
+historycznie nie mamy): cykliczna — najgorszy rok przychodów w 5 lat ≤ −10 %; szybko rosnąca — przychody 5 lat ≥ 20 % rocznie; stabilnie rosnąca — 8–20 %; wolno — < 8 %
+(trzy ostatnie tylko spoza cyklicznych). Sygnały (jak na stronie): szybko rosnąca — dojrzewanie (przychody 1 rok < 0,6 × średnia 5 lat), hamowanie sprzedaży
+kwartalnej 2 kwartały z rzędu (zmiana wzrostu r/r < 0 teraz i 3 mies. wcześniej), PEG ≥ 2 (historyczny), zapasy r/r > sprzedaż r/r + 10 pp; stabilnie rosnąca —
+P/E > 1,3 × mediana własnego P/E z 60 mies., przychody 1 rok < średnia 5 lat − 5 pp, fundamenty słabną 2 lata (⬇); wolno rosnąca — ⬇; cykliczna — zapasy (jw.),
+rampa capex, sprzedaż kwartalna r/r < 0, „pułapka” (zysk +50 % r/r i P/E poniżej własnej mediany). Nietestowane (brak historii): dług rosnący 5 kwartałów, cięcie
+i pokrycie dywidendy, zmiany w zarządzie, ukryte aktywa, wychodzące z kłopotów, wskaźnik Lyncha z prognozą. Miara: zwrot ceny 12 i 36 mies. minus mediana zbioru
+w tym samym starcie; różnica median (⚠ − ✓) w danym typie, bootstrap blokowy po latach startowych (B = 2000), 95 % przedział. Reguła dla strony: sygnał zostaje jako
+ostrzeżenie, jeśli różnica dla 36 mies. jest ujemna, a górna granica przedziału < 0 (albo tak samo dla 12 mies. przy 36 mies. ≤ 0); w przeciwnym razie na stronie
+oznaczamy go „niepotwierdzony w teście” (szary, nie ⚠). Hipoteza: większość sygnałów nie rozstrzyga (szerokie przedziały), potwierdzą się ⬇ (etap 77) i ewentualnie
+P/E wysoko ponad własną normą u stabilnych.
