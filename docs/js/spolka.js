@@ -229,7 +229,7 @@
             <label>Cena<input type="number" value="${W.ok(M.price) ? M.price.toFixed(2) : ""}" disabled><span class="mut">rynek</span></label>
             <label class="szer">EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
               ${W.ok(M.eps_norm) ? `<div class="chipy"><button data-e="${M.eps}">z raportu (GAAP) ${W.fmtNum(M.eps)}</button><button data-e="${M.eps_norm}">znormalizowany ${W.fmtNum(M.eps_norm)}</button></div>` : ""}
-              ${M.peg_norm_uzyte ? `<div class="male" style="color:#92400e;margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
+              ${M.peg_norm_uzyte ? `<div class="male" style="color:var(--brazowy-t);margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
             <label class="szer">Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
               <div class="chipy"><button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button></div></label>
             <label>P/E (wyliczone)<input type="number" value="${W.ok(pe) ? pe.toFixed(2) : ""}" disabled><span class="mut">cena ÷ EPS</span></label>
@@ -321,9 +321,9 @@
             ${W.ok(m.pe_norm) ? wr3("P/E", W.fmtNum(m.pe), W.fmtNum(m.pe_norm)) : ""}
             ${W.ok(m.peg_norm) ? wr3("PEG", W.fmtNum(W.ok(m.peg_gaap) ? m.peg_gaap : m.peg), W.fmtNum(m.peg_norm)) : ""}
           </div>
-          <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:#b91c1c">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
-              : Math.abs(roz) > 0.15 ? `<b style="color:#b91c1c">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
-              : '<span style="color:#15803d">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
+          <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:var(--czerwony-t)">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
+              : Math.abs(roz) > 0.15 ? `<b style="color:var(--czerwony-t)">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
+              : '<span style="color:var(--zielony-t)">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
         const kol = ["#64748b", "#d97706", "#dc2626"];
         const li = (z) => `<li class="zd-w"><span class="mut">${esc(z.d)}</span><span>${z.p.map(([k, p, o]) => `<span style="color:${kol[p]};font-weight:${p ? 600 : 400}">● ${esc(o)}</span> <span class="mut male">(${esc(k.includes(".") ? z.f + " pkt " + k : k)})</span>`).join("; ")}
             · <a href="${esc(z.u)}" target="_blank" rel="noopener">raport</a></span></li>`;

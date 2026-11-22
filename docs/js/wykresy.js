@@ -29,8 +29,8 @@
         const yy = (v) => T + y(v);
         const n = etykiety.length, grupa = (w - L - 8) / n, sz = Math.max(2, Math.min(28, (grupa - 4) / serie.length - 2));
         let s = `<svg viewBox="0 0 ${w} ${wys}" width="100%" height="${wys}" xmlns="${NS}">`;
-        s += '<defs><pattern id="kreski" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#e2e8f0"/><line x1="0" y1="0" x2="0" y2="6" stroke="#94a3b8" stroke-width="2"/></pattern></defs>';
-        ticks.forEach((v) => { s += `<line x1="${L}" x2="${w}" y1="${yy(v)}" y2="${yy(v)}" stroke="#e5e7eb"/><text x="${L - 6}" y="${yy(v) + 4}" text-anchor="end">${fmt(v)}</text>`; });
+        s += '<defs><pattern id="kreski" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--siatka)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--tekst2)" stroke-width="2"/></pattern></defs>';
+        ticks.forEach((v) => { s += `<line x1="${L}" x2="${w}" y1="${yy(v)}" y2="${yy(v)}" stroke="var(--siatka)"/><text x="${L - 6}" y="${yy(v) + 4}" text-anchor="end">${fmt(v)}</text>`; });
         // etykiety osi X: na wąskim ekranie skracamy (2021 -> ’21, 2016-12 -> ’16-12) i pokazujemy co k-tą, żeby się nie nakładały
         const krotko = grupa < 34;
         const et2 = (et) => (krotko && /^\d{4}(-\d{2})?$/.test(String(et)) ? "’" + String(et).slice(2) : String(et));
@@ -57,7 +57,7 @@
         const y = skala(ticks[0], ticks[ticks.length - 1], wys - B - T, 0), yy = (v) => T + y(v);
         const x = (i) => L + (w - L - 8) * i / Math.max(1, wart.length - 1);
         let s = `<svg viewBox="0 0 ${w} ${wys}" width="100%" height="${wys}" xmlns="${NS}">`;
-        ticks.forEach((v) => { s += `<line x1="${L}" x2="${w}" y1="${yy(v)}" y2="${yy(v)}" stroke="#e5e7eb"/><text x="${L - 6}" y="${yy(v) + 4}" text-anchor="end">${fmt(v)}</text>`; });
+        ticks.forEach((v) => { s += `<line x1="${L}" x2="${w}" y1="${yy(v)}" y2="${yy(v)}" stroke="var(--siatka)"/><text x="${L - 6}" y="${yy(v) + 4}" text-anchor="end">${fmt(v)}</text>`; });
         const kol = wart[wart.length - 1] >= wart[0] ? "#10b981" : "#ef4444";
         s += `<polyline fill="none" stroke="${kol}" stroke-width="2" points="${wart.map((v, i) => `${x(i)},${yy(v)}`).join(" ")}"/>`;
         const co = Math.ceil(daty.length / 8);

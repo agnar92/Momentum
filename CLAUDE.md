@@ -73,6 +73,9 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   (3 columns), strategy checklists, valuation tabs PEG (EPS and growth editable, chips) / DCF (growth chips 1Y / 3Y / 5Y / EPS forecast, 5 / 7 / 10 years,
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
+- Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
+  `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
+  every page head applies it before paint). New colors: use variables (`--tlo2`, `--pole`, `--siatka`, `--czerwony-t` …), not hard-coded light hex.
 
 ## CI (`.github/workflows/`)
 

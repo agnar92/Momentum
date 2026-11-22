@@ -247,6 +247,19 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
+    // motyw ciemny / jasny: przycisk w nagłówku, wybór w localStorage `fundamenta_motyw` (bez wyboru — wg systemu)
+    if (typeof document !== "undefined") {
+        const KM = "fundamenta_motyw", root = document.documentElement;
+        const ciemny = () => root.dataset.motyw ? root.dataset.motyw === "ciemny" : !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        const przycisk = () => {
+            const w = document.querySelector(".gora .w"); if (!w || document.getElementById("motyw")) return;
+            const b = document.createElement("button"); b.id = "motyw"; b.className = "motyw"; b.type = "button";
+            const ustaw = () => { b.textContent = ciemny() ? "☀" : "🌙"; b.title = ciemny() ? "Motyw jasny" : "Motyw ciemny"; };
+            b.addEventListener("click", () => { root.dataset.motyw = ciemny() ? "jasny" : "ciemny"; try { localStorage.setItem(KM, root.dataset.motyw); } catch (e) { /* tryb prywatny */ } ustaw(); });
+            ustaw(); w.appendChild(b);
+        };
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
+    }
     const W = { dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;

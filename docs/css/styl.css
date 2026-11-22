@@ -3,6 +3,31 @@
   --ciemne: #101826; --ciemne2: #182235; --ciemny-tekst: #e9edf5; --ciemny-tekst2: #9aa6bd;
   --zielony: #16a34a; --zielony-tlo: #dcfce7; --zolty: #b45309; --zolty-tlo: #fef3c7; --czerwony: #dc2626; --czerwony-tlo: #fee2e2;
   --niebieski: #2a78d6; --pomarancz: #eb6834; --akcent: #10b981;
+  --tlo2: #f8fafc; --hover: #f8fafc; --pole: #ffffff; --siatka: #e5e7eb; --pas: #e5e7eb;
+  --ost-tlo: #fffbeb; --ost-ramka: #fcd34d; --ost-tekst: #92400e; --czerwony-t: #b91c1c; --zielony-t: #15803d; --brazowy-t: #92400e;
+  --k-wzrost: #ecfdf5; --k-sila: #eff6ff; --k-wycena: #fffbeb; --sekcja: #f1f5f9;
+  color-scheme: light;
+}
+/* motyw ciemny: przełącznik w nagłówku (localStorage fundamenta_motyw), domyślnie wg ustawień systemu */
+:root[data-motyw="ciemny"] {
+  --tlo: #0b1220; --karta: #111a2b; --tekst: #e6ebf4; --tekst2: #98a3b8; --linia: #24304a;
+  --ciemne: #0a1020; --ciemne2: #16213a;
+  --zielony: #34d399; --zielony-tlo: #0f3d2c; --zolty: #fbbf24; --zolty-tlo: #3d2f0c; --czerwony: #f87171; --czerwony-tlo: #451a1a;
+  --tlo2: #0e1626; --hover: #16213a; --pole: #0e1626; --siatka: #24304a; --pas: #24304a;
+  --ost-tlo: #2b2210; --ost-ramka: #6b5414; --ost-tekst: #fcd34d; --czerwony-t: #fca5a5; --zielony-t: #6ee7b7; --brazowy-t: #fcd34d;
+  --k-wzrost: #0f2a22; --k-sila: #0f1f3a; --k-wycena: #2a220e; --sekcja: #16213a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-motyw="jasny"]) {
+    --tlo: #0b1220; --karta: #111a2b; --tekst: #e6ebf4; --tekst2: #98a3b8; --linia: #24304a;
+    --ciemne: #0a1020; --ciemne2: #16213a;
+    --zielony: #34d399; --zielony-tlo: #0f3d2c; --zolty: #fbbf24; --zolty-tlo: #3d2f0c; --czerwony: #f87171; --czerwony-tlo: #451a1a;
+    --tlo2: #0e1626; --hover: #16213a; --pole: #0e1626; --siatka: #24304a; --pas: #24304a;
+    --ost-tlo: #2b2210; --ost-ramka: #6b5414; --ost-tekst: #fcd34d; --czerwony-t: #fca5a5; --zielony-t: #6ee7b7; --brazowy-t: #fcd34d;
+    --k-wzrost: #0f2a22; --k-sila: #0f1f3a; --k-wycena: #2a220e; --sekcja: #16213a;
+    color-scheme: dark;
+  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--tlo); color: var(--tekst); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
@@ -14,7 +39,7 @@ a { color: inherit; }
 .gora nav a { color: var(--tekst2); text-decoration: none; margin-right: 14px; font-weight: 600; }
 .gora nav a.akt { color: var(--tekst); }
 .szukaj { margin-left: auto; position: relative; }
-.szukaj input { width: 260px; max-width: 70vw; padding: 8px 12px; border: 1px solid var(--linia); border-radius: 10px; font: inherit; }
+.szukaj input { width: 260px; max-width: 70vw; padding: 8px 12px; border: 1px solid var(--linia); border-radius: 10px; font: inherit; background: var(--pole); color: var(--tekst); }
 .main { max-width: 1320px; margin: 0 auto; padding: 16px; }
 .karta { background: var(--karta); border: 1px solid var(--linia); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
 .karta h2 { margin: 0 0 2px; font-size: 20px; }
@@ -22,15 +47,15 @@ a { color: inherit; }
 .mut { color: var(--tekst2); }
 .male { font-size: 12px; }
 .narzedzia { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-select, .narzedzia input[type=text], input[type=number] { padding: 7px 10px; border: 1px solid var(--linia); border-radius: 9px; font: inherit; background: #fff; }
-button, .przycisk { padding: 7px 12px; border: 1px solid var(--linia); border-radius: 9px; background: #fff; font: inherit; cursor: pointer; }
-button.akt, .przycisk.akt { background: var(--tekst); color: #fff; border-color: var(--tekst); }
+select, .narzedzia input[type=text], input[type=number] { padding: 7px 10px; border: 1px solid var(--linia); border-radius: 9px; font: inherit; background: var(--pole); color: var(--tekst); }
+button, .przycisk { padding: 7px 12px; border: 1px solid var(--linia); border-radius: 9px; background: var(--pole); color: var(--tekst); font: inherit; cursor: pointer; }
+button.akt, .przycisk.akt { background: var(--tekst); color: var(--karta); border-color: var(--tekst); }
 .tabela-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 9px 8px; border-bottom: 1px solid var(--linia); text-align: left; white-space: nowrap; }
 th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--tekst2); cursor: pointer; user-select: none; }
 th.n, td.n { text-align: right; }
-tbody tr:hover { background: #f8fafc; cursor: pointer; }
+tbody tr:hover { background: var(--hover); cursor: pointer; }
 .firma b { display: block; }
 .firma small { color: var(--tekst2); }
 .ocena { display: inline-block; min-width: 42px; text-align: center; padding: 4px 8px; border-radius: 8px; font-weight: 700; }
@@ -59,17 +84,17 @@ tbody tr:hover { background: #f8fafc; cursor: pointer; }
 .dopas { height: 8px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin: 6px 0; }
 .dopas i { display: block; height: 100%; background: linear-gradient(90deg, #22d3ee, #10b981); }
 .liczby { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.liczby div { background: #f8fafc; border: 1px solid var(--linia); border-radius: 10px; padding: 8px 10px; }
+.liczby div { background: var(--tlo2); border: 1px solid var(--linia); border-radius: 10px; padding: 8px 10px; }
 .liczby small { display: block; color: var(--tekst2); font-size: 11px; text-transform: uppercase; }
 .liczby b { font-size: 17px; }
 .wynik-glowny { display: flex; justify-content: space-between; align-items: center; background: var(--ciemne); color: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
 .wynik-glowny .ocena { font-size: 24px; padding: 6px 14px; }
 .wiersz-oceny { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--linia); }
 .metryki .naglowek-kol { display: flex; gap: 8px; align-items: center; font-weight: 700; font-size: 15px; padding: 10px; border-radius: 10px 10px 0 0; }
-.k-wzrost .naglowek-kol { background: #ecfdf5; } .k-sila .naglowek-kol { background: #eff6ff; } .k-wycena .naglowek-kol { background: #fffbeb; }
+.k-wzrost .naglowek-kol { background: var(--k-wzrost); } .k-sila .naglowek-kol { background: var(--k-sila); } .k-wycena .naglowek-kol { background: var(--k-wycena); }
 .metryki .kol { border: 1px solid var(--linia); border-radius: 10px; }
 .metryki .wiersz { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--linia); font-size: 13px; }
-.b-dobrze { color: #15803d; font-weight: 600; } .dobrze { color: #16a34a; } .srednio { color: #b45309; } .slabo { color: #ea580c; } .b-slabo { color: #dc2626; font-weight: 600; }
+.b-dobrze { color: var(--zielony-t); font-weight: 600; } .dobrze { color: #16a34a; } .srednio { color: #b45309; } .slabo { color: #ea580c; } .b-slabo { color: #dc2626; font-weight: 600; }
 .kryt { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--linia); font-size: 13px; }
 .kryt .tak { color: var(--zielony); font-weight: 700; } .kryt .nie { color: var(--czerwony); font-weight: 700; }
 .zakladki { display: flex; gap: 6px; }
@@ -113,16 +138,16 @@ svg text { font: 11px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(-
 .sklad { padding: 8px 10px; border-top: 1px solid var(--linia); font-size: 12px; }
 .sklad summary { cursor: pointer; color: var(--tekst2); font-weight: 600; }
 .pkt { display: grid; grid-template-columns: 1fr 90px 34px; gap: 8px; align-items: center; padding: 3px 0; }
-.pkt .pas { height: 7px; border-radius: 99px; background: #e5e7eb; overflow: hidden; }
+.pkt .pas { height: 7px; border-radius: 99px; background: var(--pas); overflow: hidden; }
 .pkt .pas i { display: block; height: 100%; background: var(--akcent); }
 .pkt.nie-liczy { color: var(--tekst2); }
 .porownanie td, .porownanie th { white-space: normal; }
-.porownanie td.naj { background: #dcfce7; font-weight: 700; }
-.porownanie .sekcja td { background: #f1f5f9; font-weight: 700; }
+.porownanie td.naj { background: var(--zielony-tlo); font-weight: 700; }
+.porownanie .sekcja td { background: var(--sekcja); font-weight: 700; }
 .tag { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--linia); border-radius: 999px; padding: 3px 10px; margin: 2px; }
 .tag button { border: 0; padding: 0 2px; background: none; }
 
-.objasnienie { background: #f8fafc; border: 1px solid var(--linia); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+.objasnienie { background: var(--tlo2); border: 1px solid var(--linia); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
 .objasnienie summary { cursor: pointer; }
 td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 /* lista na telefonie: wiersz jako karta — nazwa, ocena ogólna i trzy oceny kategorii widoczne bez przewijania */
@@ -139,7 +164,7 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 }
 
 .uwaga { color: #d97706; font-weight: 700; cursor: help; }
-.ostrzezenie { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; }
+.ostrzezenie { background: var(--ost-tlo); border: 1px solid var(--ost-ramka); color: var(--ost-tekst); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-bottom: 10px; }
 
 /* własne dane użytkownika */
 .wlasne { margin: 0 0 12px; padding: 10px 12px; border: 1px dashed var(--linia, #ccd); border-radius: 10px; }
@@ -168,3 +193,21 @@ td.ogolna .ocena { font-size: 16px; min-width: 52px; }
 .przewin { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .przewin td input { padding: 4px 6px; font-size: 13px; }
 td.zawin { white-space: normal; min-width: 180px; }
+/* motyw ciemny: pigułki i oceny ciemniejsze, przełącznik */
+.motyw { margin-left: 8px; padding: 6px 10px; font-size: 15px; line-height: 1; }
+:root[data-motyw="ciemny"] .o-swietna, :root[data-motyw="ciemny"] .p-bardzo-tania { background: #14532d; color: #bbf7d0; }
+:root[data-motyw="ciemny"] .o-dobra, :root[data-motyw="ciemny"] .p-niedowartosciowana, :root[data-motyw="ciemny"] .jakosc { background: #0f3d2c; color: #86efac; }
+:root[data-motyw="ciemny"] .o-srednia, :root[data-motyw="ciemny"] .p-wyceniona-uczciwie { background: #3d2f0c; color: #fcd34d; }
+:root[data-motyw="ciemny"] .p-droga { background: #431c0a; color: #fdba74; }
+:root[data-motyw="ciemny"] .o-slaba, :root[data-motyw="ciemny"] .p-bardzo-droga, :root[data-motyw="ciemny"] .blad { background: #451a1a; color: #fca5a5; }
+:root[data-motyw="ciemny"] .jakosc.duzy-z { background: #1e1b4b; color: #c7d2fe; }
+:root[data-motyw="ciemny"] .wynik-glowny { background: #060b16; border: 1px solid var(--linia); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-motyw="jasny"]) .o-swietna, :root:not([data-motyw="jasny"]) .p-bardzo-tania { background: #14532d; color: #bbf7d0; }
+  :root:not([data-motyw="jasny"]) .o-dobra, :root:not([data-motyw="jasny"]) .p-niedowartosciowana, :root:not([data-motyw="jasny"]) .jakosc { background: #0f3d2c; color: #86efac; }
+  :root:not([data-motyw="jasny"]) .o-srednia, :root:not([data-motyw="jasny"]) .p-wyceniona-uczciwie { background: #3d2f0c; color: #fcd34d; }
+  :root:not([data-motyw="jasny"]) .p-droga { background: #431c0a; color: #fdba74; }
+  :root:not([data-motyw="jasny"]) .o-slaba, :root:not([data-motyw="jasny"]) .p-bardzo-droga, :root:not([data-motyw="jasny"]) .blad { background: #451a1a; color: #fca5a5; }
+  :root:not([data-motyw="jasny"]) .jakosc.duzy-z { background: #1e1b4b; color: #c7d2fe; }
+  :root:not([data-motyw="jasny"]) .wynik-glowny { background: #060b16; border: 1px solid var(--linia); }
+}
