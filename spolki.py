@@ -109,7 +109,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4, mapa=None):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 6 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 7 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -226,10 +226,12 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
             r["m"]["od_maks_12m"] = c[1][-1] / max(c[1][-52:]) - 1
         r["m"]["pe_gorna_tercyla"] = bool(pe67 and r["m"].get("pe") and r["m"]["pe"] >= pe67)
     for r in rows:
+        r["m"]["pe_med5"] = ocena.pe_mediana(r["hist"], r["ceny"], r["m"].get("shares"))
         r["typy"] = ocena.typy(r["m"], r["sector"])
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
+        r["lynch"] = ocena.lynch(r["m"], r["typy"][0][0] if r["typy"] else None, r.get("zdarzenia"))
         r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"]) + zdarzenia.ostrzezenia(r["zdarzenia"])
     return rows
 
@@ -258,7 +260,7 @@ def zapisz(rows, out=OUT, today=None, usdpln=None):
                           roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None,
                           zd=sum(1 for z in r["zdarzenia"] or [] if z["poz"] == 2) or None, om=r["m"].get("od_maks_12m"),
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia")}
+        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF

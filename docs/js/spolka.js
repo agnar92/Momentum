@@ -335,6 +335,41 @@
           <div><div class="mut male" style="margin-bottom:4px">Zdarzenia z raportów bieżących SEC (8-K) · <span style="color:${kol[2]}">● poważne</span> <span style="color:${kol[1]}">● istotne</span> <span style="color:${kol[0]}">● informacyjne</span></div>${lz}</div></div>`;
     }
 
+    // --- Peter Lynch („One Up on Wall Street”): typ, faza wzrostu i kiedy sprzedać — opis metody + lista kontrolna z danych ---
+    const LYNCH = {
+        "Szybko rosnąca": ["Małe lub średnie, agresywne firmy rosnące 20–25 % rocznie. Na nich da się najwięcej zarobić — i stracić. Przechodzą fazy: start (ryzykowny), szybka ekspansja (najbezpieczniej i najwięcej zysku), dojrzewanie (rynek się nasyca, wzrost hamuje).",
+            "Trzymaj, dopóki firma rośnie i ma gdzie się rozwijać (nowe rynki, produkty). Sprzedaj, gdy kończy się szybka ekspansja: sprzedaż hamuje kolejne kwartały, P/E jest absurdalnie wysokie względem wzrostu, odchodzą kluczowi ludzie, a spółkę polecają już wszyscy."],
+        "Stabilnie rosnąca": ["Duże, znane firmy rosnące ok. 10–12 % rocznie. Nie dadzą dziesięciokrotności, ale chronią w recesji.",
+            "Kupuj przy rozsądnym P/E, licz na 30–50 % zysku, potem sprzedaj i zamień na inną stabilną spółkę, która jeszcze nie wzrosła. Sprzedaj wcześniej, gdy P/E odbiega wysoko od jej normalnego poziomu albo wzrost wyraźnie zwalnia."],
+        "Wolno rosnąca": ["Duże, stare firmy rosnące 2–4 % rocznie, w tempie gospodarki; kupuje się je głównie dla dywidendy.",
+            "Sprzedaj po 30–50 % zysku albo gdy fundamenty się psują: firma traci rynek 2 lata z rzędu, nie ma nowych produktów, przepłaca za przejęcia („diworsyfikacja”), dywidenda przestaje być pokryta zyskiem lub zostaje obcięta."],
+        "Cykliczna": ["Zyski rosną i spadają razem z gospodarką (auta, linie lotnicze, stal, chemia, budownictwo). Najważniejsze jest rozpoznanie, w którym miejscu cyklu jest firma.",
+            "Kupuj pod koniec recesji, gdy zyski są niskie. Sprzedaj pod koniec cyklu: zapasy rosną, ceny spadają, firma buduje nowe moce, popyt słabnie. Niskie P/E przy rekordowych zyskach to pułapka, nie okazja."],
+        "Wychodząca z kłopotów": ["Firmy pobite i w kłopotach, czasem na granicy upadłości. Odbicie bywa szybkie i duże, a nie zależy od rynku.",
+            "Najważniejsze: czy firma przetrwa (gotówka, dług) i czy plan naprawy działa. Sprzedaj, gdy naprawa się dokonała i wszyscy to wiedzą — wtedy to już spółka innego typu. Ostrzeżenia: dług rośnie kwartał po kwartale, zapasy rosną szybciej niż sprzedaż."],
+        "Ukryte aktywa": ["Firma ma coś wartościowego, czego rynek nie zauważa: gotówkę, nieruchomości, patenty, udziały w innych firmach.",
+            "Czekaj, aż rynek doceni aktywa. Sprzedaj, gdy cena już je odzwierciedla albo zarząd zaczyna je przepalać: emituje akcje, przepłaca za przejęcia."],
+    };
+    function lynch() {
+        const el = $("lynch"), L = K.lynch, typ = K.typy && K.typy[0] && K.typy[0][0];
+        if (!typ || !LYNCH[typ]) { el.hidden = true; return; }
+        const ikona = (s) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut">–</span>');
+        const wsk = L && W.ok(L.wskaznik) ? L.wskaznik : null;
+        const ocWsk = wsk === null ? "" : wsk >= 2 ? "bardzo dobrze" : wsk >= 1.5 ? "przyzwoicie" : wsk >= 1 ? "słabo" : "drogo";
+        const lista = (L && L.lista) || [];
+        const ost = lista.filter((x) => x[2] === false).length;
+        el.innerHTML = `<h2>Peter Lynch: typ, faza i kiedy sprzedać</h2><div class="pod">Metoda z książki „One Up on Wall Street” (P. Lynch, 1989). Typ: <b>${esc(typ)}</b>${L && L.faza ? ` · faza: <b>${esc(L.faza[0])}</b> <span class="mut">(${esc(L.faza[1])})</span>` : ""}.</div>
+          <div class="siatka2"><div class="male">
+            <p style="margin:0 0 8px"><b>Czym jest:</b> ${esc(LYNCH[typ][0])}</p>
+            <p style="margin:0 0 8px"><b>Kiedy sprzedać (Lynch):</b> ${esc(LYNCH[typ][1])}</p>
+            <p style="margin:0" class="mut">Wskaźnik Lyncha z dywidendą = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze.
+              ${wsk !== null ? ` Tutaj: <b>${W.fmtNum(wsk)}</b> — ${ocWsk}.` : ""}</p></div>
+          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} sygnał(y) ostrzegawcze</b>` : ""}</div>
+            ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="zd-w" style="grid-template-columns:22px 1fr auto"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut" style="text-align:right">${esc(w)}</span></div>`).join("")}</div>`
+              : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>`;
+    }
+
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
         el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">Z raportów SEC (pierwsza publikacja, bez późniejszych korekt).</div></div>
@@ -372,6 +407,6 @@
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); sprawozdania("q");
+        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania("q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
 })();

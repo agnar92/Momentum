@@ -44,6 +44,12 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    **8-K events** (`momentum/zdarzenia.py`, `spolki.sec_zdarzenia`: data.sec.gov/submissions, cache `<T>.zd.json` 2 days): last 12 months, Polish item
    descriptions, level 2 (1.03, 1.05, 2.04, 4.01, 4.02, NT 10-K/Q → ❗ warning, `zd` count in lista) / 1 (3.01 — often a voluntary exchange move, 5.02, 2.06, 2.05, 1.02, 5.01, 3.03, 10-K/A)
    / 0; routine 2.02 / 7.01 / 9.01 / 5.07 skipped; card section `#zysk-zd` „Jakość zysku i zdarzenia”, PEG panel EPS chips GAAP / normalized.
+   **Peter Lynch** (user: „sprawdź jego metodę … fazy, reguły sprzedaży, jak rozpoznać typy”): `ocena.faza` (fast growers: Szybka ekspansja / Dojrzewanie),
+   `ocena.lynch(m, typ, zd)` → card `lynch` {faza, lista [(check, value, True/False/None)], wskaznik = (EPS growth % + yield %) ÷ P/E} with per-type sell
+   checks from „One Up on Wall Street” ch. 17 (quarterly revenue y/y slowing 3 quarters `rev_q_yoy3`, PEG < 2, inventories vs sales `zapasy_1y` /
+   `zapasy_przych` — SEC InventoryNet / IFRS Inventories, cache v7 —, P/E vs own 5-year median `pe_mediana` → `pe_med5` (computed in `buduj` from weekly
+   prices × current shares ÷ TTM NI), dividend cut / payout, capex ramp, debt rising 5 quarters `dlug_rosnie_kw`, share dilution); static Lynch texts in
+   spolka.js `LYNCH`, card section `#lynch`. Thresholds Lynch did not give (1.3× P/E, 10 pp, 60 %) are ours.
    `spadek_2l` = revenue or net income TTM y/y < 0 now and a year ago (user's sell rule; stage 77: −4 pp over 5 years) → ⬇ on list and warning on card.
 Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, sila, wycena, ogolna}, typ, peg, pe, dcf_pot, et, st{strategy: [passed,
 total]}, zw, …) and `docs/data/spolki/<T>.json` (card: m, pct, oceny, typy, strategie, peg, dcf, hist{q: [end, rev, ni, fcf, cash, debt] last 40

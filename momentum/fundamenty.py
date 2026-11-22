@@ -38,6 +38,7 @@ CHWILE = {
     "lease": ["OperatingLeaseLiability"],
     "lease_nc": ["OperatingLeaseLiabilityNoncurrent"],
     "lease_c": ["OperatingLeaseLiabilityCurrent"],
+    "zapasy": ["InventoryNet"],                        # Lynch: zapasy rosnące szybciej niż sprzedaż = ostrzeżenie
 }
 # emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
 TAGI_IFRS = {
@@ -62,6 +63,7 @@ CHWILE_IFRS = {
     "assets": ["Assets"],
     "lc": ["CurrentLiabilities"],
     "lease": ["LeaseLiabilities"],
+    "zapasy": ["Inventories"],
 }
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
@@ -173,7 +175,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 6
+    out["v"] = 7
     return out
 
 
