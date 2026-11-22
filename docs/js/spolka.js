@@ -353,21 +353,23 @@
     function lynch() {
         const el = $("lynch"), L = K.lynch, typ = K.typy && K.typy[0] && K.typy[0][0];
         if (!typ || !LYNCH[typ]) { el.hidden = true; return; }
-        const ikona = (s) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut">–</span>');
+        // etap 92: ⚠ tylko dla sygnałów potwierdzonych w teście; niepotwierdzone i nietestowane — szare ○
+        const ikona = (s, st) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? (st === "potwierdzony" ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut" title="sygnał Lyncha niepotwierdzony w naszym teście">○</span>') : '<span class="mut">–</span>');
+        const stTxt = { potwierdzony: "potwierdzony w teście", niepotwierdzony: "niepotwierdzony w teście", nietestowany: "nietestowany" };
         const wsk = L && W.ok(L.wskaznik) ? L.wskaznik : null;
         const ocWsk = wsk === null ? "" : wsk >= 2 ? "bardzo dobrze" : wsk >= 1.5 ? "przyzwoicie" : wsk >= 1 ? "słabo" : "drogo";
         const lista = (L && L.lista) || [];
-        const ost = lista.filter((x) => x[2] === false).length;
+        const ost = lista.filter((x) => x[2] === false && x[3] === "potwierdzony").length, inne = lista.filter((x) => x[2] === false && x[3] !== "potwierdzony").length;
         el.innerHTML = `<h2>Peter Lynch: typ, faza i kiedy sprzedać</h2><div class="pod">Metoda z książki „One Up on Wall Street” (P. Lynch, 1989). Typ: <b>${esc(typ)}</b>${L && L.faza ? ` · faza: <b>${esc(L.faza[0])}</b> <span class="mut">(${esc(L.faza[1])})</span>` : ""}.</div>
           <div class="siatka2"><div class="male">
             <p style="margin:0 0 8px"><b>Czym jest:</b> ${esc(LYNCH[typ][0])}</p>
             <p style="margin:0 0 8px"><b>Kiedy sprzedać (Lynch):</b> ${esc(LYNCH[typ][1])}</p>
             <p style="margin:0" class="mut">Wskaźnik Lyncha z dywidendą = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze.
               ${wsk !== null ? ` Tutaj: <b>${W.fmtNum(wsk)}</b> — ${ocWsk}.` : ""}</p></div>
-          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} sygnał(y) ostrzegawcze</b>` : ""}</div>
-            ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="ly-w"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
+          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} potwierdzony sygnał ostrzegawczy</b>` : ""}${inne ? ` · ${inne} sygnał(y) Lyncha niepotwierdzone w teście` : ""}</div>
+            ${lista.length ? `<div class="jz">${lista.map(([co, w, s, st]) => `<div class="ly-w"><span>${ikona(s, st)}</span><span>${esc(co)}<br><span class="mut" style="font-size:11px">${esc(stTxt[st] || "")}</span></span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
               : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
-            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>`;
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Z 12 sprawdzonych sygnałów potwierdził się tylko jeden: u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata).</p></div></div>`;
     }
 
     function sprawozdania(tryb) {

@@ -624,7 +624,26 @@ def lynch(m, typ, zd=None):
         lista.append(("Zmiany w zarządzie w 12 mies. (8-K 5.02) — sprawdź, czy nie odchodzą kluczowi ludzie", f"{zmiany} raport(y)", None))
     g = m.get("eps_next5")
     wsk = (100 * g + 100 * (m.get("div") or 0)) / pe if g and pe and pe > 0 else None
+    # wynik etapu 92 (research/wyniki/r117_etap92.md): ⚠ tylko dla sygnałów potwierdzonych w teście; reszta = „niepotwierdzony” / „nietestowany”
+    lista = [(co, w, s, TEST_LYNCH.get((typ, co), "nietestowany")) for co, w, s in lista]
     return dict(faza=faza(m) if typ == "Szybko rosnąca" else None, lista=lista, wskaznik=wsk)
+
+
+_NP = "niepotwierdzony"
+TEST_LYNCH = {
+    ("Szybko rosnąca", "Faza szybkiej ekspansji trwa"): _NP,
+    ("Szybko rosnąca", "Sprzedaż nie hamuje 2 kwartały z rzędu"): _NP,
+    ("Szybko rosnąca", "P/E nie jest absurdalnie wysokie względem wzrostu (PEG < 2)"): _NP,
+    ("Szybko rosnąca", "Zapasy nie rosną szybciej niż sprzedaż"): _NP,
+    ("Stabilnie rosnąca", "P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"): _NP,
+    ("Stabilnie rosnąca", "Wzrost przychodów nie hamuje (ostatni rok ≥ średnia 5 lat − 5 pp)"): _NP,
+    ("Stabilnie rosnąca", "Fundamenty nie słabną 2 lata z rzędu"): _NP,
+    ("Wolno rosnąca", "Sprzedaż nie spada 2 lata z rzędu (utrata rynku)"): "potwierdzony",
+    ("Cykliczna", "Zapasy nie rosną szybciej niż sprzedaż (koniec cyklu)"): _NP,
+    ("Cykliczna", "Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)"): _NP,
+    ("Cykliczna", "Sprzedaż w ostatnim kwartale rośnie r/r"): _NP,
+    ("Cykliczna", "Niskie P/E nie przy zysku na szczycie (zysk +50 % r/r i P/E w dolnej połowie)"): _NP,
+}
 
 
 # --- strategie z badania -----------------------------------------------------------------------------------------

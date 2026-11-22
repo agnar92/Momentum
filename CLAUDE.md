@@ -49,7 +49,10 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    checks from „One Up on Wall Street” ch. 17 (quarterly revenue y/y slowing 3 quarters `rev_q_yoy3`, PEG < 2, inventories vs sales `zapasy_1y` /
    `zapasy_przych` — SEC InventoryNet / IFRS Inventories, cache v7 —, P/E vs own 5-year median `pe_mediana` → `pe_med5` (computed in `buduj` from weekly
    prices × current shares ÷ TTM NI), dividend cut / payout, capex ramp, debt rising 5 quarters `dlug_rosnie_kw`, share dilution); static Lynch texts in
-   spolka.js `LYNCH`, card section `#lynch`. Thresholds Lynch did not give (1.3× P/E, 10 pp, 60 %) are ours.
+   spolka.js `LYNCH`, card section `#lynch`. Thresholds Lynch did not give (1.3× P/E, 10 pp, 60 %) are ours. Added first WITHOUT a backtest (user
+   rightly objected: „czemu dodałeś to bez backtestu?” — always test before putting a rule on the site); stage 92 (r117) then tested 12 signals: only ⬇ for
+   slow growers confirmed (−10.9 pp / 36 m), so `TEST_LYNCH` marks each check potwierdzony / niepotwierdzony / nietestowany and the card shows ⚠ only for
+   confirmed ones, grey ○ otherwise.
    `spadek_2l` = revenue or net income TTM y/y < 0 now and a year ago (user's sell rule; stage 77: −4 pp over 5 years) → ⬇ on list and warning on card.
 Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, sila, wycena, ogolna}, typ, peg, pe, dcf_pot, et, st{strategy: [passed,
 total]}, zw, …) and `docs/data/spolki/<T>.json` (card: m, pct, oceny, typy, strategie, peg, dcf, hist{q: [end, rev, ni, fcf, cash, debt] last 40
@@ -107,4 +110,4 @@ session's `/home/user/ndx` (not in the repo). Key results behind the site: stage
 screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE), 89 (position building: DCA + × 2 after a ≥ 15 % drop; PEG tilt
 and waiting for cheap prices not better; lump sum beat 12 tranches 5/7), 90 (std-dev channel from a video: 89 % of trades profitable but only
 +0.7 pp vs SPY over 12 months — buys in market-wide crashes; portfolio 5.4 %/yr vs SPY 14.5 %, mostly in cash), 91 (same on monthly closes, 12 variants: none beats SPY in both halves with idle
-cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %).
+cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers).

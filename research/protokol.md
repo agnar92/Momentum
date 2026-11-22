@@ -1312,3 +1312,11 @@ w tym samym starcie; różnica median (⚠ − ✓) w danym typie, bootstrap blo
 ostrzeżenie, jeśli różnica dla 36 mies. jest ujemna, a górna granica przedziału < 0 (albo tak samo dla 12 mies. przy 36 mies. ≤ 0); w przeciwnym razie na stronie
 oznaczamy go „niepotwierdzony w teście” (szary, nie ⚠). Hipoteza: większość sygnałów nie rozstrzyga (szerokie przedziały), potwierdzą się ⬇ (etap 77) i ewentualnie
 P/E wysoko ponad własną normą u stabilnych.
+
+Wynik etapu 92 (2026-11-22). Różnica median nadwyżki (⚠ − ✓), 36 mies. [95 % przedział]: szybko rosnące — dojrzewanie +4,5 [−19,8; +33,0], hamowanie sprzedaży
+kwartalnej −8,9 [−31,2; +10,1], PEG ≥ 2 +8,1 [−26,0; +64,2], zapasy +22,5 [−33,4; +68,1]; stabilnie rosnące — P/E > 1,3 × własna mediana +6,9 [−24,6; +22,9],
+wzrost hamuje +2,1 [−15,6; +20,8], ⬇ −0,9 [−34,3; +31,7]; wolno rosnące ⬇ −10,9 [−21,3; −1,9] (12 mies. +0,3) — jedyny potwierdzony; cykliczne — zapasy +11,1
+[−12,3; +28,3], rampa capex (4 przypadki), sprzedaż kwartalna < 0 −11,4 [−31,9; +5,6], „pułapka” +0,8 [−12,9; +21,4]. Łącznie (co najmniej jeden sygnał vs żaden):
+szybko +3,3, stabilne +0,1, cykliczne −3,6 pp (wszystkie przedziały obejmują 0). Hipoteza (większość nie rozstrzyga, potwierdzi się ⬇) — tak, ale ⬇ tylko u wolno
+rosnących; P/E ponad własną normą u stabilnych — nie. Strona: ⚠ tylko dla potwierdzonego sygnału, pozostałe szare ○ „niepotwierdzony w teście”, sygnały bez historii
+— „nietestowany”.

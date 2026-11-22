@@ -191,12 +191,14 @@ def test_lynch_fazy_i_sygnaly():
     m = dict(rev_1y=0.30, rev_cagr3=0.25, rev_cagr5=0.25, przysp=0.01, rev_q_yoy3=[0.35, 0.30, 0.25], peg=2.5, zapasy_1y=0.50, zapasy_przych=0.10, dlug_rosnie_kw=5)
     assert O.faza(m)[0] == "Szybka ekspansja"
     lis = O.lynch(m, "Szybko rosnąca")["lista"]
-    stany = {k: s for k, _, s in lis}
+    stany = {k: s for k, _, s, _ in lis}
     assert stany["Sprzedaż nie hamuje 2 kwartały z rzędu"] is False and stany["P/E nie jest absurdalnie wysokie względem wzrostu (PEG < 2)"] is False
     assert stany["Zapasy nie rosną szybciej niż sprzedaż"] is False and stany["Dług nie rośnie 5 kwartałów z rzędu"] is False
     assert O.faza(dict(rev_1y=0.05, rev_cagr3=0.15, rev_cagr5=0.25))[0] == "Dojrzewanie"
     s = dict(pe=30.0, pe_med5=20.0, rev_1y=0.08, rev_cagr5=0.10)
-    assert {k: v for k, _, v in O.lynch(s, "Stabilnie rosnąca")["lista"]}["P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"] is False
+    assert {k: v for k, _, v, _ in O.lynch(s, "Stabilnie rosnąca")["lista"]}["P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"] is False
+    assert all(st == "niepotwierdzony" for *_, st in lis[:4]) and lis[-1][3] == "nietestowany"
+    assert O.lynch(dict(spadek_2l=["przychody"]), "Wolno rosnąca")["lista"][2][3] == "potwierdzony"
     assert abs(O.lynch(dict(eps_next5=0.15, div=0.02, pe=17.0), "Wolno rosnąca")["wskaznik"] - 1.0) < 1e-9
     h = dict(q=[[f"2025-{mm:02d}-28", 0, 10, 0, 0, 0] for mm in range(1, 13)])
     assert abs(O.pe_mediana(h, (["2024-01-01"], [100.0]), 4) - 10.0) < 1e-9    # 100 × 4 ÷ 40
