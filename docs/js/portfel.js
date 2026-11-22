@@ -39,30 +39,31 @@
         sugestie(); typyPf();
     }
 
-    // skład portfela wg typów Lyncha (informacyjnie): udział w wartości akcji, podział Lyncha (10 spółek), wynik typu w etapie 86
-    // skład portfela wg typów Lyncha: Twój cel (domyślnie 60 / 20 / 10 — użytkownik: „więcej stabilnych, mniej wychodzących z kłopotów i szybko rosnących”),
+    // skład portfela wg typów Lyncha — LICZBA SPÓŁEK (użytkownik: „mówiłem o ilości spółek w portfelu i procentowym udziale jednej spółki”):
+    // jedna spółka = najwyżej 10 % konta → 10 miejsc; cel domyślnie 6 stabilnie / 2 szybko / 1 wolno rosnąca (60 / 20 / 10 %), edytowalny;
     // obok podział Lyncha (10 spółek) i wynik typu w etapie 86; tylko informacja — reguły dokupu bez zmian
-    const TYPY_PF = [["Stabilnie rosnąca", 60, 20, "+83 %"], ["Szybko rosnąca", 20, 40, "+56 %"], ["Wolno rosnąca", 10, 0, "+63 %"],
-        ["Cykliczna", 0, 0, "+78 %"], ["Wychodząca z kłopotów", 0, 40, "+58 %"], ["Ukryte aktywa", 0, 0, "–"]];
-    const celTypu = (t, dom) => (S.celTypy && W.ok(S.celTypy[t]) ? S.celTypy[t] : dom);
+    const MIEJSC = Math.round(1 / W.DOKUP.limit);
+    const TYPY_PF = [["Stabilnie rosnąca", 6, 2, "+83 %"], ["Szybko rosnąca", 2, 4, "+56 %"], ["Wolno rosnąca", 1, 0, "+63 %"],
+        ["Cykliczna", 0, 0, "+78 %"], ["Wychodząca z kłopotów", 0, 4, "+58 %"], ["Ukryte aktywa", 0, 0, "–"]];
+    const celTypu = (t, dom) => (S.celLiczba && W.ok(S.celLiczba[t]) ? S.celLiczba[t] : dom);
     function typyPf() {
         const el = $("typy-pf"); if (!el) return;
         const d = W.dokup(S.pozycje, WIERSZE, { konto: S.konto, kurs: kurs() });
-        const ud = {}, sp = {};
-        if (d.suma > 0) d.pozycje.forEach((x) => { const t = (x.r && x.r.typ) || "brak typu"; ud[t] = (ud[t] || 0) + x.wartosc / d.suma; (sp[t] = sp[t] || []).push(x.t); });
+        const ile = {}, sp = {};
+        d.pozycje.forEach((x) => { const t = (x.r && x.r.typ) || "brak typu"; ile[t] = (ile[t] || 0) + 1; (sp[t] = sp[t] || []).push(`${x.t}${d.konto > 0 ? ` (${W.fmtPct(x.wartosc / d.konto, 1)})` : ""}`); });
         const suma = TYPY_PF.reduce((a, [t, c]) => a + celTypu(t, c), 0);
-        el.innerHTML = `<div class="przewin"><table class="male"><thead><tr><th>Typ</th><th>Twoje spółki</th><th class="n">Teraz</th><th class="n">Twój cel</th><th class="n">Różnica</th><th class="n">Lynch (10 spółek)</th><th class="n">Etap 86: mediana 5 lat</th></tr></thead><tbody>
-          ${TYPY_PF.map(([t, c, l, w]) => { const cel = celTypu(t, c), teraz = ud[t] || 0, roz = teraz - cel / 100;
-            return `<tr><td>${esc(t)}</td><td class="zawin">${esc((sp[t] || []).join(", ") || "–")}</td><td class="n">${d.suma > 0 ? W.fmtPct(teraz, 0) : "–"}</td>
-            <td class="n"><input type="number" min="0" max="100" step="5" data-cel="${esc(t)}" value="${cel}" style="width:64px"> %</td>
-            <td class="n">${d.suma > 0 ? `<span class="${Math.abs(roz) >= 0.05 ? (roz > 0 ? "plus" : "minus") : "mut"}">${W.fmtPct(roz, 0, true)}</span>` : "–"}</td>
-            <td class="n mut">${l} %</td><td class="n mut">${w}</td></tr>`; }).join("")}
-          ${ud["brak typu"] ? `<tr><td>brak typu</td><td>${esc(sp["brak typu"].join(", "))}</td><td class="n">${W.fmtPct(ud["brak typu"], 0)}</td><td></td><td></td><td></td><td></td></tr>` : ""}
+        el.innerHTML = `<p class="male">Jedna spółka = najwyżej <b>${Math.round(100 * W.DOKUP.limit)} % konta</b>, więc portfel ma <b>${MIEJSC} miejsc</b>. Cel: ${suma} z ${MIEJSC}${suma < MIEJSC ? ` (${MIEJSC - suma} wolne)` : suma > MIEJSC ? " — więcej niż miejsc" : ""}.</p>
+          <div class="przewin"><table class="male"><thead><tr><th>Typ</th><th>Twoje spółki (udział w koncie)</th><th class="n">Spółek teraz</th><th class="n">Cel (liczba spółek)</th><th class="n">Cel % konta</th><th class="n">Lynch (10 spółek)</th><th class="n">Etap 86: mediana 5 lat</th></tr></thead><tbody>
+          ${TYPY_PF.map(([t, c, l, w]) => { const cel = celTypu(t, c), n = ile[t] || 0;
+            return `<tr><td>${esc(t)}</td><td class="zawin">${esc((sp[t] || []).join(", ") || "–")}</td>
+            <td class="n"><b class="${n > cel ? "plus" : n < cel ? "minus" : ""}">${n}</b></td>
+            <td class="n"><input type="number" min="0" max="${MIEJSC}" step="1" data-cel="${esc(t)}" value="${cel}" style="width:56px"></td>
+            <td class="n">${Math.round(100 * cel * W.DOKUP.limit)} %</td><td class="n mut">${l}</td><td class="n mut">${w}</td></tr>`; }).join("")}
+          ${ile["brak typu"] ? `<tr><td>brak typu</td><td>${esc(sp["brak typu"].join(", "))}</td><td class="n">${ile["brak typu"]}</td><td></td><td></td><td></td><td></td></tr>` : ""}
           </tbody></table></div>
-          <p class="male">Cel razem: <b>${suma} %</b>${suma < 100 ? ` — ${100 - suma} % nieprzypisane (np. gotówka albo inne typy)` : suma > 100 ? " — więcej niż 100 %" : ""}.
-            <span class="mut">Tylko informacja — reguły dokupu się nie zmieniają. Lynch: „najpierw wielkość, potem historia spółki”. W naszym teście 2012–2026 najlepiej wypadały stabilnie rosnące; reguła „nie trzymaj stabilnie rosnącej po podwojeniu” się nie potwierdziła (etap 94).</span></p>`;
+          <p class="mut male">Tylko informacja — reguły dokupu się nie zmieniają. Lynch: „najpierw wielkość, potem historia spółki”. W naszym teście 2012–2026 najlepiej wypadały stabilnie rosnące; reguła „nie trzymaj stabilnie rosnącej po podwojeniu” się nie potwierdziła (etap 94).</p>`;
         el.querySelectorAll("input[data-cel]").forEach((i) => i.addEventListener("change", () => {
-            S.celTypy = { ...(S.celTypy || {}), [i.dataset.cel]: i.value === "" ? 0 : +i.value }; zapisz(); typyPf();
+            S.celLiczba = { ...(S.celLiczba || {}), [i.dataset.cel]: i.value === "" ? 0 : Math.max(0, Math.round(+i.value)) }; zapisz(); typyPf();
         }));
     }
 
