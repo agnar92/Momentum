@@ -1243,3 +1243,34 @@ czeka w SPY: 24,1 % (M0 20,1 %), maxDD −39 % (−33 %), bez NVDA 17,5 % (12,5 
 waga (2 − PEG) × ocena ogólna ÷ 6 (0,5–1,5) × (1 + 0,25 log10(kapit. ÷ 100 mld)) (0,5–1,5): 24,4 %, maxDD −40 %, bez NVDA 17,8 %; okna +1,92 pp [+0,61; +3,09] 7/9;
 szersza lista +0,62 [−0,13; +1,41] 6/9. Wniosek: na liście Jakość 7/7 reguła użytkownika wypada lepiej niż równe kwoty, ale za cenę większych obsunięć, a na szerszej
 liście przewaga jest w granicach szumu; parametry (próg 2, wzór wag) wybrane po obejrzeniu wyników etapu 89 — ryzyko dopasowania.
+
+## Etap 90: kanał odchylenia standardowego (10 lat) — kupno przy −3σ / −4σ, sprzedaż na linii regresji (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, czy to w ogóle ma sens na danych” (film: spółki > 50 mld USD, kanał regresji liniowej z 2500 dni sesyjnych na wykresie dziennym,
+kupno, gdy kurs spadnie poniżej −3σ (spółki z top 10 wg kapitalizacji) albo −4σ (pozostałe); warunki: ≥ 10 lat historii, kanał rosnący, linia −3σ/−4σ > 0;
+realizacja zysku przy dotknięciu linii regresji; 5–10 % portfela na spółkę, gotówka, gdy nic nie ma; autor: „od 2016 bije S&P 500 i Nasdaq”, 10 tys. → 99,9 tys. USD).
+Dane: dzienne ceny skorygowane (eodhd, `prices_valid`), kapitalizacja miesięczna (cap.pkl, USD, z poprzedniego miesiąca — bez zaglądania w przyszłość),
+wszystkie spółki z USA w danych ze spółkami usuniętymi z giełdy (bez listy dzisiejszych zwycięzców). Kanał liczony każdego dnia na ostatnich 2500 dniach:
+regresja liniowa kursu względem czasu, σ = odchylenie standardowe reszt, linia = wartość regresji w bieżącym dniu (tak jak rysuje TradingView; dokładny wzór
+wskaźnika autora nie jest znany — założenie). Sygnał: pierwsze zamknięcie poniżej linii −kσ (k = 3 dla top 10, k = 4 dla reszty spółek ≥ 50 mld USD), nachylenie > 0,
+linia −kσ > 0; kolejny sygnał tej samej spółki dopiero po powrocie kursu do linii regresji. Okres sygnałów 2012-01..2025-10.
+Pytania i miary: (A) zdarzenia — zwrot do wyjścia na linii regresji (najdłużej 36 mies.; inaczej sprzedaż po 36 mies. lub na końcu danych), odsetek wyjść z zyskiem
+(„trafność”), czas do wyjścia, najgłębszy spadek od zakupu; zwrot 12 i 24 mies. od sygnału i nadwyżka nad SPY; (B) porównanie z kupnem przy spadku ≥ 30 % od
+szczytu (ta sama grupa spółek, ta sama reguła wyjścia) i z losowym dniem w tej grupie (zwrot 12/24 mies.); (C) portfel 2013-01..2026-10: 10 % konta na pozycję
+(najwyżej 10 pozycji), gotówka 0 %, wyjście na linii regresji — roczna stopa, maxDD, roczne zwroty, porównanie z SPY i QQQ (z dywidendami w cenach skorygowanych);
+wariant „po dotknięciu linii regresji zatrzymaj połowę” pominięty (prosta reguła). Analiza fundamentalna z AI z filmu — nietestowalna (pominięta; zaznaczamy).
+Hipotezy: (1) trafność wyjść ≥ 70 %, ale średni zwrot 12/24 mies. bliski SPY (nadwyżka w granicach ±3 pp); (2) sygnałów jest mało (kilka–kilkanaście rocznie), więc
+portfel większość czasu w gotówce i przegrywa z SPY w stopie rocznej, ma za to mniejsze obsunięcie; (3) kupno przy −30 % od szczytu nie gorsze niż −3σ/−4σ.
+
+Wynik etapu 90 (2026-11-22). 359 spółek kiedykolwiek ≥ 50 mld USD, 314 z ≥ 10 lat cen. Sygnałów 63 w 14 lat (54 spółki; 33 w marcu 2020, 11 w 2022, 7 w 2025;
+w latach 2013–2014, 2016–2017 żadnego), top 10 (−3σ) tylko 5. Wyjście na linii regresji w 79 %, z zyskiem 89 %, średnio +33,5 % (mediana +35 %, mediana 205 dni),
+najgłębszy spadek po zakupie mediana −12 %, najgorszy wynik −60 %. Zwrot 12 mies. od sygnału +44 %, ale SPY w tym samym czasie prawie tyle samo: nadwyżka +0,7 pp,
+lepiej niż SPY w 46 % sygnałów; 24 mies. −1,8 pp (top 10: +7,6 pp i +25 pp, ale 5 zdarzeń). Losowy miesiąc w tej grupie: 12 mies. nad SPY −1,0 pp, lepiej w 43 %.
+Spadek ≥ 30 % od szczytu: 12 mies. +19,5 %, nad SPY +4,9 pp, lepiej w 46 % (wyjście na linii regresji nie ma tu sensu — kurs często jest już nad linią, porównujemy
+tylko 12/24 mies.). Portfel (10 % na pozycję, gotówka 0 %): 2013–2026 5,4 % rocznie (SPY 14,5 %, QQQ 19,3 %), maxDD −28 % (SPY −34 %), średnio zainwestowane 34 %
+konta, 26 % dni bez żadnej pozycji; 2016–2026 6,7 % (SPY 14,8 %); 10 tys. USD od 2016 → 20 tys. (autor: 99,9 tys.; SPY 44,7 tys.). Hipotezy: (1) trafność ≥ 70 % przy
+nadwyżce ±3 pp — tak (89 %, +0,7 pp); (2) mało sygnałów, portfel w gotówce przegrywa z SPY, mniejsze obsunięcie — tak; (3) −30 % od szczytu nie gorsze — tak.
+Wrażliwość (poza protokołem, r115b): niższe progi (−2σ/−3σ) i kanał na log-cenie — 81–159 sygnałów, trafność 85–89 %, nadwyżka 12 mies. −2,1 … +1,1 pp, portfel
+5,9–8,2 % (gotówka 0 %) albo 13,2–14,2 % (gotówka w SPY; SPY 14,5 %). Wniosek: sygnał „często ma rację” (sprzedaż z zyskiem w ~9 na 10 przypadków), ale nie dlatego,
+że trafia w spółki lepsze od rynku — kupuje w ogólnych krachach (marzec 2020, 2022), po których rośnie cały rynek; wynik autora nie odtwarza się na regułach z filmu
+(różnice: jego decyzje uznaniowe, częściowe trzymanie po linii regresji, analiza z AI, nieznany wzór wskaźnika).
