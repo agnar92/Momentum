@@ -112,4 +112,5 @@ and waiting for cheap prices not better; lump sum beat 12 tranches 5/7), 90 (std
 +0.7 pp vs SPY over 12 months — buys in market-wide crashes; portfolio 5.4 %/yr vs SPY 14.5 %, mostly in cash), 91 (same on monthly closes, 12 variants: none beats SPY in both halves with idle
 cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
-`dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise).
+`dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
+confirmed). Portfel shows an informational „Skład wg typów Petera Lyncha” table (`typyPf`: user's share by type, Lynch's 20/40/40 split, stage 86 medians).

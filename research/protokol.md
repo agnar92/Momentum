@@ -1343,3 +1343,16 @@ Wynik etapu 93 (2026-11-22). A − B, 36 mies. [95 % przedział]: L1 gotówka ne
 w akcjach, wypadały lepiej w 2012–2026; uwaga: w ocenie „Siła” liczba akcji 3 lata liczy się „mniej = lepiej” na podstawie etapu 76 — inna miara, IC całego zbioru);
 L10 P/FCF ≤ 15 −3,5 [−14,9; +6,9]. Hipoteza (2–3 potwierdzone, w tym skup i mały dług) — liczba tak (2), ale potwierdziły się marża u stabilnych i rosnąca dywidenda
 u wolno rosnących, a skup wyszedł odwrotnie. Strona: dwie nowe pozycje listy kontrolnej (potwierdzone), reszta opisana w metodzie jako niepotwierdzona / nietestowana.
+
+## Etap 94: „nie trzymaj stabilnie rosnącej po podwojeniu” i podział portfela wg typów (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik przysłał streszczenie Lyncha: kategoryzuj najpierw wg wielkości, potem „historii”; nie trzymaj stabilnie rosnącej po 2× licząc na 10×; podział portfela
+inwestora indywidualnego (10 spółek): stabilnie rosnące 20 %, szybko rosnące 40 %, wychodzące z kłopotów 40 %, wolno rosnące i ukryte aktywa 0. Test (dane, zbiór,
+starty, miara i bootstrap jak w etapach 92–93): stabilnie rosnące (typ jak w etapie 92), których kurs wzrósł ≥ 100 % w 3 lata, vs stabilnie rosnące z wzrostem < 100 %
+(oraz vs < 50 %); kierunek Lyncha: po podwojeniu gorzej (różnica < 0). Podział portfela: wyniki typów są już w etapie 86 (mediana 5 lat: stabilnie +83 %, cykliczne +78 %,
+wolno rosnące +63 %, wychodzące z kłopotów +58 %, szybko rosnące +56 %, wszystkie +69 %) — nie liczymy ponownie; na stronie Portfel pokażemy tylko informacyjnie skład
+portfela użytkownika wg typów obok podziału Lyncha i wyników etapu 86 (bez zmian w regułach dokupu). Hipoteza: po podwojeniu nie gorzej (różnica w granicach szumu).
+
+Wynik etapu 94 (2026-11-22). Stabilnie rosnące po wzroście kursu ≥ 100 % w 3 lata vs < 100 %: 12 mies. +1,4 pp [−5,9; +10,9], 36 mies. +8,7 [−15,5; +29,9]
+(vs < 50 %: +1,8 / +9,9). Hipoteza (nie gorzej) — tak; reguła Lyncha „sprzedaj stabilnie rosnącą po 2×” niepotwierdzona (raczej odwrotnie). Strona Portfel:
+informacyjna tabela składu wg typów (udział użytkownika, podział Lyncha 20/40/40, mediana 5 lat z etapu 86), bez zmian w regułach dokupu.
