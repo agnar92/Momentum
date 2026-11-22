@@ -22,7 +22,8 @@
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">szczegóły PEG / DCF ↓</a></div>` : "";
         $("top").innerHTML = `
           <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}</h1>
-            <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div></div>
+            <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div>
+            <div id="do-portfela" style="margin-top:10px"></div></div>
           <div class="siatka2">
             <div class="pole"><div class="mut male">W skrócie</div><p style="font-size:15px;margin:6px 0">${esc(fakty.join(", ") || "Brak danych z raportów.")}.</p>
               <div class="mut male">Miejsce #${K.rank} wg kapitalizacji · dane z ${esc(K.generated_at)}</div>${wyc}</div>
@@ -32,6 +33,20 @@
               <details style="margin-top:8px"><summary class="mut male">Wszystkie typy</summary>${K.typy.map((x) => `<div class="male" style="display:flex;justify-content:space-between"><span>${esc(x[0])}</span><span>${x[1]} %</span></div>`).join("")}</details>` : '<p class="mut">–</p>'}
             </div>
           </div>`;
+        przyciskPortfela();
+    }
+
+    // --- portfel (localStorage `fundamenta_portfel`, strona portfel.html): spółkę do portfela dodaje użytkownik ---
+    const PF_KLUCZ = "fundamenta_portfel";
+    const czytajPf = () => { try { return JSON.parse(localStorage.getItem(PF_KLUCZ)) || {}; } catch (e) { return {}; } };
+    function przyciskPortfela() {
+        const el = $("do-portfela"); if (!el) return;
+        const pf = czytajPf(), jest = (pf.pozycje || []).some((p) => p.t === K.t);
+        el.innerHTML = jest ? `<span class="pill p-niedowartosciowana">✓ W portfelu</span> <a href="portfel.html" style="color:inherit">przejdź do portfela →</a> <button id="pf-usun" class="male" style="margin-left:6px">Usuń z portfela</button>`
+            : '<button id="pf-dodaj" class="akt">＋ Dodaj do portfela</button>';
+        const zapisz = (v) => { try { localStorage.setItem(PF_KLUCZ, JSON.stringify(v)); } catch (e) { /* tryb prywatny */ } przyciskPortfela(); };
+        if (jest) $("pf-usun").addEventListener("click", () => { if (window.confirm(`Usunąć ${K.t} z portfela (razem z liczbą akcji i średnim kosztem)?`)) zapisz({ ...pf, pozycje: pf.pozycje.filter((p) => p.t !== K.t) }); });
+        else $("pf-dodaj").addEventListener("click", () => zapisz({ ...pf, pozycje: (pf.pozycje || []).concat([{ t: K.t, akcje: 0, koszt: null }]) }));
     }
 
     // --- własne dane użytkownika (brakujące wskaźniki, np. młoda spółka): localStorage, ocena przeliczana w przeglądarce ---

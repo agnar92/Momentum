@@ -53,7 +53,8 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
 - `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
   0–2, im niższy tym większa waga, nie więcej niż 10 % portfela” and „włóż w to score i market cap”): positions (ticker, shares, average cost) and monthly amount
-  in localStorage `fundamenta_portfel`; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
+  in localStorage `fundamenta_portfel` — stocks are added with the „＋ Dodaj do portfela” button on the card (`przyciskPortfela` in spolka.js; user: „zamiast wpisywać daj
+  przycisk dodaj do portfela w widoku spółki”), shares / average cost edited in the portfel table; `W.dokup` (user, later: „nie dostosowuj wag do przeszłości, prosty wzór, max 10 punktów … im bardziej tania duża spółka z dobrą
   oceną, tym większa waga”): only PEG 0–2; `W.punkty` = 10 × mean of tanio (2 − PEG) ÷ 2, ocena (overall ÷ 10), wielkość (1 − (mcap rank − 1) ÷ 500); amount
   proportional to points, ONLY the amount the user enters (user: „nie rozdzielaj całego kapitału … pozycję buduje się powoli w kilku lub kilkunastu tanich
   momentach”): target position 10 % of portfolio built in `transze` purchases (default 10, input on the page) — one purchase ≤ target × points/10 ÷ transze (10 pts reach the target in `transze` cheap moments, 5 pts in twice as many), overflow to other

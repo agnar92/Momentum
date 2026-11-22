@@ -27,7 +27,7 @@
               <td><button data-usun="${k}" title="Usuń">✕</button></td></tr>`; }).join("")}</tbody></table></div>
             <div class="liczby" style="margin-top:10px"><div><small>Wartość</small><b>${zl(d.suma)}</b></div><div><small>Koszt zakupu</small><b>${zl(koszt)}</b></div>
               <div><small>Zysk</small><b>${koszt > 0 ? pct(d.suma / koszt - 1) : "–"}</b></div><div><small>Spółek</small><b>${S.pozycje.length}</b></div></div>`
-            : '<p class="mut">Brak pozycji — dodaj spółki, które masz albo chcesz zacząć kupować (liczba akcji 0).</p>';
+            : '<p class="mut">Brak pozycji — otwórz kartę spółki i kliknij „＋ Dodaj do portfela”.</p>';
         document.querySelectorAll("#pozycje input[data-k]").forEach((el) => el.addEventListener("change", () => {
             const v = el.value === "" ? null : +el.value; S.pozycje[+el.dataset.k][el.dataset.p] = v; zapisz(); rysuj();
         }));
@@ -61,16 +61,6 @@
         }));
     }
 
-    $("dodaj").addEventListener("submit", (e) => {
-        e.preventDefault();
-        const t = $("d-t").value.trim().toUpperCase(); if (!t) return;
-        const a = $("d-a").value === "" ? 0 : +$("d-a").value, k = $("d-k").value === "" ? null : +$("d-k").value;
-        const p = S.pozycje.find((x) => x.t === t);
-        if (p) { p.koszt = k !== null ? W.sredniKoszt(p.akcje || 0, p.koszt || 0, a, k) : p.koszt; p.akcje = (p.akcje || 0) + a; }
-        else S.pozycje.push({ t, akcje: a, koszt: k });
-        $("d-t").value = $("d-a").value = $("d-k").value = "";
-        zapisz(); rysuj();
-    });
     $("kwota").value = W.ok(S.kwota) ? S.kwota : "";
     $("transze").value = S.transze || 10;
     $("transze").addEventListener("change", (e) => { S.transze = Math.max(1, +e.target.value || 10); zapisz(); sugestie(); });
@@ -79,7 +69,6 @@
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => r.json()).then((d) => {
         WIERSZE = Object.fromEntries(d.rows.map((r) => [r.t, r]));
         $("asof").textContent = d.generated_at;
-        $("tickery").innerHTML = d.rows.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join("");
         rysuj();
     }).catch(() => { $("pozycje").innerHTML = '<p class="blad">Nie udało się wczytać danych.</p>'; });
 })();
