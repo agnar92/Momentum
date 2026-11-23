@@ -106,7 +106,7 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”, „czemu słupkowy?”; no schematic curves, no test texts — „nie interesują mnie twoje
   testy”): 3 questions with revenue / operating profit (fallback net income) lines, buybacks / share count (min–max scale) / dividends paid, then ONE lifecycle chart
   (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn full width (`SZER`, CSS width 100 %, taller on phones;
-  redrawn on resize; phone shows 5 years). P/E history: time-based x axis, year ticks at 1 January, line broken where P/E is missing (loss). Missing 12 m payouts are never drawn — for classification only the last FY payout ratio is used. Data: `hist.y` [5] operating
+  redrawn on resize; phone shows 5 years). P/E history: time-based x axis, year ticks at 1 January, line broken where P/E is missing (loss). Missing 12 m payouts are never drawn (the 3-year window uses what exists). Data: `hist.y` [5] operating
   income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps = splits older than the 5-year price history) and `hist.ltm`
   [end, rev, op, buybacks, dividends, shares]. Phase texts `CYKL`.
   Other steps borrow data-computable parts of the user's screenshots (user: „wsiąść części z tych zdjęć”): Wzrost — revenue / net income lines with y/y % at each point
