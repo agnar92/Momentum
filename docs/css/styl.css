@@ -2,7 +2,7 @@
   --tlo: #f4f5f7; --karta: #ffffff; --tekst: #15171c; --tekst2: #5b6070; --linia: #e3e6eb;
   --ciemne: #101826; --ciemne2: #182235; --ciemny-tekst: #e9edf5; --ciemny-tekst2: #9aa6bd;
   --zielony: #16a34a; --zielony-tlo: #dcfce7; --zolty: #b45309; --zolty-tlo: #fef3c7; --czerwony: #dc2626; --czerwony-tlo: #fee2e2;
-  --niebieski: #2a78d6; --pomarancz: #eb6834; --akcent: #10b981;
+  --niebieski: #2a78d6; --fiolet: #7c5cd6; --pomarancz: #eb6834; --akcent: #10b981;
   --tlo2: #f8fafc; --hover: #f8fafc; --pole: #ffffff; --siatka: #e5e7eb; --pas: #e5e7eb;
   --ost-tlo: #fffbeb; --ost-ramka: #fcd34d; --ost-tekst: #92400e; --czerwony-t: #b91c1c; --zielony-t: #15803d; --brazowy-t: #92400e;
   --k-wzrost: #ecfdf5; --k-sila: #eff6ff; --k-wycena: #fffbeb; --sekcja: #f1f5f9;
@@ -236,19 +236,20 @@ td.zawin { white-space: normal; min-width: 180px; }
 .kr-kroki button.akt { background: var(--zielony); border-color: var(--zielony); color: #fff; }
 .kr-kroki button.akt span { background: rgba(255,255,255,.25); }
 .kr-tresc h3 { margin: 4px 0 10px; font-size: 18px; }
-.kr-pyt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kr-pyt { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .kr-pyt .pole { border: 1px solid var(--linia); border-radius: 10px; padding: 10px 12px; background: var(--tlo2); }
 .kr-nr { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--tekst); color: var(--karta); font-size: 11px; font-weight: 700; margin-right: 6px; }
 .kr-tak { color: var(--zielony-t); } .kr-nie { color: var(--czerwony-t); }
-.kr-iskra { width: 100%; height: 60px; margin-top: 6px; display: block; }
-.kr-osx { display: flex; justify-content: space-between; font-size: 11px; }
+.kr-mini { display: block; max-width: 100%; height: auto; margin-top: 4px; overflow: visible; }
 .kr-faza { margin-top: 12px; border: 2px solid var(--zielony); border-radius: 12px; padding: 12px; }
 .kr-faza-t { font-size: 17px; margin-bottom: 8px; }
-.kr-fazy { width: 100%; height: 150px; display: block; }
-.kr-fazy-et { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; font-size: 12px; color: var(--tekst2); margin-top: 4px; }
-.kr-fazy-et span { display: block; margin: 0 auto 2px; width: 20px; height: 20px; line-height: 18px; border-radius: 50%; border: 1px solid var(--linia); }
-.kr-fazy-et .akt { color: var(--tekst); font-weight: 700; } .kr-fazy-et .akt span { background: var(--tekst); color: var(--karta); border-color: var(--tekst); }
-.kr-leg { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.kr-etapy { display: grid; grid-template-columns: repeat(5, 1fr); position: relative; margin: 6px 0 0; }
+.kr-etapy::before { content: ""; position: absolute; left: 10%; right: 10%; top: 13px; height: 2px; background: var(--siatka); }
+.kr-etapy div { position: relative; text-align: center; color: var(--tekst2); }
+.kr-etapy span { display: grid; place-items: center; margin: 0 auto 4px; width: 28px; height: 28px; border-radius: 50%; background: var(--karta); border: 2px solid var(--siatka); font-weight: 700; font-size: 13px; }
+.kr-etapy small { display: block; font-size: 12px; line-height: 1.2; }
+.kr-etapy .za span { border-color: var(--zielony); color: var(--zielony-t); }
+.kr-etapy .akt span { background: var(--zielony); border-color: var(--zielony); color: #fff; } .kr-etapy .akt small { color: var(--tekst); font-weight: 700; }
 .kr-cagr { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
 .kr-cagr small { display: block; color: var(--tekst2); font-size: 11px; } .kr-cagr b { font-size: 17px; }
 .kr-kropki { display: inline-flex; gap: 3px; margin-right: 8px; } .kr-kropki i { width: 14px; height: 6px; border-radius: 3px; background: var(--siatka); } .kr-kropki i.on { background: var(--zielony); }
@@ -273,4 +274,12 @@ td.zawin { white-space: normal; min-width: 180px; }
 }
 @media (max-width: 700px) { .kr-pyt { grid-template-columns: 1fr; } .kr-pasek { font-size: 9px; } .kr-cagr b { font-size: 15px; } }
 .kr-faza-ost { border-color: var(--czerwony); }
-@media (max-width: 700px) { .kr-fazy-et { font-size: 10px; } .kr-fazy-et div { overflow-wrap: anywhere; padding: 0 1px; } }
+@media (max-width: 700px) { .kr-etapy small { font-size: 10px; overflow-wrap: anywhere; } }
+.kr-q { display: flex; align-items: center; gap: 2px; } .kr-odp { margin: 4px 0 2px; }
+.kr-zwrot { margin-top: 10px; border: 1px solid var(--linia); border-radius: 10px; padding: 10px 12px; background: var(--tlo2); }
+.kr-pody { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 6px; }
+.kr-pod { background: var(--karta); border: 1px solid var(--linia); border-radius: 8px; padding: 8px 10px 4px; }
+.kr-tx { font-size: 11px; fill: var(--tekst2); } .kr-tx-b { font-weight: 700; fill: var(--tekst); } .kr-tx-os { font-size: 10px; }
+.kr-zero, .kr-os { stroke: var(--siatka); stroke-width: 1; } .kr-zero { stroke-dasharray: 3 3; } .kr-prog { stroke: var(--zielony); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.kr-tempo { display: block; max-width: 100%; height: auto; overflow: visible; } .kr-tx-prog { fill: var(--zielony-t); font-weight: 600; } .kr-brak { padding: 24px 0; text-align: center; }
+@media (max-width: 700px) { .kr-pody { grid-template-columns: 1fr; } }

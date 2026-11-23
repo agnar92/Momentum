@@ -100,8 +100,11 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   thresholds work); `W.faza(m, hist.q)` = Peter LYNCH's company life cycle (user: „chcę analizę Petera Lyncha cykli spółki”, NOT technical analysis —
   the Weinstein price-stage section from stage 102 was removed from the card): 1 Start / 2 Szybka ekspansja / 3 Dojrzewanie / 4 Dojrzałość / 5 Schyłek (revenue 3Y CAGR < 0
   → 5; no operating profit → 2 if loss shrinking and revenue 3Y ≥ 15 % else 1; profitable → 2 if revenue 3Y and 1Y ≥ 15 %, 3 if 3Y or 5Y ≥ 15 % but 1Y < 15 %, else 4);
-  3 questions (growth and pace, profit, cash returned — info), own schematic diagram, Lynch texts `CYKL`; stage 103: Dojrzewanie confirmed worse (−11 pp / 36 m) → ⚠ red
-  frame (`W.FAZA_TEST`), the rest description only; no buy/sell verdict.
+  Step 1 charts are DATA ONLY (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”; no schematic curves, no test texts on the card — user: „nie
+  interesują mnie twoje testy”): revenue and operating profit (fallback net income) per fiscal year + „12 m”, buybacks / share count (min–max scale) / dividends paid,
+  revenue y/y bars with the 15 % line, 5-step phase stepper; charts drawn 1:1 in px (`SZER` = section width, redrawn on resize). Data: `hist.y` columns [5] operating
+  income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps year to year = splits older than the 5-year price history) and
+  `hist.ltm` [end, rev, op, buybacks, dividends, shares]. Lynch texts `CYKL`; Dojrzewanie (stage 103: −11 pp / 36 m) gets a red frame.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in

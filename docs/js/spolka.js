@@ -403,28 +403,56 @@
     }
     const kropki = (n, z) => `<span class="kr-kropki">${Array.from({ length: z }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
     const tn = (b) => (b === true ? '<b class="kr-tak">Tak.</b>' : b === false ? '<b class="kr-nie">Nie.</b>' : '<b class="mut">Brak danych.</b>');
-    function iskra(w, et, kolor) {
-        const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
-        if (p.length < 2) return '<div class="mut male">Za mało danych do wykresu.</div>';
-        const mn = Math.min(0, ...p.map((x) => x[1])), mx = Math.max(...p.map((x) => x[1])), zak = mx - mn || 1;
-        const X = (i) => 6 + (i / (w.length - 1)) * 188, Y = (v) => 52 - ((v - mn) / zak) * 44;
-        const os = mn < 0 ? `<line x1="0" x2="200" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--siatka)" stroke-dasharray="3 3"/>` : "";
-        const ost = p[p.length - 1];
-        return `<svg viewBox="0 0 200 60" class="kr-iskra" preserveAspectRatio="none">${os}<polyline fill="none" stroke-width="2" style="stroke:${kolor}" points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}"/><circle cx="${X(ost[0])}" cy="${Y(ost[1])}" r="3" style="fill:${kolor}"/></svg>
-          <div class="kr-osx mut"><span>${esc(et[p[0][0]])}</span><span>${esc(et[ost[0]])}</span></div>`;
+    // --- wykresy fazy: tylko dane z raportów (lata obrotowe + ostatnie 12 mies.), każdy punkt to liczba z raportu ---
+    function seriaFazy() {
+        const y = ((K.hist && K.hist.y) || []).slice(-6), l = K.hist && K.hist.ltm;
+        const zLtm = l && l[0] && (!y.length || l[0] > y[y.length - 1][0]);
+        const et = y.map((r) => "FY" + r[0].slice(2, 4)).concat(zLtm ? ["12 m"] : []);
+        const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [l[il]] : []);
+        const op = kol(5, 2), maOp = op.some(W.ok);
+        return { et, rev: kol(1, 1), zysk: maOp ? op : y.map((r) => r[2]).concat(zLtm ? [null] : []), zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto",
+            skup: kol(6, 3), dyw: kol(7, 4), akcje: kol(8, 5), lata: y.map((r) => r[0].slice(0, 4)) };
     }
-    function diagramFaz(nr) {
-        // własny schemat: przychody, zysk i wypłaty dla akcjonariuszy w pięciu fazach (poglądowo, bez danych)
-        const x = (f) => f * 120;
-        const prz = "M0,96 C80,95 140,80 240,62 S400,36 480,30 S560,30 600,40", zys = "M0,100 C40,110 80,122 120,120 S200,104 240,100 S330,72 360,64 S470,54 600,70",
-            wyp = "M360,100 C400,96 440,92 480,90 S560,92 600,98";
-        return `<svg viewBox="0 0 600 140" class="kr-fazy" preserveAspectRatio="none" role="img" aria-label="Schemat pięciu faz spółki">
-          ${[1, 2, 3, 4, 5].map((f) => `<rect x="${x(f - 1)}" y="0" width="120" height="140" style="fill:${f === nr ? "var(--zielony-tlo)" : "transparent"}"/>${f > 1 ? `<line x1="${x(f - 1)}" x2="${x(f - 1)}" y1="0" y2="140" style="stroke:var(--siatka)"/>` : ""}`).join("")}
-          <line x1="0" x2="600" y1="100" y2="100" style="stroke:var(--siatka)" stroke-dasharray="4 4"/>
-          <path d="${prz}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--niebieski)"/><path d="${zys}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--zielony)"/>
-          <path d="${wyp}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--zolty)"/></svg>
-          <div class="kr-fazy-et">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : ""}"><span>${i + 1}</span>${esc(n)}</div>`).join("")}</div>
-          <div class="kr-leg male"><span style="color:var(--niebieski)">━ przychody</span> <span style="color:var(--zielony)">━ zysk</span> <span style="color:var(--zolty)">━ dywidendy i skup</span> <span class="mut">(schemat poglądowy)</span></div>`;
+    const kw = (v) => (v === 0 ? "0" : W.ok(v) ? W.fmtUsd(v) : "–");
+    const szt = (v) => (W.ok(v) ? (v >= 1e9 ? W.fmtNum(v / 1e9, 2) + " mld" : W.fmtNum(v / 1e6, 0) + " mln") : "–");
+    let SZER = 1000;  // szerokość sekcji w px — wykresy rysujemy w skali 1:1, żeby napisy miały stały rozmiar
+    function mini(et, w, kolor, fmt, wys = 130, sz = 300, odZera = true) {
+        // wykres liniowy: punkty = wartości z raportów; podpisane pierwsza i ostatnia wartość, oś zera przy wartościach ujemnych
+        const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+        if (p.length < 2) return '<div class="mut male kr-brak">Brak danych w raportach.</div>';
+        const n = et.length, w0 = p.map((x) => x[1]), mx0 = Math.max(...w0), mn0 = Math.min(...w0);
+        // liczba akcji: skala od najmniejszej do największej wartości (zmiana o kilka % musi być widoczna); kwoty: od zera
+        const mn = odZera ? Math.min(0, mn0) : mn0 - (mx0 - mn0 || mx0 * 0.01) * 0.6, mx = odZera ? mx0 : mx0 + (mx0 - mn0 || mx0 * 0.01) * 0.2, zak = mx - mn || 1;
+        const X = (i) => 22 + (i / Math.max(1, n - 1)) * (sz - 44), Y = (v) => 26 + (1 - (v - mn) / zak) * (wys - 52);
+        const pierw = p[0], ost = p[p.length - 1];
+        const zero = mn < 0 ? `<line x1="10" x2="${sz - 10}" y1="${Y(0)}" y2="${Y(0)}" class="kr-zero"/>` : "";
+        const pole = !odZera ? "" : `<path d="M${X(pierw[0])},${Y(Math.max(mn, 0))} ${p.map(([i, v]) => `L${X(i)},${Y(v)}`).join(" ")} L${X(ost[0])},${Y(Math.max(mn, 0))}Z" style="fill:${kolor};opacity:.10"/>`;
+        return `<svg viewBox="0 0 ${sz} ${wys}" width="${sz}" height="${wys}" class="kr-mini" role="img">${zero}${pole}
+          <polyline points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke-width="2.5" stroke-linejoin="round" style="stroke:${kolor}"/>
+          ${p.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === ost[0] ? 4.5 : 2.5}" style="fill:${kolor}"><title>${esc(et[i])}: ${esc(fmt(v))}</title></circle>`).join("")}
+          <text x="${X(pierw[0])}" y="${Y(pierw[1]) - 9}" class="kr-tx" text-anchor="start">${esc(fmt(pierw[1]))}</text>
+          <text x="${X(ost[0])}" y="${Y(ost[1]) - 10}" class="kr-tx kr-tx-b" text-anchor="end">${esc(fmt(ost[1]))}</text>
+          ${et.map((e, i) => `<text x="${X(i)}" y="${wys - 4}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}</svg>`;
+    }
+    function tempoWzrostu(sf) {
+        // przychody r/r w każdym roku obrotowym (z raportów) i ostatnie 12 mies.; linia przerywana = próg szybkiej ekspansji Lyncha (15 %)
+        const r = sf.rev, g = r.map((v, i) => (i > 0 && W.ok(v) && W.ok(r[i - 1]) && r[i - 1] > 0 ? v / r[i - 1] - 1 : null));
+        if (sf.et[sf.et.length - 1] === "12 m" && W.ok(M.rev_1y)) g[g.length - 1] = M.rev_1y;
+        const p = g.map((v, i) => [i, v]).filter((x) => W.ok(x[1]) && x[0] > 0);
+        if (p.length < 2) return "";
+        const n = sf.et.length - 1, gm = p.map((x) => x[1]), mx = Math.max(0.2, ...gm), mn = Math.min(0, ...gm), zak = mx - mn;
+        const S_ = Math.max(260, SZER - 60), sz = (S_ - 44) / n, Y = (v) => 22 + (1 - (v - mn) / zak) * 108, X = (i) => 40 + (i - 1) * sz;
+        const kol = (v) => (v >= 0.15 ? "var(--zielony)" : v >= 0 ? "var(--niebieski)" : "var(--czerwony)");
+        return `<div class="mut male" style="margin-top:12px">Wzrost przychodów rok do roku (z raportów) — próg szybkiej ekspansji wg Lyncha: 15 %</div>
+          <svg viewBox="0 0 ${S_} 160" width="${S_}" height="160" class="kr-tempo" role="img">
+          <line x1="4" x2="${S_ - 4}" y1="${Y(0)}" y2="${Y(0)}" class="kr-os"/>
+          <line x1="4" x2="${S_ - 4}" y1="${Y(0.15)}" y2="${Y(0.15)}" class="kr-prog"/><text x="4" y="${Y(0.15) - 4}" class="kr-tx kr-tx-prog" text-anchor="start">15 %</text>
+          ${p.map(([i, v]) => `<rect x="${X(i) + sz * 0.2}" y="${Math.min(Y(v), Y(0))}" width="${sz * 0.6}" height="${Math.max(1, Math.abs(Y(v) - Y(0)))}" rx="3" style="fill:${kol(v)}"><title>${esc(sf.et[i])}: ${esc(W.fmtPct(v, 1, true))}</title></rect>
+            <text x="${X(i) + sz / 2}" y="${v >= 0 ? Y(v) - 5 : Y(v) + 13}" class="kr-tx kr-tx-b" text-anchor="middle">${esc(W.fmtPct(v, 0, true))}</text>
+            <text x="${X(i) + sz / 2}" y="156" class="kr-tx kr-tx-os" text-anchor="middle">${esc(sf.et[i])}</text>`).join("")}</svg>`;
+    }
+    function etapy(nr) {
+        return `<div class="kr-etapy">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : i + 1 < nr ? "za" : ""}"><span>${i + 1}</span><small>${esc(n)}</small></div>`).join("")}</div>`;
     }
     function kryteriaHtml(idx) {
         const l = lista77(); if (!l) return '<p class="mut male">Brak kryteriów 7/7 dla tej spółki.</p>';
@@ -432,24 +460,28 @@
     }
     const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
     function krokTresc(i) {
-        const f = W.faza(M, K.hist && K.hist.q), y = (K.hist && K.hist.y) || [];
-        const ety = y.map((r) => r[0].slice(0, 4)), cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
+        const f = W.faza(M, K.hist && K.hist.q);
+        const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
         if (i === 0) {
-            const p = f ? f.pyt : {};
+            const p = f ? f.pyt : {}, sf = seriaFazy();
+            const z = sf.zysk.filter(W.ok), zOst = z[z.length - 1], zRos = z.length >= 2 && zOst > z[z.length - 2];
             const zw = [];
             if (W.ok(M.div) && M.div > 0) zw.push(`dywidenda ${W.fmtPct(M.div, 1)} rocznie`);
-            if (W.ok(M.skup_netto_mc)) zw.push(`skup netto ${W.fmtPct(M.skup_netto_mc, 1, true)} kapitalizacji (12 mies.)`);
-            if (W.ok(M.akcje_3l)) zw.push(`liczba akcji ${W.fmtPct(M.akcje_3l, 1, true)} w 3 lata`);
-            const t = f && f.test;
-            const tempo = `${W.fmtPct(M.rev_cagr3, 1, true)} rocznie przez 3 lata, ${W.fmtPct(M.rev_1y, 1, true)} w ostatnim roku${p.przychody === false ? "" : p.szybko ? (p.hamuje ? " — szybko, ale wzrost hamuje" : " — szybko (≥ 15 % rocznie)") : " — wolniej niż 15 % rocznie"}`;
+            if (W.ok(M.skup_netto_mc) && M.skup_netto_mc > 0) zw.push(`skup netto ${W.fmtPct(M.skup_netto_mc, 1)} kapitalizacji`);
+            const mob = SZER < 700, szG = mob ? SZER - 60 : (SZER - 90) / 2, szP = mob ? SZER - 80 : (SZER - 140) / 3;
+            const pod = (n, w, kolor, fmt, odZera = true) => `<div class="kr-pod"><div class="mut male">${n}</div>${mini(sf.et, w, kolor, fmt, 110, szP, odZera)}</div>`;
             return `<div class="kr-pyt">
-              <div class="pole"><div class="kr-nr">1</div><b>Czy przychody rosną i jak szybko?</b><div>${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? tempo : ""}</div>${iskra(y.map((r) => r[1]), ety, "var(--niebieski)")}</div>
-              <div class="pole"><div class="kr-nr">2</div><b>Czy zarabia?</b><div>${tn(p.zysk)} ${f && W.ok(f.om) ? `marża operacyjna ${W.fmtPct(f.om, 1)}` : ""}${W.ok(M.op_ttm) ? `, zysk operacyjny ${W.fmtUsd(M.op_ttm)} ${WAL} (12 mies.)` : ""}${p.poprawa === true ? " — strata się zmniejsza" : p.poprawa === false ? " — strata się nie zmniejsza" : ""}</div>${iskra(y.map((r) => r[2]), ety, "var(--zielony)")}</div>
-              <div class="pole"><div class="kr-nr">3</div><b>Czy oddaje gotówkę akcjonariuszom?</b><div>${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div>
-                <p class="mut male" style="margin:6px 0 0">Wg Lyncha dojrzałe spółki, które nie mają już gdzie szybko rosnąć, oddają gotówkę (dywidenda, skup akcji).</p></div></div>
-              ${f ? `<div class="kr-faza${t[2] ? " kr-faza-ost" : ""}"><div class="kr-faza-t">Faza w cyklu życia spółki (wg Lyncha): <b>${f.nr}: ${esc(f.nazwa)}</b></div>${diagramFaz(f.nr)}
-                <p class="male" style="margin:8px 0 0">${esc(CYKL[f.nr])}</p>
-                <p class="${t[2] ? "" : "mut "}male" style="margin:6px 0 0">${t[2] ? '<b style="color:var(--czerwony-t)">⚠ Potwierdzone w teście:</b> ' : "Test 2012–2026: "}spółki w fazie ${f.nr} po 3 latach — mediana ${t[0] >= 0 ? "+" : ""}${W.fmtNum(t[0], 1)} pp względem mediany wszystkich, strata u ${t[1]} % (wszystkie: 23 %)${t[2] ? " — gorzej w obu połowach okresu (etap 103" + (GPW ? ", spółki USA" : "") + ")." : ". Różnica w granicach przypadku (etap 103" + (GPW ? ", spółki USA" : "") + ")."}${f.nr === 2 ? " Wbrew Lynchowi faza szybkiej ekspansji nie dawała przewagi wśród dużych spółek." : ""}</p></div>`
+              <div class="pole"><div class="kr-q"><span class="kr-nr">1</span><b>Czy przychody rosną?</b></div>
+                <div class="kr-odp">${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? `${W.fmtPct(M.rev_cagr3, 0, true)} rocznie przez 3 lata, ${W.fmtPct(M.rev_1y, 0, true)} w ostatnim roku` : ""}</div>
+                ${mini(sf.et, sf.rev, "var(--niebieski)", kw, 150, szG)}</div>
+              <div class="pole"><div class="kr-q"><span class="kr-nr">2</span><b>Czy zarabia?</b></div>
+                <div class="kr-odp">${tn(p.zysk)} ${W.ok(zOst) ? `${kw(zOst)} ${WAL} ${sf.zyskNazwa}${z.length >= 2 ? (zRos ? ", rośnie" : ", spada") : ""}` : ""}</div>
+                ${mini(sf.et, sf.zysk, "var(--zielony)", kw, 150, szG)}</div></div>
+              <div class="pole kr-zwrot"><div class="kr-q"><span class="kr-nr">3</span><b>Czy oddaje gotówkę akcjonariuszom?</b></div>
+                <div class="kr-odp">${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div>
+                <div class="kr-pody">${pod("Skup akcji (rocznie)", sf.skup, "var(--fiolet)", kw)}${pod("Liczba akcji (mniej = skup)", sf.akcje, "var(--fiolet)", szt, false)}${pod("Dywidendy wypłacone (rocznie)", sf.dyw, "var(--fiolet)", kw)}</div></div>
+              ${f ? `<div class="kr-faza${f.nr === 3 ? " kr-faza-ost" : ""}"><div class="kr-faza-t">Faza w cyklu życia spółki (wg Lyncha): <b>${f.nr}: ${esc(f.nazwa)}</b></div>
+                ${etapy(f.nr)}<p class="male" style="margin:10px 0 0">${esc(CYKL[f.nr])}</p>${tempoWzrostu(sf)}</div>`
                 : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}`;
         }
         if (i === 1) {
@@ -495,9 +527,12 @@
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
           <p class="mut male">To zestawienie faktów, nie rekomendacja — decyzję podejmujesz sam. W testach 2015–2026 portfel spółek 7/7 (PEG 0–1) dawał 18–21 % rocznie wobec 14 % dla S&amp;P 500 (etapy 67–68).</p>`;
     }
+    let krokRozmiar = null;
+    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K && !(S.krok || 0)) krok(); }, 200); });
     function krok(i) {
         if (i !== undefined) S.krok = i;
         const k = S.krok || 0, el = $("krok");
+        SZER = el.clientWidth - 32 || 1000;
         el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Krótka ocena spółki według kryteriów 7/7 — przejdź kolejne kroki albo od razu zobacz podsumowanie.</div>
           <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
