@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPW · Fundamenta</title>
+<script>try{var m=localStorage.getItem("fundamenta_motyw");if(m)document.documentElement.dataset.motyw=m}catch(e){}</script>
+<link rel="stylesheet" href="css/styl.css">
+<link rel="icon" href="icons/icon-192.png">
+</head>
+<body>
+<header class="gora"><div class="w">
+  <a class="logo" href="index.html">Funda<span>menta</span></a>
+  <nav><a href="index.html">Spółki</a><a class="akt" href="gpw.html">GPW</a><a href="porownaj.html">Porównaj</a><a href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
+  <div class="szukaj"><input id="q" type="text" placeholder="Szukaj: DNP, CD Projekt…" autocomplete="off"></div>
+</div></header>
+<main class="main">
+  <section class="karta">
+    <h2>GPW: WIG20 + mWIG40 + sWIG80 — jakość a wycena</h2>
+    <div class="pod">Oceny 0–10 na tle tych spółek GPW (wzrost, siła finansowa, wycena), listy kontrolne z <b>obniżonymi progami wzrostu</b> (wolniejszy rynek). Bez sektorów trudnych do przewidzenia (finanse, surowce, energia, użyteczność publiczna, nieruchomości) — jak w USA. Dane z yfinance (ok. 4–5 lat rocznie, kwotowania w zł), z <span id="asof">–</span>. Kliknij spółkę, żeby zobaczyć szczegóły. Informacyjnie, nie rekomendacja.</div>
+    <details class="objasnienie">
+      <summary><b>Czym GPW różni się od listy USA</b></summary>
+      <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
+        <li><b>Progi wzrostu obniżone:</b> Jakość — przychody &gt; 5 % rocznie przez 3 lata (USA: &gt; 8 % przez 5 lat); 7/7 — przychody 3 lata &gt; +16 % (USA: 5 lat &gt; +50 %), przychody i zysk 1 rok &gt; 3 % (USA 5 %); konsekwentny wzrost — przychody &gt; 6 % w ≥ 2 z 3 lat (USA &gt; 10 % w ≥ 3 z 5). Pozostałe progi (ROE, ROA, ROCE, dług, FCF) jak w USA.</li>
+        <li><b>PEG z przeszłego wzrostu zysku</b> (3 lata), bo prognoz analityków na 5 lat dla GPW nie mamy — przy jednorazowo wysokim wzroście zysku PEG wychodzi zaniżony.</li>
+        <li><b>Progi GPW nie są przetestowane</b> — dane historyczne dla GPW są zbyt krótkie. Wyniki badań z USA (np. Siła finansowa ≥ 7) nie muszą działać tak samo na GPW.</li>
+      </ul>
+    </details>
+    <div class="narzedzia" style="margin-top:10px">
+      <select id="sektor"><option value="">Wszystkie sektory</option></select>
+      <select id="ind"><option value="">Wszystkie indeksy</option><option>WIG20</option><option>mWIG40</option><option>sWIG80</option></select>
+      <label class="mut"><input id="jak" type="checkbox"> tylko <span class="jakosc">✔ Jakość 7/7</span></label>
+      <label class="mut"><input id="sila" type="checkbox"> tylko Siła finansowa ≥ 7</label>
+      <label class="mut"><input id="bez" type="checkbox"> bez ⬇</label>
+      <span id="ile" class="mut male"></span>
+    </div>
+    <div class="tabela-wrap"><table id="lista-gpw">
+      <thead><tr>
+        <th data-k="ogolna" class="n">#</th><th data-k="nazwa">Spółka</th><th data-k="ogolna" class="n">Ocena ogólna</th><th data-k="wzrost" class="n">Wzrost</th><th data-k="sila" class="n">Siła</th>
+        <th data-k="wycena" class="n">Wycena</th><th data-k="pe" class="n">P/E</th><th data-k="peg" class="n">PEG (hist.)</th><th>Wycena</th><th data-k="jak" class="n">Jakość</th><th data-k="lr" class="n">7/7</th>
+        <th data-k="zw" class="n">1 rok</th><th data-k="mc" class="n">Kapit.</th>
+      </tr></thead><tbody></tbody>
+    </table></div>
+  </section>
+  <div class="stopka">Źródła: biznesradar.pl (skład indeksów), Yahoo Finance (sprawozdania, ceny). Progi GPW nieprzetestowane.</div>
+</main>
+<script src="js/wspolne.js"></script>
+<script src="js/gpw.js"></script>
+</body>
+</html>

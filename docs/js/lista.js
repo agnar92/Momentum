@@ -14,7 +14,7 @@
     let MIEJSCA = {};
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
-        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked };
+        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, sila: $("sila").checked };
         const rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
@@ -34,7 +34,7 @@
     }
     function opcje(id, wartosci) { $(id).insertAdjacentHTML("beforeend", wartosci.map((v) => `<option>${esc(v)}</option>`).join("")); }
     function podlacz() {
-        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw"].forEach((id) => $(id).addEventListener("input", rysuj));
+        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw", "sila"].forEach((id) => $(id).addEventListener("input", rysuj));
         document.querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
             const k = th.dataset.k; st = { sort: k, kier: st.sort === k ? -st.kier : (k === "peg" || k === "nazwa" ? 1 : -1) }; zapisz(KLUCZ, st); rysuj();
         }));

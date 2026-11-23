@@ -100,7 +100,7 @@
         return rows.filter((r) => (!q || r.t.toLowerCase().includes(q) || (r.n || "").toLowerCase().includes(q))
             && (!f.sektor || r.s === f.sektor) && (!f.typ || r.typ === f.typ) && (!f.wycena || r.et === f.wycena)
             && (!f.strategia || (r.st[f.strategia] && r.st[f.strategia][0] >= (f.min || r.st[f.strategia][1])))
-            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw));
+            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)));
     }
     // znacznik jakości: spełnia wszystkie 7 kryteriów listy „Jakość” (etapy 74–75, 83)
     const JAKOSC = "Jakość (7 kryteriów)";
@@ -126,9 +126,10 @@
         return { tanio, ocena, wielkosc, punkty: 10 * (tanio + ocena + wielkosc) / 3 };
     }
     function dokup(pozycje, wiersze, opcje) {
-        const o = { konto: null, budzet: null, dzis: new Date().toISOString().slice(0, 10), ...(opcje || {}) };
+        const o = { konto: null, budzet: null, kurs: 1, dzis: new Date().toISOString().slice(0, 10), ...(opcje || {}) };
+        const kurs = ok(o.kurs) && o.kurs > 0 ? o.kurs : 1;            // waluta konta za 1 USD (IKE: PLN); konto, cel i kwoty w walucie konta, ceny akcji w USD
         const wsz = pozycje.map((p) => ({ ...p, r: wiersze[p.t] || null }));
-        wsz.forEach((x) => { x.cena = x.r && ok(x.r.c) ? x.r.c : null; x.wartosc = x.cena !== null ? x.cena * (x.akcje || 0) : 0; });
+        wsz.forEach((x) => { x.cena = x.r && ok(x.r.c) ? x.r.c : null; x.wartosc = x.cena !== null ? x.cena * kurs * (x.akcje || 0) : 0; });
         const suma = wsz.reduce((a, x) => a + x.wartosc, 0), konto = ok(o.konto) && o.konto > 0 ? o.konto : suma, cel = DOKUP.limit * konto;
         wsz.forEach((x) => {
             x.waga = konto > 0 ? x.wartosc / konto : 0; x.kwota = 0; x.plan = 0; x.powod = ""; x.uwagi = []; x.czynniki = punkty(x.r); x.mn = x.czynniki ? x.czynniki.punkty : 0;
@@ -153,7 +154,7 @@
             x.kwota = Math.min(x.plan, zostalo); zostalo -= x.kwota;
             if (x.kwota < x.plan - 0.005) x.uwagi.push(x.kwota > 0 ? "część zakupu — skończył się budżet" : "brak budżetu w tym miesiącu");
         });
-        wsz.forEach((x) => { x.akcjeKup = x.cena ? x.kwota / x.cena : 0; });
+        wsz.forEach((x) => { x.akcjeKup = x.cena ? x.kwota / (x.cena * kurs) : 0; });
         const potrzeba = wsz.reduce((a, x) => a + x.plan, 0), razem = wsz.reduce((a, x) => a + x.kwota, 0);
         return { pozycje: wsz, suma, konto, cel, potrzeba, razem, zostaje: Number.isFinite(zostalo) ? zostalo : 0 };
     }
@@ -246,6 +247,19 @@
         return i < 0 ? null : { miejsce: i + 1, z: z.length };
     }
 
+    // motyw ciemny / jasny: przycisk w nagłówku, wybór w localStorage `fundamenta_motyw` (bez wyboru — wg systemu)
+    if (typeof document !== "undefined") {
+        const KM = "fundamenta_motyw", root = document.documentElement;
+        const ciemny = () => root.dataset.motyw ? root.dataset.motyw === "ciemny" : !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        const przycisk = () => {
+            const w = document.querySelector(".gora .w"); if (!w || document.getElementById("motyw")) return;
+            const b = document.createElement("button"); b.id = "motyw"; b.className = "motyw"; b.type = "button";
+            const ustaw = () => { b.textContent = ciemny() ? "☀" : "🌙"; b.title = ciemny() ? "Motyw jasny" : "Motyw ciemny"; };
+            b.addEventListener("click", () => { root.dataset.motyw = ciemny() ? "jasny" : "ciemny"; try { localStorage.setItem(KM, root.dataset.motyw); } catch (e) { /* tryb prywatny */ } ustaw(); });
+            ustaw(); w.appendChild(b);
+        };
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
+    }
     const W = { dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;

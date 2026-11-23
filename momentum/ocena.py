@@ -70,6 +70,11 @@ def metryki(ex, fv, dzis=None, splity=()):
             ea, va = lq[-1]
             ya = [v for ee, v in lq if abs((F.D(ea) - F.D(ee)).days - 365) <= 45]
             m["rev_q_yoy"] = va / ya[-1] - 1 if ya and ya[-1] > 0 else None
+            qy = []                                          # Lynch: wzrost sprzedaży r/r w ostatnich 3 kwartałach (hamowanie 2 kwartały z rzędu)
+            for ea_, va_ in lq[-3:]:
+                y_ = [v for ee, v in lq if abs((F.D(ea_) - F.D(ee)).days - 365) <= 45]
+                qy.append(va_ / y_[-1] - 1 if y_ and y_[-1] > 0 else None)
+            m["rev_q_yoy3"] = [_r(x) for x in qy]
         lata = []
         for k in range(5):
             a, b = F.wartosc_lata_temu(rt, e, k + 1), F.wartosc_lata_temu(rt, e, k) if k else r0
@@ -129,7 +134,7 @@ def metryki(ex, fv, dzis=None, splity=()):
         if ca_ and rt and abs((F.D(list(ca_)[-1]) - F.D(rt[-1][0])).days) <= 200:
             m["capex_przych"] = list(ca_.values())[-1] / m["rev_ttm"]
     # bilans: ostatni znany i sprzed 5 lat
-    ch = {k: F.polacz(ex[k], F.chwilowe) for k in ("cash", "sti", "eq", "assets", "lc") if ex.get(k)}
+    ch = {k: F.polacz(ex[k], F.chwilowe) for k in ("cash", "sti", "eq", "assets", "lc", "zapasy") if ex.get(k)}
     if ch.get("eq"):
         e = list(ch["eq"])[-1]
         m["cash"] = (ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0)
@@ -240,7 +245,8 @@ def metryki(ex, fv, dzis=None, splity=()):
     op12, ods12, pp12, pod12, no12 = ost12("op"), ost12("odsetki"), ost12("przed_pod"), ost12("podatek"), ost12("nonop")
     if op12 is not None and m.get("ni_ttm") is not None:
         st_ = pod12 / pp12 if pod12 is not None and pp12 and pp12 > 0 else 0.21
-        st_ = min(0.30, max(0.10, st_))
+        # stopa < 10 % to zwykle jednorazowa korzyść podatkowa (np. ALNY: rozwiązanie odpisu na aktywa podatkowe, −1,9 mld) — wtedy ostrożnie 21 %
+        st_ = 0.21 if st_ < 0.10 else min(0.30, st_)
         ni_n = (op12 - (ods12 or 0)) * (1 - st_)
         m["ni_norm"], m["stopa_pod"], m["op_ttm"], m["odsetki_ttm"] = ni_n, st_, op12, ods12
         m["roznica_norm"] = m["ni_ttm"] - ni_n                       # o ile zysk z raportu różni się od znormalizowanego
@@ -275,6 +281,8 @@ def metryki(ex, fv, dzis=None, splity=()):
             med_ = sorted(d5)[2] if len(d5) == 5 else None
             reg = [v for v in d5 if med_ and v <= 1.5 * med_]
             m["dywidenda_stabilna"] = bool(len(d5) == 5 and all(v > 0 for v in d5) and all(reg[k + 1] >= 0.8 * reg[k] for k in range(len(reg) - 1)))
+            d6 = [abs(v) for _, v in dv[-6:]]                 # etap 93 (Lynch): dywidenda rośnie 5 lat z rzędu — u wolno rosnących +11 pp w 3 lata
+            m["dyw_rosnie_5"] = bool(len(d6) == 6 and d6[0] > 0 and all(d6[k + 1] > d6[k] for k in range(5))) if len(d6) == 6 else None
     # rampa capex (etap 86): capex ≥ 2 × capex sprzed 2 lat i ≥ 5 % przychodów; „bogata” = przepływy operacyjne sprzed 2 lat ≥ 3 × ówczesny capex
     ya = {k: F.polacz(ex[k], F.roczne) for k in ("ocf", "capex") if ex.get(k)}
     if ya.get("capex") and ya.get("ocf") and m.get("rev_ttm"):
@@ -290,6 +298,23 @@ def metryki(ex, fv, dzis=None, splity=()):
         hist["q"].append([e, _r(q.get("rev", {}).get(e), 0), _r(q.get("ni", {}).get(e), 0), _r(fq.get(e), 0),
                           _r((ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0) if ch.get("cash", {}).get(e) is not None else None, 0),
                           _r(F.dlug(ex.get("debt", {}), e) if ch.get("eq", {}).get(e) is not None else None, 0)])
+    # Lynch: zapasy r/r względem sprzedaży r/r; dług rosnący kwartał po kwartale
+    if ch.get("zapasy") and m.get("rev_ttm"):
+        zs = list(ch["zapasy"].items())
+        e_, z0 = zs[-1]
+        z1 = next((v for d_, v in reversed(zs) if abs((F.D(e_) - F.D(d_)).days - 365) <= 45), None)
+        m["zapasy_przych"] = z0 / m["rev_ttm"]
+        if z1 and z1 > 0:
+            m["zapasy_1y"] = z0 / z1 - 1
+    dq = [x[5] for x in hist["q"] if x[5] is not None]
+    if len(dq) >= 2:
+        n_ = 0
+        for a_, b_ in zip(dq[::-1][1:], dq[::-1]):
+            if b_ > a_ * 1.001:
+                n_ += 1
+            else:
+                break
+        m["dlug_rosnie_kw"] = n_
     yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc") if ex.get(k)}
     for e in list(yr.get("rev", {}))[-12:]:
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
@@ -510,6 +535,123 @@ CENA_TYPU = {"Duży zwycięzca (10+ lat)": (2.0, "PEG 1–2 to cena godziwa, pon
              "Cykliczna": (None, "autor: niskie P/E to pułapka; u nas nie było gorzej (79 % = 79 %), ale prognozy wzrostu są mało wiarygodne"),
              "Wychodząca z kłopotów": (None, "ważne: czy przetrwa (gotówka, dług) i czy plan naprawy działa"),
              "Ukryte aktywa": (None, "wartość w aktywach, nie w zyskach — wymaga cierpliwości")}
+
+
+# --- Peter Lynch („One Up on Wall Street”, 1989): fazy wzrostu, na co patrzeć i kiedy sprzedać, wg typu spółki -------------
+def pe_mediana(hist, ceny, akcje):
+    """Mediana P/E z ostatnich 5 lat na końcach kwartałów: cena (tygodniowa, skorygowana o splity) × dzisiejsza liczba akcji ÷ zysk TTM
+    (przybliżenie — skup akcji lekko zaniża dawne P/E)."""
+    if not ceny or not akcje or len(hist.get("q") or []) < 8:
+        return None
+    d, c = ceny[0], ceny[1]
+    q, pes = hist["q"], []
+    for i in range(3, len(q)):
+        ni = [x[2] for x in q[i - 3:i + 1]]
+        if any(v is None for v in ni) or sum(ni) <= 0:
+            continue
+        e = q[i][0]
+        j = max((k for k, x in enumerate(d) if x <= e), default=None)
+        if j is None or e < d[0]:
+            continue
+        pes.append(c[j] * akcje / sum(ni))
+    pes.sort()
+    return pes[len(pes) // 2] if len(pes) >= 8 else None
+
+
+FAZY = ("Start", "Szybka ekspansja", "Dojrzewanie")
+
+
+def faza(m):
+    """Lynch: szybko rosnące przechodzą fazy start → szybka ekspansja → dojrzewanie (nasycenie rynku); najwięcej zarabia się w ekspansji."""
+    g1, g3, g5, p = m.get("rev_1y"), m.get("rev_cagr3"), m.get("rev_cagr5"), m.get("przysp")
+    if g1 is None or g3 is None:
+        return None
+    if g1 >= 0.15 and g3 >= 0.15 and (p is None or p >= -0.02 or g1 >= g3):
+        return ("Szybka ekspansja", "przychody rosną ≥ 15 % rocznie i wzrost nie hamuje")
+    if g5 is not None and g5 >= 0.15 and g1 < 0.6 * g5:
+        return ("Dojrzewanie", "wzrost wyraźnie wolniejszy niż średnio przez 5 lat — rynek się nasyca")
+    if g1 >= 0.15:
+        return ("Szybka ekspansja", "przychody rosną ≥ 15 % rocznie, ale tempo spada")
+    return None
+
+
+def lynch(m, typ, zd=None):
+    """Lista kontrolna wg Lyncha dla głównego typu: [(co sprawdzamy, wartość / opis, stan)], stan: True = w porządku, False = sygnał ostrzegawczy
+    (wg Lyncha: rozważ sprzedaż / nie dokupuj), None = brak danych. Plus wskaźnik Lyncha z dywidendą i faza."""
+    def pct(x):
+        return f"{100 * x:+.0f} %".replace("+-", "−") if x is not None else "–"
+    lista = []
+    g1, g5 = m.get("rev_1y"), m.get("rev_cagr5")
+    q3 = [x for x in (m.get("rev_q_yoy3") or []) if x is not None]
+    hamuje = len(q3) == 3 and q3[2] < q3[1] < q3[0]
+    zap, zap_p = m.get("zapasy_1y"), m.get("zapasy_przych")
+    zap_ok = None if zap is None or g1 is None or (zap_p or 0) < 0.03 else not (zap > g1 + 0.10)
+    zap_txt = f"zapasy {pct(zap)} r/r, sprzedaż {pct(g1)}" if zap is not None else "brak danych o zapasach"
+    dl = m.get("dlug_rosnie_kw")
+    pe, pm = m.get("pe"), m.get("pe_med5")
+    if typ == "Szybko rosnąca":
+        lista += [("Faza szybkiej ekspansji trwa", (faza(m) or ("–", ""))[0], (faza(m) or (None,))[0] == "Szybka ekspansja" if faza(m) else None),
+                  ("Sprzedaż nie hamuje 2 kwartały z rzędu", " → ".join(pct(x) for x in q3) if q3 else "–", None if len(q3) < 3 else not hamuje),
+                  ("P/E nie jest absurdalnie wysokie względem wzrostu (PEG < 2)", f"PEG {m['peg']:.2f}".replace(".", ",") if m.get("peg") else "–",
+                   None if m.get("peg") is None else m["peg"] < 2),
+                  ("Zapasy nie rosną szybciej niż sprzedaż", zap_txt, zap_ok)]
+    elif typ == "Stabilnie rosnąca":
+        lista += [("P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)", f"P/E {pe:.1f} vs mediana {pm:.1f}".replace(".", ",") if pe and pm else "–",
+                   None if not (pe and pm) else pe <= 1.3 * pm),
+                  ("Wzrost przychodów nie hamuje (ostatni rok ≥ średnia 5 lat − 5 pp)", f"{pct(g1)} vs {pct(g5)} rocznie", None if g1 is None or g5 is None else g1 >= g5 - 0.05),
+                  ("Fundamenty nie słabną 2 lata z rzędu", "przychody i zysk", not m.get("spadek_2l")),
+                  ("Wysoka marża netto (górna 1/3 stabilnie rosnących)", f"{100 * m['nm']:.0f} %" if m.get("nm") is not None else "–", m.get("nm_gorna_tercyla_stab"))]
+    elif typ == "Wolno rosnąca":
+        dyw_ok = None if not m.get("div") else bool(m.get("dywidenda_stabilna"))
+        wypl = m["div"] * m["mcap"] / m["ni_ttm"] if m.get("div") and m.get("mcap") and m.get("ni_ttm") and m["ni_ttm"] > 0 else None
+        lista += [("Dywidenda rośnie 5 lat z rzędu", "tak" if m.get("dyw_rosnie_5") else ("brak dywidendy" if not m.get("div") else "nie"),
+                   None if not m.get("div") or m.get("dyw_rosnie_5") is None else bool(m["dyw_rosnie_5"]))]
+        lista += [("Dywidenda bez cięć przez 5 lat", "tak" if m.get("dywidenda_stabilna") else ("brak dywidendy" if not m.get("div") else "było cięcie / przerwa"), dyw_ok),
+                  ("Zysk pokrywa dywidendę (wypłata < 100 % zysku)", f"{100 * wypl:.0f} % zysku" if wypl else "–", None if wypl is None else wypl < 1),
+                  ("Sprzedaż nie spada 2 lata z rzędu (utrata rynku)", "przychody i zysk", not m.get("spadek_2l"))]
+    elif typ == "Cykliczna":
+        lista += [("Zapasy nie rosną szybciej niż sprzedaż (koniec cyklu)", zap_txt, zap_ok),
+                  ("Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)", "rampa capex" if m.get("rampa_capex") else "nie", not m.get("rampa_capex")),
+                  ("Sprzedaż w ostatnim kwartale rośnie r/r", pct(m.get("rev_q_yoy")), None if m.get("rev_q_yoy") is None else m["rev_q_yoy"] >= 0),
+                  ("Niskie P/E nie przy zysku na szczycie (zysk +50 % r/r i P/E w dolnej połowie)", f"zysk {pct(m.get('ni_1y'))}, P/E {pe:.1f}".replace(".", ",") if pe else "–",
+                   None if m.get("ni_1y") is None or not pe else not (m["ni_1y"] > 0.5 and pm and pe < pm))]
+    elif typ == "Wychodząca z kłopotów":
+        lista += [("Dług nie rośnie 5 kwartałów z rzędu", f"rośnie {dl} kw. z rzędu" if dl is not None else "–", None if dl is None else dl < 5),
+                  ("Zapasy nie rosną szybciej niż sprzedaż", zap_txt, zap_ok),
+                  ("Naprawa już się dokonała? (zysk dodatni i rośnie — wtedy to już nie okazja, przeklasyfikuj)", pct(m.get("ni_1y")), None)]
+    elif typ == "Ukryte aktywa":
+        lista += [("Zarząd nie rozwadnia akcji (liczba akcji 3 lata ≤ +5 %)", pct(m.get("akcje_3l")), None if m.get("akcje_3l") is None else m["akcje_3l"] <= 0.05),
+                  ("Gotówka netto dodatnia", f"{100 * m['net_cash_mc']:.0f} % kapitalizacji" if m.get("net_cash_mc") is not None else "–",
+                   None if m.get("net_cash_mc") is None else m["net_cash_mc"] > 0)]
+    if typ != "Wychodząca z kłopotów" and dl is not None:
+        lista.append(("Dług nie rośnie 5 kwartałów z rzędu", f"rośnie {dl} kw. z rzędu", dl < 5))
+    zmiany = sum(1 for z in zd or [] for p in z["p"] if p[0] == "5.02")
+    if typ == "Szybko rosnąca" and zd is not None:
+        lista.append(("Zmiany w zarządzie w 12 mies. (8-K 5.02) — sprawdź, czy nie odchodzą kluczowi ludzie", f"{zmiany} raport(y)", None))
+    g = m.get("eps_next5")
+    wsk = (100 * g + 100 * (m.get("div") or 0)) / pe if g and pe and pe > 0 else None
+    # wynik etapu 92 (research/wyniki/r117_etap92.md): ⚠ tylko dla sygnałów potwierdzonych w teście; reszta = „niepotwierdzony” / „nietestowany”
+    lista = [(co, w, s, TEST_LYNCH.get((typ, co), "nietestowany")) for co, w, s in lista]
+    return dict(faza=faza(m) if typ == "Szybko rosnąca" else None, lista=lista, wskaznik=wsk)
+
+
+_NP = "niepotwierdzony"
+TEST_LYNCH = {
+    ("Szybko rosnąca", "Faza szybkiej ekspansji trwa"): _NP,
+    ("Szybko rosnąca", "Sprzedaż nie hamuje 2 kwartały z rzędu"): _NP,
+    ("Szybko rosnąca", "P/E nie jest absurdalnie wysokie względem wzrostu (PEG < 2)"): _NP,
+    ("Szybko rosnąca", "Zapasy nie rosną szybciej niż sprzedaż"): _NP,
+    ("Stabilnie rosnąca", "P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"): _NP,
+    ("Stabilnie rosnąca", "Wzrost przychodów nie hamuje (ostatni rok ≥ średnia 5 lat − 5 pp)"): _NP,
+    ("Stabilnie rosnąca", "Fundamenty nie słabną 2 lata z rzędu"): _NP,
+    ("Wolno rosnąca", "Sprzedaż nie spada 2 lata z rzędu (utrata rynku)"): "potwierdzony",
+    ("Wolno rosnąca", "Dywidenda rośnie 5 lat z rzędu"): "potwierdzony",                       # etap 93: +10,8 pp w 3 lata
+    ("Stabilnie rosnąca", "Wysoka marża netto (górna 1/3 stabilnie rosnących)"): "potwierdzony",  # etap 93: +28 pp w 3 lata
+    ("Cykliczna", "Zapasy nie rosną szybciej niż sprzedaż (koniec cyklu)"): _NP,
+    ("Cykliczna", "Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)"): _NP,
+    ("Cykliczna", "Sprzedaż w ostatnim kwartale rośnie r/r"): _NP,
+    ("Cykliczna", "Niskie P/E nie przy zysku na szczycie (zysk +50 % r/r i P/E w dolnej połowie)"): _NP,
+}
 
 
 # --- strategie z badania -----------------------------------------------------------------------------------------

@@ -38,6 +38,7 @@ CHWILE = {
     "lease": ["OperatingLeaseLiability"],
     "lease_nc": ["OperatingLeaseLiabilityNoncurrent"],
     "lease_c": ["OperatingLeaseLiabilityCurrent"],
+    "zapasy": ["InventoryNet"],                        # Lynch: zapasy rosnące szybciej niż sprzedaż = ostrzeżenie
 }
 # emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
 TAGI_IFRS = {
@@ -62,6 +63,7 @@ CHWILE_IFRS = {
     "assets": ["Assets"],
     "lc": ["CurrentLiabilities"],
     "lease": ["LeaseLiabilities"],
+    "zapasy": ["Inventories"],
 }
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
@@ -93,6 +95,17 @@ def kwartalne(rows):
         for (e0, n0, v0), (e1, n1, v1) in zip(lst, lst[1:]):
             if 80 <= n1 - n0 <= 120 and e1 not in q:
                 q[e1] = v1 - v0
+    # brakujący PIERWSZY kwartał roku: narastająco (np. 6 mies.) minus kwartał kończący się tego samego dnia (np. ALNY: raport za I kw. 2026 bez tagu
+    # 3-miesięcznego, a w raporcie półrocznym są 6 mies. i II kw.) — reszta to I kwartał, kończy się dzień przed początkiem znanego kwartału
+    kw = {(s, e): v for (s, e), (v, _) in pierwsze.items() if 80 <= (D(e) - D(s)).days <= 120}
+    for (s, e), (v, _) in pierwsze.items():
+        if (D(e) - D(s)).days <= 120:
+            continue
+        for (s2, e2), v2 in kw.items():
+            if e2 == e and s2 > s:
+                e_ = (D(s2) - dt.timedelta(days=1)).isoformat()
+                if 80 <= (D(e_) - D(s)).days <= 120 and e_ not in q:
+                    q[e_] = v - v2
     return dict(sorted(q.items()))
 
 
@@ -173,7 +186,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 6
+    out["v"] = 7
     return out
 
 

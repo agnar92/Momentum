@@ -20,7 +20,7 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
 2. SEC: CIK from `company_tickers.json`, companyfacts per ticker (4 threads, `SEC_UA` env / secret) → `fundamenty.wyciag`: for every key ALL tags of its
    list are kept ({tag: rows}) and `polacz` picks, per date, the first tag that has a value (companies switch tags, e.g. Revenues →
    RevenueFromContract…; NVDA's marketable securities tag stopped). Quarters (`kwartalne`): 3-month values plus differences of cumulative values of the
-   same fiscal year (Q4 = FY − 9M; quarterly cash flow from YTD); first filing wins (no restatements). Debt (`dlug`): non-current + current + short-term
+   same fiscal year (Q4 = FY − 9M; quarterly cash flow from YTD; missing Q1 = 6M − Q2, e.g. ALNY 2026); first filing wins (no restatements). Debt (`dlug`): non-current + current + short-term
    borrowings + commercial paper, fallback LongTermDebt. Foreign filers: other reporting currencies (ASML EUR in us-gaap) and IFRS (`ifrs-full`, `TAGI_IFRS`, annual only) are read in the reporting currency (`waluta`) and converted with one current yfinance FX rate (`kursy`, `przelicz`: growth stays as in local currency); SEC data whose latest revenue is > 550 days old is ignored (TM / HMC stopped XBRL); the rest (no SEC filings, e.g. SKHY) → Finviz fallbacks
    (sales / EPS 5Y growth, FCF = mcap / P/FCF, cash = mcap / P/C, debt = D/E × mcap / P/B, revenue = mcap / P/S). Cash = max(SEC cash + short-term
    investments, Finviz mcap / P/C when > 1.2× SEC). < 70 % of tickers with SEC revenue = nothing written.
@@ -38,16 +38,35 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    Scenarios bear g × 0.6 / margin × 0.85, bull × 1.2 / × 1.1. Input checks (`dcf_wejscie`, Nov 2026 audit — the math matched an independent implementation, 37 / 482 inputs were off): revenue from Finviz (mcap / P/S) when SEC TTM differs > 25 %, FCF margin from Finviz (mcap / P/FCF) when SEC FCF differs > 2×, shares = mcap / price, value ≤ 0 → no DCF (e.g. GM captive finance); `dcf_rev`, `dcf_g`, `dcf_marza`, `dcf_uwagi` (Finviz corrections), `dcf_brak` (why DCF is skipped) on the card (JS uses them). Conservative since Nov 2026 (user: „popraw DCF, żeby nie zawyżał wyceny”): FCF margins minus SBC (`sbc_ttm`, `sbc_przych`, hist.y[4] = annual SBC; tags ShareBasedCompensation / IFRS AdjustmentsForSharebasedPayments) and debt + operating lease liability (`leasing`, `dcf_dlug`); cache format v3. Remaining simplification: cash without long-term investments (left on purpose — user: „wolę mieć lekko zaniżoną niż zawyżoną” wycenę; keep DCF changes conservative). Label (`etykieta`) PEG FIRST (user: „na pierwszym planie PEG, dopiero przełączenie na DCF”): PEG < 0.5 Bardzo tania, < 1 Niedowartościowana, < 2 Wyceniona uczciwie,
    < 3 Droga, ≥ 3 Bardzo droga; fallback DCF potential ≥ +40 % / +15 / −15 / −40 %. Card: ONE valuation panel (`#wycena`, right under the top card; user: „PEG i DCF panel powinien być jeden”) with PEG (default, price at PEG 1 / 2) / DCF tabs; top card only shows the label + link.
    Soft analysis (user, Nov 2026, HelloStocks AMZN example: „samo EPS nic nie mówi … czy spółka nie zarabia z czegoś co jest istotne”), facts only, no
-   AI text: **normalized earnings** `ni_norm` = (operating income TTM − interest expense) × (1 − effective tax 10–30 %, fallback 21 %) (SEC tags `nonop`,
+   AI text: **normalized earnings** `ni_norm` = (operating income TTM − interest expense) × (1 − effective tax ≤ 30 %; < 10 % (one-off tax benefit, e.g. ALNY Q3 2026 −1.9 bn) or missing → 21 %) (SEC tags `nonop`,
    `odsetki`, `przed_pod`, `podatek`, cache v6), `eps_norm` = EPS × ni_norm / ni_ttm, `pe_norm`, `peg_norm`; when EPS differs > 15 % `m.peg` = peg_norm
    (`peg_gaap` kept, `peg_norm_uzyte`) so label / 7/7 / score don't show false cheapness; normalized ≤ 0 with GAAP > 0 → no PEG; > 25 % → ❗.
    **8-K events** (`momentum/zdarzenia.py`, `spolki.sec_zdarzenia`: data.sec.gov/submissions, cache `<T>.zd.json` 2 days): last 12 months, Polish item
    descriptions, level 2 (1.03, 1.05, 2.04, 4.01, 4.02, NT 10-K/Q → ❗ warning, `zd` count in lista) / 1 (3.01 — often a voluntary exchange move, 5.02, 2.06, 2.05, 1.02, 5.01, 3.03, 10-K/A)
    / 0; routine 2.02 / 7.01 / 9.01 / 5.07 skipped; card section `#zysk-zd` „Jakość zysku i zdarzenia”, PEG panel EPS chips GAAP / normalized.
+   **Peter Lynch** (user: „sprawdź jego metodę … fazy, reguły sprzedaży, jak rozpoznać typy”): `ocena.faza` (fast growers: Szybka ekspansja / Dojrzewanie),
+   `ocena.lynch(m, typ, zd)` → card `lynch` {faza, lista [(check, value, True/False/None)], wskaznik = (EPS growth % + yield %) ÷ P/E} with per-type sell
+   checks from „One Up on Wall Street” ch. 17 (quarterly revenue y/y slowing 3 quarters `rev_q_yoy3`, PEG < 2, inventories vs sales `zapasy_1y` /
+   `zapasy_przych` — SEC InventoryNet / IFRS Inventories, cache v7 —, P/E vs own 5-year median `pe_mediana` → `pe_med5` (computed in `buduj` from weekly
+   prices × current shares ÷ TTM NI), dividend cut / payout, capex ramp, debt rising 5 quarters `dlug_rosnie_kw`, share dilution); static Lynch texts in
+   spolka.js `LYNCH`, card section `#lynch`. Thresholds Lynch did not give (1.3× P/E, 10 pp, 60 %) are ours. Added first WITHOUT a backtest (user
+   rightly objected: „czemu dodałeś to bez backtestu?” — always test before putting a rule on the site); stage 92 (r117) then tested 12 signals: only ⬇ for
+   slow growers confirmed (−10.9 pp / 36 m), so `TEST_LYNCH` marks each check potwierdzony / niepotwierdzony / nietestowany and the card shows ⚠ only for
+   confirmed ones, grey ○ otherwise.
    `spadek_2l` = revenue or net income TTM y/y < 0 now and a year ago (user's sell rule; stage 77: −4 pp over 5 years) → ⬇ on list and warning on card.
 Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, sila, wycena, ogolna}, typ, peg, pe, dcf_pot, et, st{strategy: [passed,
 total]}, zw, …) and `docs/data/spolki/<T>.json` (card: m, pct, oceny, typy, strategie, peg, dcf, hist{q: [end, rev, ni, fcf, cash, debt] last 40
 quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
+
+## GPW (`gpw.py`, `docs/gpw.html`, `js/gpw.js`)
+
+User, Nov 2026: „to samo dla GPW … trzeba zmniejszyć procenty wzrostowe, bo to wolniejszy rynek”; chosen universe WIG20 + mWIG40 + sWIG80 (composition from
+biznesradar.pl index pages, fallback `docs/data/gpw_sklad.json`), same excluded sectors as USA (yfinance sector names), data from yfinance `.WA` (info, ~4–5
+annual statements, quarterly TTM, weekly prices; cache dir 6 days) → `docs/data/gpw.json` (rows: t, n, s, i, ind, m, st, et, oceny, pct, ceny). Lowered growth
+thresholds `GPW_PROGI` (Jakość: revenue 3y CAGR > 5 %; 7/7: revenue 3y > +16 %, revenue / earnings 1y > 3 %; consistent growth > 6 % in ≥ 2 of 3 years), others
+as USA; PEG from past 3-year earnings CAGR (no analyst forecasts) → labels; scores = percentiles among GPW stocks, same weights. NOT backtested (no history) —
+stated on the page. Page: list with filters (sector, index, Jakość 7/7, Siła ≥ 7, without ⬇), click row → inline details; mobile layout `#lista-gpw`.
+CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „Siła finansowa ≥ 7” filter (stage 95: the only factor with a confirmed edge).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
@@ -56,7 +75,8 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   in localStorage `fundamenta_portfel` — stocks are added with the „＋ Dodaj do portfela” button on the card (`przyciskPortfela` in spolka.js; user: „zamiast wpisywać daj
   przycisk dodaj do portfela w widoku spółki”), shares / average cost edited in the portfel table; `W.dokup` = the USER'S position-building rule (user: „na spółkę max 10 % … pierwszy raz 20 % z tych 10 %,
   potem za każdym razem, kiedy robi się tania, raz w miesiącu kolejne 10 % z tych 10 % … najlepiej ruch kursu o 7 % na plus lub minus”): target = 10 % of the
-  account value (`konto` input: shares + cash; fallback = value of shares), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
+  account value IN PLN (IKE; user: „waluta na IKE jest w PLN, więc tam też sizing”; `konto` input: shares + cash; fallback = value of shares; amounts in PLN,
+  shares = PLN ÷ (USD price × USD/PLN), rate `usdpln` in lista.json from yfinance PLNUSD=X weekly, editable `kurs` input; prices / average cost stay in USD), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
   month (`ost` = {c, d} saved by „Kupiłem”), only when PEG 0–2 and the price moved ≥ ±7 % since the last purchase (reference: `ost.c`, else average cost);
   otherwise wait; none for ⬇ `sp`; optional monthly budget — priority by `W.punkty` (10 × mean of tanio (2 − PEG) ÷ 2, overall ÷ 10, size 1 − (rank − 1) ÷ 500).
   The USER picks the stocks (user: „tylko ja wybieram spółki, nie automat”), no automatic additions or filters. Do not tune to backtests; do NOT suggest ETFs,
@@ -72,6 +92,9 @@ quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
   (3 columns), strategy checklists, valuation tabs PEG (EPS and growth editable, chips) / DCF (growth chips 1Y / 3Y / 5Y / EPS forecast, 5 / 7 / 10 years,
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
+- Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
+  `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
+  every page head applies it before paint). New colors: use variables (`--tlo2`, `--pole`, `--siatka`, `--czerwony-t` …), not hard-coded light hex.
 
 ## CI (`.github/workflows/`)
 
@@ -95,4 +118,13 @@ cd docs && python3 -m http.server
 Pre-registered backtests (protocol in `research/protokol.md` BEFORE each run, results in `research/rejestr.csv` and `research/wyniki/`), data in the
 session's `/home/user/ndx` (not in the repo). Key results behind the site: stages 58 (consistent revenue growth predicts 5-year returns), 67–68 (7/7
 screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE), 89 (position building: DCA + × 2 after a ≥ 15 % drop; PEG tilt
-and waiting for cheap prices not better; lump sum beat 12 tranches 5/7).
+and waiting for cheap prices not better; lump sum beat 12 tranches 5/7), 90 (std-dev channel from a video: 89 % of trades profitable but only
++0.7 pp vs SPY over 12 months — buys in market-wide crashes; portfolio 5.4 %/yr vs SPY 14.5 %, mostly in cash), 91 (same on monthly closes, 12 variants: none beats SPY in both halves with idle
+cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 95 („Prosty wybór” 6-point counter: 5–6 pts 63 % beat the median in 3 years but
+only in 2018–23, CI includes 0 → not on the site; Siła ≥ 7 alone +16 pp [+2.5; +26.8] → list filter), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
+rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
+`dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
+confirmed). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
+6 stabilnie / 2 szybko / 1 wolno rosnąca of 10 slots = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
+procentowym udziale jednej spółki”), each stock's share of the account, Lynch's 20/40/40 and stage
+86 medians for reference; informational, dokup rules unchanged.

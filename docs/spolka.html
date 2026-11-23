@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spółka · Fundamenta</title>
+<script>try{var m=localStorage.getItem("fundamenta_motyw");if(m)document.documentElement.dataset.motyw=m}catch(e){}</script>
 <link rel="stylesheet" href="css/styl.css">
 <link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
 <header class="gora"><div class="w">
   <a class="logo" href="index.html">Funda<span>menta</span></a>
-  <nav><a href="index.html">Spółki</a><a href="porownaj.html">Porównaj</a><a href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
+  <nav><a href="index.html">Spółki</a><a href="gpw.html">GPW</a><a href="porownaj.html">Porównaj</a><a href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
   <div class="szukaj"><input id="q" type="text" placeholder="Ticker, np. NVDA" list="tickery" autocomplete="off"><datalist id="tickery"></datalist></div>
 </div></header>
 <main class="main">
@@ -17,6 +18,7 @@
   <section class="karta ciemna" id="top"></section>
   <section class="karta" id="wycena"></section>
   <section class="karta" id="zysk-zd"></section>
+  <section class="karta" id="lynch"></section>
   <section class="siatka2">
     <div class="karta" id="liczby"></div>
     <div class="karta" id="wykres-ceny"></div>

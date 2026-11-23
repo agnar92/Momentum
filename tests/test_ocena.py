@@ -185,3 +185,45 @@ def test_zdarzenia_8k():
     assert [z["f"] for z in zd] == ["8-K", "NT 10-Q"]       # wyniki kwartalne (2.02) pominięte, zdarzenie sprzed roku też
     assert zd[0]["poz"] == 1 and zd[1]["poz"] == 2 and zd[0]["u"].endswith("/1045810/0001261/a.htm")
     assert len(Z.ostrzezenia(zd)) == 1
+
+
+def test_lynch_fazy_i_sygnaly():
+    m = dict(rev_1y=0.30, rev_cagr3=0.25, rev_cagr5=0.25, przysp=0.01, rev_q_yoy3=[0.35, 0.30, 0.25], peg=2.5, zapasy_1y=0.50, zapasy_przych=0.10, dlug_rosnie_kw=5)
+    assert O.faza(m)[0] == "Szybka ekspansja"
+    lis = O.lynch(m, "Szybko rosnąca")["lista"]
+    stany = {k: s for k, _, s, _ in lis}
+    assert stany["Sprzedaż nie hamuje 2 kwartały z rzędu"] is False and stany["P/E nie jest absurdalnie wysokie względem wzrostu (PEG < 2)"] is False
+    assert stany["Zapasy nie rosną szybciej niż sprzedaż"] is False and stany["Dług nie rośnie 5 kwartałów z rzędu"] is False
+    assert O.faza(dict(rev_1y=0.05, rev_cagr3=0.15, rev_cagr5=0.25))[0] == "Dojrzewanie"
+    s = dict(pe=30.0, pe_med5=20.0, rev_1y=0.08, rev_cagr5=0.10)
+    assert {k: v for k, _, v, _ in O.lynch(s, "Stabilnie rosnąca")["lista"]}["P/E nie odbiegło wysoko od normalnego (≤ 1,3 × mediana z 5 lat)"] is False
+    assert all(st == "niepotwierdzony" for *_, st in lis[:4]) and lis[-1][3] == "nietestowany"
+    wl = {k: (s_, st) for k, _, s_, st in O.lynch(dict(spadek_2l=["przychody"], div=0.02, dyw_rosnie_5=True), "Wolno rosnąca")["lista"]}
+    assert wl["Sprzedaż nie spada 2 lata z rzędu (utrata rynku)"] == (False, "potwierdzony") and wl["Dywidenda rośnie 5 lat z rzędu"] == (True, "potwierdzony")
+    st = {k: (s_, x) for k, _, s_, x in O.lynch(dict(nm=0.3, nm_gorna_tercyla_stab=True), "Stabilnie rosnąca")["lista"]}
+    assert st["Wysoka marża netto (górna 1/3 stabilnie rosnących)"] == (True, "potwierdzony")
+    assert abs(O.lynch(dict(eps_next5=0.15, div=0.02, pe=17.0), "Wolno rosnąca")["wskaznik"] - 1.0) < 1e-9
+    h = dict(q=[[f"2025-{mm:02d}-28", 0, 10, 0, 0, 0] for mm in range(1, 13)])
+    assert abs(O.pe_mediana(h, (["2024-01-01"], [100.0]), 4) - 10.0) < 1e-9    # 100 × 4 ÷ 40
+
+
+def test_pierwszy_kwartal_z_polrocza():
+    rows = [["2026-01-01", "2026-06-30", 500.0, "2026-08-01"], ["2026-04-01", "2026-06-30", 230.0, "2026-08-01"],
+            ["2026-01-01", "2026-09-30", 850.0, "2026-11-01"], ["2026-07-01", "2026-09-30", 350.0, "2026-11-01"]]
+    q = F.kwartalne(rows)
+    assert q == {"2026-03-31": 270.0, "2026-06-30": 230.0, "2026-09-30": 350.0}     # I kw. = 6 mies. − II kw.
+
+
+def test_gpw_metryki_i_progi():
+    import gpw
+    d = dict(info=dict(marketCap=1e9, currentPrice=10.0, trailingPE=10.0),
+             rev={"2022-12-31": 100.0, "2023-12-31": 110.0, "2024-12-31": 121.0, "2025-12-31": 133.1},
+             ni={"2022-12-31": 10.0, "2023-12-31": 12.0, "2024-12-31": 14.0, "2025-12-31": 20.0},
+             eq={"2022-12-31": 80.0, "2025-12-31": 100.0}, assets={"2025-12-31": 150.0}, lc={"2025-12-31": 30.0}, op={"2025-12-31": 25.0},
+             debt={"2025-12-31": 20.0}, fcf={"2025-12-31": 15.0}, cash={"2025-12-31": 30.0})
+    m = gpw.metryki(d)
+    assert abs(m["rev_cagr3"] - 0.10) < 1e-9 and m["lata_wzrostu"] == 3 and abs(m["roe"] - 0.2) < 1e-9
+    assert abs(m["peg"] - 10 / (100 * ((20 / 10) ** (1 / 3) - 1))) < 1e-9 and m["spadek_2l"] is None
+    st = gpw.strategie(m)
+    assert st["Jakość (7 kryteriów, GPW)"][0][2] is True          # przychody 10 %/rok > próg GPW 5 %
+    assert gpw.etykieta(0.4) == "Bardzo tania" and gpw.etykieta(None) is None

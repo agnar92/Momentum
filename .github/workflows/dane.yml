@@ -32,6 +32,9 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
         run: python spolki.py
+      - name: Dane GPW (WIG20 + mWIG40 + sWIG80)
+        continue-on-error: true
+        run: python gpw.py
       - name: Commit data
         run: |
           if [ -z "$(git status --porcelain docs/data)" ]; then

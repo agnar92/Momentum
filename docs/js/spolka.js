@@ -229,7 +229,7 @@
             <label>Cena<input type="number" value="${W.ok(M.price) ? M.price.toFixed(2) : ""}" disabled><span class="mut">rynek</span></label>
             <label class="szer">EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
               ${W.ok(M.eps_norm) ? `<div class="chipy"><button data-e="${M.eps}">z raportu (GAAP) ${W.fmtNum(M.eps)}</button><button data-e="${M.eps_norm}">znormalizowany ${W.fmtNum(M.eps_norm)}</button></div>` : ""}
-              ${M.peg_norm_uzyte ? `<div class="male" style="color:#92400e;margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
+              ${M.peg_norm_uzyte ? `<div class="male" style="color:var(--brazowy-t);margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
             <label class="szer">Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
               <div class="chipy"><button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button></div></label>
             <label>P/E (wyliczone)<input type="number" value="${W.ok(pe) ? pe.toFixed(2) : ""}" disabled><span class="mut">cena ÷ EPS</span></label>
@@ -321,9 +321,9 @@
             ${W.ok(m.pe_norm) ? wr3("P/E", W.fmtNum(m.pe), W.fmtNum(m.pe_norm)) : ""}
             ${W.ok(m.peg_norm) ? wr3("PEG", W.fmtNum(W.ok(m.peg_gaap) ? m.peg_gaap : m.peg), W.fmtNum(m.peg_norm)) : ""}
           </div>
-          <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:#b91c1c">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
-              : Math.abs(roz) > 0.15 ? `<b style="color:#b91c1c">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
-              : '<span style="color:#15803d">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
+          <div class="male" style="margin-top:6px">${roz === null ? (m.ni_norm <= 0 && m.eps > 0 ? '<b style="color:var(--czerwony-t)">Zysk z podstawowej działalności jest ujemny — dodatni wynik z raportu pochodzi z pozycji nieoperacyjnych.</b>' : "")
+              : Math.abs(roz) > 0.15 ? `<b style="color:var(--czerwony-t)">Zysk z raportu jest ${roz > 0 ? "zawyżony" : "zaniżony"} o ${W.fmtPct(Math.abs(roz), 0)} względem podstawowej działalności</b> — P/E i PEG z raportu ${roz > 0 ? "zaniżają" : "zawyżają"} wycenę.`
+              : '<span style="color:var(--zielony-t)">Zysk z raportu zgodny z podstawową działalnością (różnica do 15 %).</span>'}</div>` : '<p class="mut male">Brak danych o zysku operacyjnym w SEC.</p>';
         const kol = ["#64748b", "#d97706", "#dc2626"];
         const li = (z) => `<li class="zd-w"><span class="mut">${esc(z.d)}</span><span>${z.p.map(([k, p, o]) => `<span style="color:${kol[p]};font-weight:${p ? 600 : 400}">● ${esc(o)}</span> <span class="mut male">(${esc(k.includes(".") ? z.f + " pkt " + k : k)})</span>`).join("; ")}
             · <a href="${esc(z.u)}" target="_blank" rel="noopener">raport</a></span></li>`;
@@ -333,6 +333,43 @@
         el.innerHTML = `<h2>Jakość zysku i zdarzenia</h2><div class="pod">Czy zysk z raportu pochodzi z podstawowej działalności, czy z jednorazowych pozycji (np. zyski z wyceny inwestycji), oraz co spółka zgłosiła do SEC w ostatnich 12 miesiącach. Fakty z SEC, bez komentarza.</div>
           <div class="siatka2"><div><div class="mut male" style="margin-bottom:4px">Zysk z raportu a zysk znormalizowany (zysk operacyjny − odsetki, po podatku)</div>${jz}</div>
           <div><div class="mut male" style="margin-bottom:4px">Zdarzenia z raportów bieżących SEC (8-K) · <span style="color:${kol[2]}">● poważne</span> <span style="color:${kol[1]}">● istotne</span> <span style="color:${kol[0]}">● informacyjne</span></div>${lz}</div></div>`;
+    }
+
+    // --- Peter Lynch („One Up on Wall Street”): typ, faza wzrostu i kiedy sprzedać — opis metody + lista kontrolna z danych ---
+    const LYNCH = {
+        "Szybko rosnąca": ["Małe lub średnie, agresywne firmy rosnące 20–25 % rocznie. Na nich da się najwięcej zarobić — i stracić. Przechodzą fazy: start (ryzykowny), szybka ekspansja (najbezpieczniej i najwięcej zysku), dojrzewanie (rynek się nasyca, wzrost hamuje).",
+            "Trzymaj, dopóki firma rośnie i ma gdzie się rozwijać (nowe rynki, produkty). Sprzedaj, gdy kończy się szybka ekspansja: sprzedaż hamuje kolejne kwartały, P/E jest absurdalnie wysokie względem wzrostu, odchodzą kluczowi ludzie, a spółkę polecają już wszyscy."],
+        "Stabilnie rosnąca": ["Duże, znane firmy rosnące ok. 10–12 % rocznie. Nie dadzą dziesięciokrotności, ale chronią w recesji.",
+            "Kupuj przy rozsądnym P/E, licz na 30–50 % zysku, potem sprzedaj i zamień na inną stabilną spółkę, która jeszcze nie wzrosła. Sprzedaj wcześniej, gdy P/E odbiega wysoko od jej normalnego poziomu albo wzrost wyraźnie zwalnia."],
+        "Wolno rosnąca": ["Duże, stare firmy rosnące 2–4 % rocznie, w tempie gospodarki; kupuje się je głównie dla dywidendy.",
+            "Sprzedaj po 30–50 % zysku albo gdy fundamenty się psują: firma traci rynek 2 lata z rzędu, nie ma nowych produktów, przepłaca za przejęcia („diworsyfikacja”), dywidenda przestaje być pokryta zyskiem lub zostaje obcięta."],
+        "Cykliczna": ["Zyski rosną i spadają razem z gospodarką (auta, linie lotnicze, stal, chemia, budownictwo). Najważniejsze jest rozpoznanie, w którym miejscu cyklu jest firma.",
+            "Kupuj pod koniec recesji, gdy zyski są niskie. Sprzedaj pod koniec cyklu: zapasy rosną, ceny spadają, firma buduje nowe moce, popyt słabnie. Niskie P/E przy rekordowych zyskach to pułapka, nie okazja."],
+        "Wychodząca z kłopotów": ["Firmy pobite i w kłopotach, czasem na granicy upadłości. Odbicie bywa szybkie i duże, a nie zależy od rynku.",
+            "Najważniejsze: czy firma przetrwa (gotówka, dług) i czy plan naprawy działa. Sprzedaj, gdy naprawa się dokonała i wszyscy to wiedzą — wtedy to już spółka innego typu. Ostrzeżenia: dług rośnie kwartał po kwartale, zapasy rosną szybciej niż sprzedaż."],
+        "Ukryte aktywa": ["Firma ma coś wartościowego, czego rynek nie zauważa: gotówkę, nieruchomości, patenty, udziały w innych firmach.",
+            "Czekaj, aż rynek doceni aktywa. Sprzedaj, gdy cena już je odzwierciedla albo zarząd zaczyna je przepalać: emituje akcje, przepłaca za przejęcia."],
+    };
+    function lynch() {
+        const el = $("lynch"), L = K.lynch, typ = K.typy && K.typy[0] && K.typy[0][0];
+        if (!typ || !LYNCH[typ]) { el.hidden = true; return; }
+        // etap 92: ⚠ tylko dla sygnałów potwierdzonych w teście; niepotwierdzone i nietestowane — szare ○
+        const ikona = (s, st) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? (st === "potwierdzony" ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut" title="sygnał Lyncha niepotwierdzony w naszym teście">○</span>') : '<span class="mut">–</span>');
+        const stTxt = { potwierdzony: "potwierdzony w teście", niepotwierdzony: "niepotwierdzony w teście", nietestowany: "nietestowany" };
+        const wsk = L && W.ok(L.wskaznik) ? L.wskaznik : null;
+        const ocWsk = wsk === null ? "" : wsk >= 2 ? "bardzo dobrze" : wsk >= 1.5 ? "przyzwoicie" : wsk >= 1 ? "słabo" : "drogo";
+        const lista = (L && L.lista) || [];
+        const ost = lista.filter((x) => x[2] === false && x[3] === "potwierdzony").length, inne = lista.filter((x) => x[2] === false && x[3] !== "potwierdzony").length;
+        el.innerHTML = `<h2>Peter Lynch: typ, faza i kiedy sprzedać</h2><div class="pod">Metoda z książki „One Up on Wall Street” (P. Lynch, 1989). Typ: <b>${esc(typ)}</b>${L && L.faza ? ` · faza: <b>${esc(L.faza[0])}</b> <span class="mut">(${esc(L.faza[1])})</span>` : ""}.</div>
+          <div class="siatka2"><div class="male">
+            <p style="margin:0 0 8px"><b>Czym jest:</b> ${esc(LYNCH[typ][0])}</p>
+            <p style="margin:0 0 8px"><b>Kiedy sprzedać (Lynch):</b> ${esc(LYNCH[typ][1])}</p>
+            <p style="margin:0" class="mut">Wskaźnik Lyncha z dywidendą = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze.
+              ${wsk !== null ? ` Tutaj: <b>${W.fmtNum(wsk)}</b> — ${ocWsk}.` : ""}</p></div>
+          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} potwierdzony sygnał ostrzegawczy</b>` : ""}${inne ? ` · ${inne} sygnał(y) Lyncha niepotwierdzone w teście` : ""}</div>
+            ${lista.length ? `<div class="jz">${lista.map(([co, w, s, st]) => `<div class="ly-w"><span>${ikona(s, st)}</span><span>${esc(co)}<br><span class="mut" style="font-size:11px">${esc(stTxt[st] || "")}</span></span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
+              : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Potwierdzone w testach 2012–2026 (etapy 92–93): u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata) i dywidenda rosnąca 5 lat (+11 pp), u stabilnie rosnących wysoka marża netto (+28 pp). Pozostałe reguły Lyncha — w metodzie.</p></div></div>`;
     }
 
     function sprawozdania(tryb) {
@@ -372,6 +409,6 @@
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); sprawozdania("q");
+        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania("q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
 })();

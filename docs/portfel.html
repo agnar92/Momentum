@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Portfel · Fundamenta</title>
+<script>try{var m=localStorage.getItem("fundamenta_motyw");if(m)document.documentElement.dataset.motyw=m}catch(e){}</script>
 <link rel="stylesheet" href="css/styl.css">
 <link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
 <header class="gora"><div class="w">
   <a class="logo" href="index.html">Funda<span>menta</span></a>
-  <nav><a href="index.html">Spółki</a><a href="porownaj.html">Porównaj</a><a class="akt" href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
+  <nav><a href="index.html">Spółki</a><a href="gpw.html">GPW</a><a href="porownaj.html">Porównaj</a><a class="akt" href="portfel.html">Portfel</a><a href="metoda.html">Metoda</a></nav>
 </div></header>
 <main class="main">
   <section class="karta">
@@ -18,8 +19,8 @@
     <details class="objasnienie" open>
       <summary><b>Zasady</b></summary>
       <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
-        <li><b>Na jedną spółkę najwyżej 10 % konta.</b> Przy koncie 10 000 USD to 1000 USD.</li>
-        <li><b>Pierwszy zakup: 20 % z tych 10 %</b> (200 USD). <b>Każdy kolejny: 10 % z tych 10 %</b> (100 USD), aż pozycja dojdzie do 10 % konta.</li>
+        <li><b>Na jedną spółkę najwyżej 10 % konta</b> (IKE w złotówkach). Przy koncie 10 000 zł to 1000 zł.</li>
+        <li><b>Pierwszy zakup: 20 % z tych 10 %</b> (200 zł). <b>Każdy kolejny: 10 % z tych 10 %</b> (100 zł), aż pozycja dojdzie do 10 % konta. Liczbę akcji przeliczamy kursem USD/PLN (z cotygodniowych danych albo wpisanym przez Ciebie); ceny akcji i średni koszt — w USD.</li>
         <li><b>Dokup najwyżej raz w miesiącu i tylko, gdy spółka jest tania</b> — PEG 0–2 — <b>a kurs zmienił się o co najmniej ±7 %</b> od ostatniego zakupu (w dół lub w górę). Drogo albo za mały ruch kursu → czekamy.</li>
         <li><b>Nie dokupujemy</b>, gdy fundamenty słabną 2 lata z rzędu (⬇).</li>
         <li>Jeśli podasz budżet miesiąca i nie starczy na wszystko, pierwszeństwo mają spółki z większą liczbą <b>punktów 0–10</b>: średnia z „tanio” ((2 − PEG) ÷ 2), oceny ogólnej ÷ 10 i wielkości (miejsce wg kapitalizacji wśród 500, największa = 1).</li>
@@ -37,10 +38,16 @@
   <section class="karta">
     <h2>Ile dokupić w tym miesiącu</h2>
     <div class="narzedzia" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
-      <label class="male">Wartość konta (akcje + gotówka, USD)<br><input id="konto" type="number" step="any" min="0" style="width:170px"></label>
-      <label class="male">Budżet w tym miesiącu (opcjonalnie)<br><input id="budzet" type="number" step="any" min="0" style="width:150px"></label>
+      <label class="male">Wartość konta IKE (akcje + gotówka, PLN)<br><input id="konto" type="number" step="any" min="0" style="width:170px"></label>
+      <label class="male">Budżet w tym miesiącu (PLN, opcjonalnie)<br><input id="budzet" type="number" step="any" min="0" style="width:150px"></label>
+      <label class="male">Kurs USD/PLN<br><input id="kurs" type="number" step="any" min="0" style="width:150px"></label>
     </div>
     <div id="sugestie" style="margin-top:12px"></div>
+  </section>
+  <section class="karta">
+    <h2>Skład wg typów Petera Lyncha</h2>
+    <div class="pod">Ile spółek każdego typu chcesz mieć (domyślnie 6 stabilnie rosnących, 2 szybko rosnące, 1 wolno rosnąca — zmień w tabeli) i ile masz teraz. Obok dla porównania: podział Lyncha (10 spółek) i wynik typów w naszym badaniu (etap 86, mediana zwrotu w 5 lat; wszystkie spółki +69 %).</div>
+    <div id="typy-pf"></div>
   </section>
   <div class="stopka">Informacyjnie, nie rekomendacja. Zasady budowania pozycji ustalasz Ty — strona tylko je liczy.</div>
 </main>

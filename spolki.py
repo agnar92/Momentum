@@ -109,7 +109,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4, mapa=None):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 6 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 7 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -226,11 +226,21 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
             r["m"]["od_maks_12m"] = c[1][-1] / max(c[1][-52:]) - 1
         r["m"]["pe_gorna_tercyla"] = bool(pe67 and r["m"].get("pe") and r["m"]["pe"] >= pe67)
     for r in rows:
+        r["m"]["pe_med5"] = ocena.pe_mediana(r["hist"], r["ceny"], r["m"].get("shares"))
         r["typy"] = ocena.typy(r["m"], r["sector"])
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
         r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"]) + zdarzenia.ostrzezenia(r["zdarzenia"])
+    # etap 93 (Lynch): marża netto w górnej 1/3 stabilnie rosnących
+    stab = [r for r in rows if r["typy"] and r["typy"][0][0] == "Stabilnie rosnąca" and r["m"].get("nm") is not None]
+    nms = sorted(r["m"]["nm"] for r in stab)
+    if len(nms) >= 15:
+        prog = nms[int(len(nms) * 2 / 3)]
+        for r in stab:
+            r["m"]["nm_gorna_tercyla_stab"] = r["m"]["nm"] >= prog
+    for r in rows:
+        r["lynch"] = ocena.lynch(r["m"], r["typy"][0][0] if r["typy"] else None, r.get("zdarzenia"))
     return rows
 
 
@@ -244,7 +254,7 @@ def _czysc(x):
     return x
 
 
-def zapisz(rows, out=OUT, today=None):
+def zapisz(rows, out=OUT, today=None, usdpln=None):
     today = today or dt.date.today()
     os.makedirs(os.path.join(out, "spolki"), exist_ok=True)
     for f in os.listdir(os.path.join(out, "spolki")):
@@ -258,13 +268,13 @@ def zapisz(rows, out=OUT, today=None):
                           roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None,
                           zd=sum(1 for z in r["zdarzenia"] or [] if z["poz"] == 2) or None, om=r["m"].get("od_maks_12m"),
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia")}
+        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["dcf_param"] = ocena.DCF
         json.dump(_czysc(karta), open(os.path.join(out, "spolki", f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     json.dump(_czysc(ocena.rozklady(rows)), open(os.path.join(out, "sektory.json"), "w"), ensure_ascii=False, separators=(",", ":"))
-    json.dump(_czysc(dict(generated_at=today.isoformat(), n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
+    json.dump(_czysc(dict(generated_at=today.isoformat(), usdpln=usdpln, n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
               open(os.path.join(out, "lista.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 
 
@@ -289,7 +299,8 @@ def main(argv=None):
     px = ceny(top)
     zd = sec_zdarzenia(top, mapa, a.cache)
     rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd)
-    zapisz(rows, a.out)
+    pln = kursy(["PLN"]).get("PLN")                       # USD za 1 PLN -> kurs USD/PLN do portfela (IKE w złotówkach)
+    zapisz(rows, a.out, usdpln=1 / pln if pln else None)
     print(f"Zapisano {len(rows)} spółek; z danymi SEC {sum(1 for v in ex.values() if v.get('rev'))}, z cenami {len(px)}.")
     return 0
 

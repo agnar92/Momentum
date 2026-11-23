@@ -1243,3 +1243,134 @@ czeka w SPY: 24,1 % (M0 20,1 %), maxDD −39 % (−33 %), bez NVDA 17,5 % (12,5 
 waga (2 − PEG) × ocena ogólna ÷ 6 (0,5–1,5) × (1 + 0,25 log10(kapit. ÷ 100 mld)) (0,5–1,5): 24,4 %, maxDD −40 %, bez NVDA 17,8 %; okna +1,92 pp [+0,61; +3,09] 7/9;
 szersza lista +0,62 [−0,13; +1,41] 6/9. Wniosek: na liście Jakość 7/7 reguła użytkownika wypada lepiej niż równe kwoty, ale za cenę większych obsunięć, a na szerszej
 liście przewaga jest w granicach szumu; parametry (próg 2, wzór wag) wybrane po obejrzeniu wyników etapu 89 — ryzyko dopasowania.
+
+## Etap 90: kanał odchylenia standardowego (10 lat) — kupno przy −3σ / −4σ, sprzedaż na linii regresji (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, czy to w ogóle ma sens na danych” (film: spółki > 50 mld USD, kanał regresji liniowej z 2500 dni sesyjnych na wykresie dziennym,
+kupno, gdy kurs spadnie poniżej −3σ (spółki z top 10 wg kapitalizacji) albo −4σ (pozostałe); warunki: ≥ 10 lat historii, kanał rosnący, linia −3σ/−4σ > 0;
+realizacja zysku przy dotknięciu linii regresji; 5–10 % portfela na spółkę, gotówka, gdy nic nie ma; autor: „od 2016 bije S&P 500 i Nasdaq”, 10 tys. → 99,9 tys. USD).
+Dane: dzienne ceny skorygowane (eodhd, `prices_valid`), kapitalizacja miesięczna (cap.pkl, USD, z poprzedniego miesiąca — bez zaglądania w przyszłość),
+wszystkie spółki z USA w danych ze spółkami usuniętymi z giełdy (bez listy dzisiejszych zwycięzców). Kanał liczony każdego dnia na ostatnich 2500 dniach:
+regresja liniowa kursu względem czasu, σ = odchylenie standardowe reszt, linia = wartość regresji w bieżącym dniu (tak jak rysuje TradingView; dokładny wzór
+wskaźnika autora nie jest znany — założenie). Sygnał: pierwsze zamknięcie poniżej linii −kσ (k = 3 dla top 10, k = 4 dla reszty spółek ≥ 50 mld USD), nachylenie > 0,
+linia −kσ > 0; kolejny sygnał tej samej spółki dopiero po powrocie kursu do linii regresji. Okres sygnałów 2012-01..2025-10.
+Pytania i miary: (A) zdarzenia — zwrot do wyjścia na linii regresji (najdłużej 36 mies.; inaczej sprzedaż po 36 mies. lub na końcu danych), odsetek wyjść z zyskiem
+(„trafność”), czas do wyjścia, najgłębszy spadek od zakupu; zwrot 12 i 24 mies. od sygnału i nadwyżka nad SPY; (B) porównanie z kupnem przy spadku ≥ 30 % od
+szczytu (ta sama grupa spółek, ta sama reguła wyjścia) i z losowym dniem w tej grupie (zwrot 12/24 mies.); (C) portfel 2013-01..2026-10: 10 % konta na pozycję
+(najwyżej 10 pozycji), gotówka 0 %, wyjście na linii regresji — roczna stopa, maxDD, roczne zwroty, porównanie z SPY i QQQ (z dywidendami w cenach skorygowanych);
+wariant „po dotknięciu linii regresji zatrzymaj połowę” pominięty (prosta reguła). Analiza fundamentalna z AI z filmu — nietestowalna (pominięta; zaznaczamy).
+Hipotezy: (1) trafność wyjść ≥ 70 %, ale średni zwrot 12/24 mies. bliski SPY (nadwyżka w granicach ±3 pp); (2) sygnałów jest mało (kilka–kilkanaście rocznie), więc
+portfel większość czasu w gotówce i przegrywa z SPY w stopie rocznej, ma za to mniejsze obsunięcie; (3) kupno przy −30 % od szczytu nie gorsze niż −3σ/−4σ.
+
+Wynik etapu 90 (2026-11-22). 359 spółek kiedykolwiek ≥ 50 mld USD, 314 z ≥ 10 lat cen. Sygnałów 63 w 14 lat (54 spółki; 33 w marcu 2020, 11 w 2022, 7 w 2025;
+w latach 2013–2014, 2016–2017 żadnego), top 10 (−3σ) tylko 5. Wyjście na linii regresji w 79 %, z zyskiem 89 %, średnio +33,5 % (mediana +35 %, mediana 205 dni),
+najgłębszy spadek po zakupie mediana −12 %, najgorszy wynik −60 %. Zwrot 12 mies. od sygnału +44 %, ale SPY w tym samym czasie prawie tyle samo: nadwyżka +0,7 pp,
+lepiej niż SPY w 46 % sygnałów; 24 mies. −1,8 pp (top 10: +7,6 pp i +25 pp, ale 5 zdarzeń). Losowy miesiąc w tej grupie: 12 mies. nad SPY −1,0 pp, lepiej w 43 %.
+Spadek ≥ 30 % od szczytu: 12 mies. +19,5 %, nad SPY +4,9 pp, lepiej w 46 % (wyjście na linii regresji nie ma tu sensu — kurs często jest już nad linią, porównujemy
+tylko 12/24 mies.). Portfel (10 % na pozycję, gotówka 0 %): 2013–2026 5,4 % rocznie (SPY 14,5 %, QQQ 19,3 %), maxDD −28 % (SPY −34 %), średnio zainwestowane 34 %
+konta, 26 % dni bez żadnej pozycji; 2016–2026 6,7 % (SPY 14,8 %); 10 tys. USD od 2016 → 20 tys. (autor: 99,9 tys.; SPY 44,7 tys.). Hipotezy: (1) trafność ≥ 70 % przy
+nadwyżce ±3 pp — tak (89 %, +0,7 pp); (2) mało sygnałów, portfel w gotówce przegrywa z SPY, mniejsze obsunięcie — tak; (3) −30 % od szczytu nie gorsze — tak.
+Wrażliwość (poza protokołem, r115b): niższe progi (−2σ/−3σ) i kanał na log-cenie — 81–159 sygnałów, trafność 85–89 %, nadwyżka 12 mies. −2,1 … +1,1 pp, portfel
+5,9–8,2 % (gotówka 0 %) albo 13,2–14,2 % (gotówka w SPY; SPY 14,5 %). Wniosek: sygnał „często ma rację” (sprzedaż z zyskiem w ~9 na 10 przypadków), ale nie dlatego,
+że trafia w spółki lepsze od rynku — kupuje w ogólnych krachach (marzec 2020, 2022), po których rośnie cały rynek; wynik autora nie odtwarza się na regułach z filmu
+(różnice: jego decyzje uznaniowe, częściowe trzymanie po linii regresji, analiza z AI, nieznany wzór wskaźnika).
+
+## Etap 91: kanał odchylenia standardowego na wykresie miesięcznym — siatka wariantów (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „potestuj te odchylenia na miesięcznym wykresie, może coś można zmienić”. Dane i grupa jak w etapie 90 (spółki ≥ 50 mld USD, ceny skorygowane, ze spółkami
+usuniętymi). Zamknięcia miesięczne (ostatnia sesja miesiąca); kanał z ostatnich L miesięcy, sygnał i wyjście sprawdzane tylko na zamknięciu miesiąca; wejście po cenie
+zamknięcia miesiąca sygnału; wyjście: pierwsze zamknięcie miesiąca ≥ linia regresji, najdłużej 36 mies. Siatka (12 wariantów): L ∈ {60, 120} mies. × skala ∈ {cena,
+log-cena} × progi (top 10 / reszta) ∈ {−2σ/−2σ, −2σ/−3σ, −3σ/−4σ}. Warunki jak w filmie: kanał rosnący, (dla skali cena) dolna linia > 0. Portfel: 10 % konta na pozycję,
+najwyżej 10, gotówka 0 % albo w SPY; 2013-01..2026-10 oraz połowy 2013–2019 i 2020–2026 (każda od zera). Miary: liczba sygnałów, odsetek z zyskiem, nadwyżka 12 mies.
+nad SPY (średnia i odsetek > 0), stopa roczna portfela i maxDD, średnie zaangażowanie. Reguła oceny (wiele wariantów = ryzyko dopasowania): wariant uznajemy za lepszy
+od SPY tylko, jeśli z gotówką 0 % bije SPY w obu połowach; jeśli żaden — wniosek „zmiana parametrów nie pomaga”; nadwyżkę 12 mies. uznajemy, gdy jest > 0 w obu połowach.
+Hipotezy: (1) żaden wariant z gotówką 0 % nie bije SPY w obu połowach; (2) z gotówką w SPY warianty w granicach SPY ±2 pp rocznie; (3) trafność (z zyskiem) 80–90 %
+we wszystkich wariantach.
+
+Wynik etapu 91 (2026-11-22). SPY 2013–2026 14,3 % rocznie (2013–2019 13,8 %, 2020–2026 14,9 %), QQQ 19,4 %. Z gotówką 0 % żaden z 12 wariantów nie bije SPY
+w obu połowach (najlepszy: 120 mies., log-cena, −2σ/−2σ — 12,2 % rocznie, maxDD −18 % vs SPY −34 %; 2013–2019 9,2 % < 13,8 %, 2020–2026 21,1 % > 14,9 %; 208 sygnałów,
+zaangażowanie 74 %). Z gotówką w SPY: 11,0–16,1 % (6 wariantów ponad SPY, najwięcej 120 mies. log −3σ/−4σ 16,1 % i log −2σ 15,0–15,1 %). Trafność 73–85 %. Nadwyżka 12 mies.
+nad SPY > 0 w obu połowach tylko w 3 wariantach: 120 mies. cena −2σ/−3σ (+3,3 / +2,7 pp; 82 sygnały), 120 mies. log −2σ/−2σ (+0,8 / +2,4 pp; 208), 120 mies. log −3σ/−4σ
+(+31 / +0,7 pp; 33 — pierwsza połowa z kilku zdarzeń); kanał 60 mies. — gorzej (prawie wszystkie ujemne). Hipotezy: (1) żaden wariant nie bije SPY w obu połowach
+z gotówką 0 % — tak; (2) z gotówką w SPY w granicach ±2 pp — częściowo (kanał 60 mies. 11–12 %, czyli −2 … −3 pp); (3) trafność 80–90 % — prawie (73–85 %).
+Wniosek: 10-letni kanał (120 mies.) działa lepiej niż 5-letni; na log-cenie z progiem −2σ sygnałów jest dużo (ok. 15 rocznie), portfel jest w ok. 3/4 zainwestowany
+i ma o połowę mniejsze obsunięcie niż SPY (−18 % vs −34 %), ale w 2013–2019 przegrał z SPY o 4,6 pp rocznie; przewaga tylko w latach 2020–2026. 12 wariantów =
+duże ryzyko dopasowania; żadna zmiana parametrów nie spełnia reguły zapisanej przed testem.
+
+## Etap 92: test sygnałów Lyncha z karty spółki (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „to są reguły Lyncha, czemu dodałeś to bez backtestu?” — słusznie: lista kontrolna Lyncha (karta spółki, sekcja „Peter Lynch”) trafiła na stronę
+bez testu. Sprawdzamy każdy sygnał ostrzegawczy (⚠), który da się odtworzyć historycznie. Dane i zbiór jak w etapach 86–88: top 500 USA PIT bez wykluczonych sektorów,
+starty w styczniu 2012–2023 (12 mies.) i 2012–2023 do 2023-09 (36 mies.), cechy z raportów dostępnych na dany dzień. Typ (przybliżenie strony bez prognozy EPS, której
+historycznie nie mamy): cykliczna — najgorszy rok przychodów w 5 lat ≤ −10 %; szybko rosnąca — przychody 5 lat ≥ 20 % rocznie; stabilnie rosnąca — 8–20 %; wolno — < 8 %
+(trzy ostatnie tylko spoza cyklicznych). Sygnały (jak na stronie): szybko rosnąca — dojrzewanie (przychody 1 rok < 0,6 × średnia 5 lat), hamowanie sprzedaży
+kwartalnej 2 kwartały z rzędu (zmiana wzrostu r/r < 0 teraz i 3 mies. wcześniej), PEG ≥ 2 (historyczny), zapasy r/r > sprzedaż r/r + 10 pp; stabilnie rosnąca —
+P/E > 1,3 × mediana własnego P/E z 60 mies., przychody 1 rok < średnia 5 lat − 5 pp, fundamenty słabną 2 lata (⬇); wolno rosnąca — ⬇; cykliczna — zapasy (jw.),
+rampa capex, sprzedaż kwartalna r/r < 0, „pułapka” (zysk +50 % r/r i P/E poniżej własnej mediany). Nietestowane (brak historii): dług rosnący 5 kwartałów, cięcie
+i pokrycie dywidendy, zmiany w zarządzie, ukryte aktywa, wychodzące z kłopotów, wskaźnik Lyncha z prognozą. Miara: zwrot ceny 12 i 36 mies. minus mediana zbioru
+w tym samym starcie; różnica median (⚠ − ✓) w danym typie, bootstrap blokowy po latach startowych (B = 2000), 95 % przedział. Reguła dla strony: sygnał zostaje jako
+ostrzeżenie, jeśli różnica dla 36 mies. jest ujemna, a górna granica przedziału < 0 (albo tak samo dla 12 mies. przy 36 mies. ≤ 0); w przeciwnym razie na stronie
+oznaczamy go „niepotwierdzony w teście” (szary, nie ⚠). Hipoteza: większość sygnałów nie rozstrzyga (szerokie przedziały), potwierdzą się ⬇ (etap 77) i ewentualnie
+P/E wysoko ponad własną normą u stabilnych.
+
+Wynik etapu 92 (2026-11-22). Różnica median nadwyżki (⚠ − ✓), 36 mies. [95 % przedział]: szybko rosnące — dojrzewanie +4,5 [−19,8; +33,0], hamowanie sprzedaży
+kwartalnej −8,9 [−31,2; +10,1], PEG ≥ 2 +8,1 [−26,0; +64,2], zapasy +22,5 [−33,4; +68,1]; stabilnie rosnące — P/E > 1,3 × własna mediana +6,9 [−24,6; +22,9],
+wzrost hamuje +2,1 [−15,6; +20,8], ⬇ −0,9 [−34,3; +31,7]; wolno rosnące ⬇ −10,9 [−21,3; −1,9] (12 mies. +0,3) — jedyny potwierdzony; cykliczne — zapasy +11,1
+[−12,3; +28,3], rampa capex (4 przypadki), sprzedaż kwartalna < 0 −11,4 [−31,9; +5,6], „pułapka” +0,8 [−12,9; +21,4]. Łącznie (co najmniej jeden sygnał vs żaden):
+szybko +3,3, stabilne +0,1, cykliczne −3,6 pp (wszystkie przedziały obejmują 0). Hipoteza (większość nie rozstrzyga, potwierdzi się ⬇) — tak, ale ⬇ tylko u wolno
+rosnących; P/E ponad własną normą u stabilnych — nie. Strona: ⚠ tylko dla potwierdzonego sygnału, pozostałe szare ○ „niepotwierdzony w teście”, sygnały bez historii
+— „nietestowany”.
+
+## Etap 93: pozostałe reguły Lyncha z „One Up on Wall Street” (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik: „nie masz wszystkich reguł Petera Lyncha z jego książki”. Spis reguł (rozdz. 7–10, 13, 15, 17) i to, co da się odtworzyć historycznie (dane, zbiór, starty,
+miara i bootstrap jak w etapie 92; porównanie grupa A vs grupa B, różnica median nadwyżki nad medianą zbioru, 12 i 36 mies.):
+L1 gotówka netto ≥ 10 % kapitalizacji vs dług netto (gotówka netto < 0) — „poduszka gotówkowa”, rozdz. 13; L2 dług / kapitał ≤ 0,33 vs > 1 — „normalnie 75 % kapitału,
+25 % długu”; L3 wskaźnik Lyncha z dywidendą (wzrost zysku 5 lat rocznie % + stopa dywidendy %) ÷ P/E ≥ 2 vs < 1 — historyczny wzrost zamiast prognozy; L4 szybko
+rosnące: wzrost zysku 20–25 % rocznie (5 lat) vs > 50 % („za gorące”); L5 „najgorętsza spółka”: zwrot 12 mies. i P/E w górnych 10 % zbioru vs reszta; L6 P/E poniżej
+własnej mediany z 5 lat vs > 1,3 × (wszystkie typy; rozdz. 10); L7 stabilnie rosnące: marża netto w górnej vs dolnej tercyli; L8 wolno rosnące płacące dywidendę:
+dywidenda (suma wypłat) wyższa niż rok wcześniej w każdym z 5 lat vs nie; L9 skup akcji (liczba akcji 3 lata ≤ −2 %) vs rozwadnianie (> +5 %) — „idealna spółka” cecha 13;
+L10 P/FCF ≤ 15 vs > 30 (rozdz. 13: przepływy). Nietestowalne (brak danych historycznych lub reguła jakościowa): udział produktu w sprzedaży, nudna nazwa / branża,
+wydzielenie, nisza, odbiorcy > 25 % sprzedaży, plotki, zakupy insiderów, udział instytucji i liczba analityków, zobowiązania emerytalne, ukryte aktywa (nieruchomości,
+patenty, straty podatkowe), struktura długu (bankowy vs obligacje), przejęcia („diworsyfikacja”), okładki gazet, „następny IBM”.
+Reguła dla strony jak w etapie 92: potwierdzony, jeśli różnica 36 mies. ma kierunek Lyncha i przedział go wyklucza 0 (albo 12 mies. przy tym samym znaku 36 mies.).
+Hipoteza: potwierdzą się co najwyżej 2–3 reguły (najpewniej L9 skup akcji i L2 niski dług), reszta nie rozstrzyga.
+
+Wynik etapu 93 (2026-11-22). A − B, 36 mies. [95 % przedział]: L1 gotówka netto +5,8 [−4,5; +15,6]; L2 mały dług −0,5 [−6,0; +7,2]; L3 wskaźnik z dywidendą −12,7
+[−20,4; +3,8] (raczej wbrew Lynchowi); L4 za mało spółek (7 vs 30); L5 „najgorętsze” −8,1 [−58; +31] (najgorętsze nie gorsze); L6 P/E poniżej własnej normy −6,7
+[−18,1; +6,1]; L7 stabilnie rosnące z wysoką marżą netto +28,0 [+7,1; +53,3] — potwierdzona; L8 wolno rosnące z dywidendą rosnącą 5 lat +10,8 [+2,1; +20,9]
+(12 mies. +3,6) — potwierdzona; L9 skup akcji vs rozwadnianie −12,1 [−17,7; −8,8] — SPRZECZNA z Lynchem (rozwadniające spółki, głównie technologiczne z wynagrodzeniami
+w akcjach, wypadały lepiej w 2012–2026; uwaga: w ocenie „Siła” liczba akcji 3 lata liczy się „mniej = lepiej” na podstawie etapu 76 — inna miara, IC całego zbioru);
+L10 P/FCF ≤ 15 −3,5 [−14,9; +6,9]. Hipoteza (2–3 potwierdzone, w tym skup i mały dług) — liczba tak (2), ale potwierdziły się marża u stabilnych i rosnąca dywidenda
+u wolno rosnących, a skup wyszedł odwrotnie. Strona: dwie nowe pozycje listy kontrolnej (potwierdzone), reszta opisana w metodzie jako niepotwierdzona / nietestowana.
+
+## Etap 94: „nie trzymaj stabilnie rosnącej po podwojeniu” i podział portfela wg typów (zapisane 2026-11-22 PRZED uruchomieniem)
+
+Użytkownik przysłał streszczenie Lyncha: kategoryzuj najpierw wg wielkości, potem „historii”; nie trzymaj stabilnie rosnącej po 2× licząc na 10×; podział portfela
+inwestora indywidualnego (10 spółek): stabilnie rosnące 20 %, szybko rosnące 40 %, wychodzące z kłopotów 40 %, wolno rosnące i ukryte aktywa 0. Test (dane, zbiór,
+starty, miara i bootstrap jak w etapach 92–93): stabilnie rosnące (typ jak w etapie 92), których kurs wzrósł ≥ 100 % w 3 lata, vs stabilnie rosnące z wzrostem < 100 %
+(oraz vs < 50 %); kierunek Lyncha: po podwojeniu gorzej (różnica < 0). Podział portfela: wyniki typów są już w etapie 86 (mediana 5 lat: stabilnie +83 %, cykliczne +78 %,
+wolno rosnące +63 %, wychodzące z kłopotów +58 %, szybko rosnące +56 %, wszystkie +69 %) — nie liczymy ponownie; na stronie Portfel pokażemy tylko informacyjnie skład
+portfela użytkownika wg typów obok podziału Lyncha i wyników etapu 86 (bez zmian w regułach dokupu). Hipoteza: po podwojeniu nie gorzej (różnica w granicach szumu).
+
+Wynik etapu 94 (2026-11-22). Stabilnie rosnące po wzroście kursu ≥ 100 % w 3 lata vs < 100 %: 12 mies. +1,4 pp [−5,9; +10,9], 36 mies. +8,7 [−15,5; +29,9]
+(vs < 50 %: +1,8 / +9,9). Hipoteza (nie gorzej) — tak; reguła Lyncha „sprzedaj stabilnie rosnącą po 2×” niepotwierdzona (raczej odwrotnie). Strona Portfel:
+informacyjna tabela składu wg typów (udział użytkownika, podział Lyncha 20/40/40, mediana 5 lat z etapu 86), bez zmian w regułach dokupu.
+
+## Etap 95: „Prosty wybór” — licznik potwierdzonych cech dobrej spółki (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „prosty algorytm oceniający, co zwiększa prawdopodobieństwo dobrej spółki, bo mamy ich za dużo do decyzji”. Licznik 0–6 punktów z cech, które
+wcześniejsze etapy potwierdziły (bez nowych progów): P1 Jakość 7/7 (etap 83), P2 ocena Siła finansowa ≥ 7 (etap 76: najsilniejsza grupa), P3 przychody > 10 %
+w ≥ 3 z 5 lat (etap 58), P4 ROA ≥ 10 % (etap 88), P5 przepływy operacyjne ≥ 30 % długu (etap 88), P6 brak ⬇ — przychody i zysk nie spadają 2 lata z rzędu (etap 77).
+Wycena (PEG) celowo poza licznikiem — o cenie decyduje reguła dokupu użytkownika. Dane i zbiór jak w etapach 92–94 (top 500 USA PIT bez wykluczonych sektorów,
+starty w styczniu 2012–2023), brak danych = punkt niezaliczony. Miary dla grup 0–2 / 3–4 / 5–6 punktów: mediana nadwyżki zwrotu 12 i 36 mies. nad medianą zbioru,
+odsetek spółek lepszych od mediany („prawdopodobieństwo”), odsetek ze stratą po 36 mies.; różnica 5–6 vs 0–2 z bootstrapem po latach (B = 2000), połowy 2012–2017
+i 2018–2023. Uwaga: wszystkie cechy wybrano na tych samych danych — wynik będzie optymistyczny (ryzyko dopasowania). Reguła dla strony: pokazujemy licznik,
+jeśli 5–6 pkt ma wyższą medianę 36 mies. niż 0–2 pkt z przedziałem > 0 i odsetek lepszych od mediany > 50 % w obu połowach.
+Hipoteza: 5–6 pkt — ok. 60 % spółek lepszych od mediany w 3 lata (vs ok. 45 % dla 0–2), różnica kilka–kilkanaście pp.
+
+Wynik etapu 95 (2026-11-23). 36 mies.: 5–6 pkt — 81 obserwacji, mediana nadwyżki +17,3 pp, lepsze od mediany 63 %, ze stratą 17 % (wszystkie: 50 % / 23 %); 3–4 pkt
++1,6 pp / 51 %; 0–2 pkt −0,5 pp / 49 %. Połowy: 2012–2017 5–6 pkt tylko 14 obserwacji, −21,3 pp, 29 % lepszych (gorzej); 2018–2023 67 obserwacji, +24,0 pp, 70 %.
+5–6 vs 0–2: 36 mies. +17,8 pp [−1,1; +40,0], 12 mies. +9,0 [−11,3; +24,4]. Pojedynczo (36 mies.): Siła ≥ 7 +16,2 [+2,5; +26,8] — jedyna z przedziałem > 0; Jakość 7/7
++13,5 [−2,1; +32,2]; przychody > 10 % w 3/5 lat +6,6 [−0,4; +12,1]; ROA ≥ 10 % +3,7; OCF/dług +0,6; brak ⬇ +3,6. Reguła dla strony NIE spełniona (przedział obejmuje 0,
+w 2012–2017 grupa 5–6 pkt gorsza). Hipoteza (ok. 60 % vs 45 %) — liczbowo tak w całości (63 % vs 49 %), ale wynik niestabilny w czasie i oparty na małej grupie.
