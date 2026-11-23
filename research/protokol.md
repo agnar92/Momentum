@@ -1425,3 +1425,20 @@ akcje 3 lata ≤ −2 % +9,3 [−33,5; +32,2] — w granicach szumu; ROA ≥ 10 
 przewagi — tak; ROA / ROCE w granicach szumu — nie (wyższe ROA raczej gorzej; mała grupa, ok. 75 vs 75 obserwacji); ujemny kapitał nie szkodzi — tak, a nawet lepiej
 (to głównie dojrzałe, rentowne firmy oddające gotówkę akcjonariuszom). Wniosek: brak ROE przy ujemnym kapitale nie jest sygnałem ostrzegawczym; skupu nie dodajemy jako
 zamiennika ROE.
+
+## Etap 99: propozycja portfela do 10 spółek wg typów Lyncha — 6 stabilnie / 2 szybko / 1 wolno rosnąca (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „zrób sugestie budowania portfela max do 10 spółek z różnych typów akcji Lyncha” (jego cel: 6 stabilnie, 2 szybko, 1 wolno rosnąca). Reguła doboru tylko
+z cech potwierdzonych wcześniej (bez nowych progów): wszędzie bez ⬇ (etapy 77, 92) i FCF > 0 (etap 97); stabilnie rosnące — Siła ≥ 7 lub Jakość 7/7 (etapy 83, 95),
+kolejność wg marży netto (etap 93), 6 spółek; szybko rosnące — Siła ≥ 7 lub Jakość 7/7, kolejność wg oceny Siła, 2 spółki; wolno rosnące — dywidenda rośnie 5 lat
+(etap 93), kolejność wg Siła, 1 spółka. Typy jak w etapie 92 (przybliżenie bez prognoz). Test: co roku w styczniu 2012–2023 wybór, równe wagi, trzymanie 12 mies.
+(i osobno 36 mies.), bez kosztów; porównanie ze średnią i medianą zbioru (równe wagi wszystkich spółek) w tym samym okresie. Miary: średni roczny zwrot portfela vs zbioru,
+lata lepsze od zbioru (z 12), najgorszy rok, odsetek spółek portfela ze stratą; połowy 2012–2017 / 2018–2023; bootstrap po latach dla różnicy średnich. Hipoteza: portfel
+lepszy od zbioru o kilka pp rocznie, w większości lat, z mniejszym odsetkiem strat; wynik niepewny (9 spółek, 12 startów). Reguła dla strony: propozycje pokazujemy
+(jako podpowiedź, użytkownik wybiera), jeśli portfel nie jest gorszy od zbioru w obu połowach; w przeciwnym razie — nie.
+
+**Wynik etapu 99** (`r124_etap99.py`, `wyniki/r124_etap99.md`): 12 mies., 10 startów 2012–2023: portfel +18,0 % vs zbiór +11,8 % (+6,2 pp [−0,7; +13,6]), lepiej w 6/10 lat,
+spółek ze stratą 24 vs 34 %; połowy: 2012–2017 −3,1 pp (1/4, średnio 4,8 spółki — w 2014 r. tylko 1, w 2015 r. 2), 2018–2023 +12,5 pp (5/6). 36 mies.: +76,1 vs +44,2 %
+(+32,0 pp [+6,6; +67,3]), 2012–2017 +8,0 pp, 2018–2023 +47,9 pp, strata 14 vs 24 %. **Reguła z protokołu NIE spełniona** (12 mies. w pierwszej połowie gorzej niż zbiór),
+przedział dla 12 mies. obejmuje 0 → propozycji nie dodajemy na stronę. Na plus (nie zmienia decyzji): mniej spółek ze stratą w obu horyzontach i lepszy wynik 36 mies.
+w obu połowach; w latach 2012–2017 reguła wybierała za mało spółek, żeby ocenić.
