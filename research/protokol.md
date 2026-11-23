@@ -1451,3 +1451,18 @@ Ta sama reguła dla strony: pokazujemy, jeśli portfel nie jest gorszy od zbioru
 **Wynik etapu 100** (`r125_etap100.py`, `wyniki/r125_etap100.md`): 12 mies. +5,5 pp [−0,4; +11,5] (6/10 lat), 2012–2017 −2,7 pp (1/4, ~5,5 spółki), 2018–2023 +11,0 pp;
 36 mies. +30,2 pp [+8,1; +58,6], obie połowy dodatnie; spółek ze stratą 24 vs 34 % (12 m), 16 vs 24 % (36 m). Jak w etapie 99 — **reguła niespełniona** (pierwsza połowa
 12 mies. gorsza), propozycji nie dodajemy. Cel 6 / 2 / 2 w tabeli portfela ustawiony (decyzja użytkownika, nie z testu).
+
+## Etap 101: faza spółki (cykl życia 1–5) a zwrot (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik (zrzuty z innego serwisu, model 5 faz: start, hiperwzrost, dźwignia operacyjna, zwrot kapitału, schyłek): „wykres fazy … mówi czy mamy szanse na zarobek”.
+Faza z trzech pytań, nasze reguły (bez dopasowania progów): **5 Schyłek** — przychody 3 lata CAGR < 0; inaczej, gdy marża operacyjna TTM ≤ 0: **1 Start** (zysk netto TTM
+nie lepszy niż rok wcześniej) albo **2 Hiperwzrost** (strata się zmniejsza); gdy marża operacyjna > 0: **4 Zwrot kapitału** (dywidenda wypłacona w ostatnim roku obrotowym
+lub skup netto > 0), w przeciwnym razie **3 Dźwignia operacyjna**. Zbiór, starty i miary jak w etapach 92–98 (top 500 USA PIT bez wykluczonych sektorów, styczeń 2012–2023;
+nadwyżka nad medianą zbioru 12 / 36 mies., odsetek lepszych od mediany, odsetek ze stratą, połowy 2012–17 / 2018–23, bootstrap po latach). Porównania: każda faza vs
+pozostałe; fazy 3–4 vs 1, 2, 5. Hipoteza z filmu: fazy 3–4 lepsze, 5 gorsza. Reguła dla strony: fazę pokazujemy zawsze jako opis faktów (trzy pytania), a obok wynik
+testu; twierdzenie „faza X daje większą szansę” oznaczamy jako potwierdzone tylko, gdy różnica 36 mies. ma przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 101** (`r126_etap101.py`, `wyniki/r126_etap101.md`): żadna faza nie różni się od pozostałych istotnie (wszystkie przedziały 36 mies. obejmują 0, znaki zmieniają się
+między połowami). 3–4 vs 1, 2, 5: 36 mies. −1,5 pp [−6,5; +3,0]. Schyłek (przychody 3 lata w dół) NIE gorszy: +2,4 pp [−3,5; +10,2], strata 19 % (najniższa). Start: więcej
+spółek ze stratą (40 % / 12 m, 46 % / 36 m vs 30 / 23 %), ale mediana bez pewności (n = 68). W top 500 ~60 % spółek jest w fazie 4. **Twierdzenie „faza mówi o szansie na
+zarobek” niepotwierdzone** → na stronie faza tylko jako opis faktów z dopiskiem o wyniku testu.

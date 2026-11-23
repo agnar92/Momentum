@@ -187,6 +187,29 @@
         return out;
     }
 
+    // faza spółki (cykl życia; etap 101): trzy pytania — przychody rosną? zarabia (marża operacyjna > 0)? oddaje kapitał (dywidenda lub skup netto)?
+    // 5 Schyłek: przychody 3 lata CAGR < 0; marża op. ≤ 0: 1 Start / 2 Hiperwzrost (strata netto TTM mniejsza niż rok wcześniej);
+    // marża op. > 0: 4 Zwrot kapitału (dywidenda lub skup netto > 0) / 3 Dźwignia operacyjna. W teście faza NIE przewidywała zwrotu — tylko opis.
+    const FAZY = ["Start", "Hiperwzrost", "Dźwignia operacyjna", "Zwrot kapitału", "Schyłek"];
+    // etap 101 (36 mies., top 500 USA 2012–2023): [mediana nadwyżki nad medianą zbioru (pp), % spółek ze stratą]; wszystkie: strata 23 %
+    const FAZA_TEST = { 1: [-22.0, 46], 2: [-3.4, 36], 3: [2.8, 24], 4: [0.0, 23], 5: [2.6, 19] };
+    function faza(m, q) {
+        if (!m) return null;
+        const rev = m.rev_cagr3, om = ok(m.om) ? m.om : (ok(m.op_ttm) && ok(m.rev_ttm) && m.rev_ttm > 0 ? m.op_ttm / m.rev_ttm : null);
+        const zwrot = (ok(m.div) && m.div > 0) || (ok(m.skup_netto_mc) && m.skup_netto_mc > 0);
+        const pyt = { przychody: ok(rev) ? rev >= 0 : null, zysk: ok(om) ? om > 0 : null, zwrot };
+        if (!ok(rev)) return null;
+        let nr = null;
+        if (rev < 0) nr = 5;
+        else if (!ok(om)) return null;
+        else if (om <= 0) {
+            const t = ttmSeria(q || [], 2).filter((x) => ok(x[1]));
+            const n = t.length, popr = n >= 5 && t[n - 1][1] > t[n - 5][1];
+            nr = popr ? 2 : 1; pyt.poprawa = n >= 5 ? popr : null;
+        } else nr = zwrot ? 4 : 3;
+        return { nr, nazwa: FAZY[nr - 1], pyt, om, test: FAZA_TEST[nr] };
+    }
+
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
     const GRUPY = {
         wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
@@ -261,7 +284,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

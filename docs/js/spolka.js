@@ -382,6 +382,122 @@
             <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Potwierdzone w testach 2012–2026 (etapy 92–93): u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata) i dywidenda rosnąca 5 lat (+11 pp), u stabilnie rosnących wysoka marża netto (+28 pp). Pozostałe reguły Lyncha — w metodzie.</p></div></div>`;
     }
 
+    // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
+    // Tylko fakty z danych i kryteria z testów; bez werdyktu „kup / sprzedaj” (spółki wybiera użytkownik).
+    const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
+    const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
+    const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
+    const KR_IDX = { Wzrost: [0, 1, 2], "Rentowność": [3], "Bezpieczeństwo": [4, 5], Wycena: [6] };
+    function fmtKryt(co, v) {
+        if (!W.ok(v)) return "–";
+        if (/FCF|Wolne|Kapitalizacja/.test(co)) return W.fmtUsd(v) + " " + WAL;
+        if (/PEG|Dług/.test(co)) return W.fmtNum(v);
+        if (/ w ≥ | z 10 lat|lat\)$/.test(co) && Math.abs(v) >= 1 && Number.isInteger(v)) return String(v);
+        return W.fmtPct(v, 0, true);
+    }
+    const kropki = (n, z) => `<span class="kr-kropki">${Array.from({ length: z }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
+    const tn = (b) => (b === true ? '<b class="kr-tak">Tak.</b>' : b === false ? '<b class="kr-nie">Nie.</b>' : '<b class="mut">Brak danych.</b>');
+    function iskra(w, et, kolor) {
+        const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+        if (p.length < 2) return '<div class="mut male">Za mało danych do wykresu.</div>';
+        const mn = Math.min(0, ...p.map((x) => x[1])), mx = Math.max(...p.map((x) => x[1])), zak = mx - mn || 1;
+        const X = (i) => 6 + (i / (w.length - 1)) * 188, Y = (v) => 52 - ((v - mn) / zak) * 44;
+        const os = mn < 0 ? `<line x1="0" x2="200" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--siatka)" stroke-dasharray="3 3"/>` : "";
+        const ost = p[p.length - 1];
+        return `<svg viewBox="0 0 200 60" class="kr-iskra" preserveAspectRatio="none">${os}<polyline fill="none" stroke-width="2" style="stroke:${kolor}" points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}"/><circle cx="${X(ost[0])}" cy="${Y(ost[1])}" r="3" style="fill:${kolor}"/></svg>
+          <div class="kr-osx mut"><span>${esc(et[p[0][0]])}</span><span>${esc(et[ost[0]])}</span></div>`;
+    }
+    function diagramFaz(nr) {
+        // własny schemat: przychody, zysk i wypłaty dla akcjonariuszy w pięciu fazach (poglądowo, bez danych)
+        const x = (f) => f * 120;
+        const prz = "M0,96 C80,95 140,80 240,62 S400,36 480,30 S560,30 600,40", zys = "M0,100 C40,110 80,122 120,120 S200,104 240,100 S330,72 360,64 S470,54 600,70",
+            wyp = "M360,100 C400,96 440,92 480,90 S560,92 600,98";
+        return `<svg viewBox="0 0 600 140" class="kr-fazy" preserveAspectRatio="none" role="img" aria-label="Schemat pięciu faz spółki">
+          ${[1, 2, 3, 4, 5].map((f) => `<rect x="${x(f - 1)}" y="0" width="120" height="140" style="fill:${f === nr ? "var(--zielony-tlo)" : "transparent"}"/>${f > 1 ? `<line x1="${x(f - 1)}" x2="${x(f - 1)}" y1="0" y2="140" style="stroke:var(--siatka)"/>` : ""}`).join("")}
+          <line x1="0" x2="600" y1="100" y2="100" style="stroke:var(--siatka)" stroke-dasharray="4 4"/>
+          <path d="${prz}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--niebieski)"/><path d="${zys}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--zielony)"/>
+          <path d="${wyp}" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--zolty)"/></svg>
+          <div class="kr-fazy-et">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : ""}"><span>${i + 1}</span>${esc(n)}</div>`).join("")}</div>
+          <div class="kr-leg male"><span style="color:var(--niebieski)">━ przychody</span> <span style="color:var(--zielony)">━ zysk</span> <span style="color:var(--zolty)">━ dywidendy i skup</span> <span class="mut">(schemat poglądowy)</span></div>`;
+    }
+    function kryteriaHtml(idx) {
+        const l = lista77(); if (!l) return '<p class="mut male">Brak kryteriów 7/7 dla tej spółki.</p>';
+        return `<div class="jz">${idx.map((i) => l[i]).filter(Boolean).map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart"><b>${esc(fmtKryt(co, v))}</b></span></div>`).join("")}</div>`;
+    }
+    const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
+    function krokTresc(i) {
+        const f = W.faza(M, K.hist && K.hist.q), y = (K.hist && K.hist.y) || [];
+        const ety = y.map((r) => r[0].slice(0, 4)), cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
+        if (i === 0) {
+            const p = f ? f.pyt : {};
+            const zw = [];
+            if (W.ok(M.div) && M.div > 0) zw.push(`dywidenda ${W.fmtPct(M.div, 1)} rocznie`);
+            if (W.ok(M.skup_netto_mc)) zw.push(`skup netto ${W.fmtPct(M.skup_netto_mc, 1, true)} kapitalizacji (12 mies.)`);
+            if (W.ok(M.akcje_3l)) zw.push(`liczba akcji ${W.fmtPct(M.akcje_3l, 1, true)} w 3 lata`);
+            const t = f && f.test;
+            return `<div class="kr-pyt">
+              <div class="pole"><div class="kr-nr">1</div><b>Czy przychody rosną?</b><div>${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? `${W.fmtPct(M.rev_cagr3, 1, true)} rocznie przez 3 lata` : ""}</div>${iskra(y.map((r) => r[1]), ety, "var(--niebieski)")}</div>
+              <div class="pole"><div class="kr-nr">2</div><b>Czy zarabia?</b><div>${tn(p.zysk)} ${f && W.ok(f.om) ? `marża operacyjna ${W.fmtPct(f.om, 1)}` : ""}${W.ok(M.op_ttm) ? `, zysk operacyjny ${W.fmtUsd(M.op_ttm)} ${WAL} (12 mies.)` : ""}${p.poprawa === true ? " — strata się zmniejsza" : p.poprawa === false ? " — strata się nie zmniejsza" : ""}</div>${iskra(y.map((r) => r[2]), ety, "var(--zielony)")}</div>
+              <div class="pole"><div class="kr-nr">3</div><b>Czy oddaje kapitał akcjonariuszom?</b><div>${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div></div></div>
+              ${f ? `<div class="kr-faza"><div class="kr-faza-t">${esc(K.t)} jest w fazie <b>${f.nr}: ${esc(f.nazwa)}</b></div>${diagramFaz(f.nr)}
+                <p class="mut male" style="margin:8px 0 0">Test 2012–2026 (etap 101, 500 największych spółek USA): sama faza <b>nie mówiła</b>, czy spółka zarobi więcej od innych — różnice w granicach przypadku.
+                Faza ${f.nr} po 3 latach: mediana ${t[0] >= 0 ? "+" : ""}${W.fmtNum(t[0], 1)} pp względem mediany wszystkich, strata u ${t[1]} % spółek (wszystkie: 23 %).${f.nr === 1 ? " Spółki na starcie częściej kończyły ze stratą." : ""}${f.nr === 5 ? " Spadające przychody nie oznaczały gorszego wyniku akcji." : ""}</p></div>`
+                : '<p class="mut">Za mało danych, żeby określić fazę.</p>'}`;
+        }
+        if (i === 1) {
+            const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
+            return `<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
+              <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div><div id="kr-wykres" style="margin-top:10px"></div>`;
+        }
+        if (i === 2) {
+            const j = listaJak(), dod = j ? j.filter(([co]) => /ROA|ROCE|3 lata temu/.test(co)) : [];
+            return `${kryteriaHtml(KR_IDX["Rentowność"])}
+              ${dod.length ? `<div class="mut male" style="margin:10px 0 4px">Dodatkowo z listy „Jakość (7 kryteriów)” (nie liczone do 7/7):</div><div class="jz">${dod.map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart">${esc(fmtKryt(co, v))}</span></div>`).join("")}</div>` : ""}
+              <div class="kr-cagr" style="margin-top:10px">${[["Marża brutto", M.gm], ["Marża operacyjna", M.om], ["Marża netto", M.nm]].map(([n, v]) => `<div><small>${n}</small><b>${W.fmtPct(v, 1)}</b></div>`).join("")}</div>`;
+        }
+        if (i === 3) {
+            const s = K.oceny && K.oceny.sila;
+            return `${kryteriaHtml(KR_IDX["Bezpieczeństwo"])}
+              <div class="kr-cagr" style="margin-top:10px"><div><small>Gotówka − dług</small><b class="${M.net_cash >= 0 ? "plus" : "minus"}">${W.ok(M.net_cash) ? W.fmtUsd(M.net_cash) + " " + WAL : "–"}</b></div>
+                <div><small>Siła finansowa (0–10)</small><b>${oc(s)}</b></div><div><small>Spadek 2 lata z rzędu (⬇)</small><b class="${M.spadek_2l ? "minus" : ""}">${M.spadek_2l ? "tak" : "nie"}</b></div></div>
+              <p class="mut male">Siła finansowa ≥ 7 to jedyny czynnik z wyraźną przewagą w naszych testach (etap 95: +16 pp w 3 lata).</p>`;
+        }
+        if (i === 4) {
+            const peg = M.peg, pr = M.price, B = [0.5, 1, 2, 3], N = ["Bardzo tania", "Niedowartościowana", "Uczciwie", "Droga", "Bardzo droga"];
+            let poz = null;
+            if (W.ok(peg) && peg > 0) { // pięć równych stref: 0–0,5 / 0,5–1 / 1–2 / 2–3 / 3–4+
+                const g = [0, ...B, 4], k = Math.min(4, g.filter((b) => b <= peg).length - 1);
+                poz = Math.max(2, Math.min(98, 20 * k + 20 * Math.min(1, (peg - g[k]) / (g[k + 1] - g[k]))));
+            }
+            return `${kryteriaHtml(KR_IDX.Wycena)}
+              ${poz !== null ? `<div class="kr-wyc"><div class="kr-wyc-teraz" style="left:${poz}%;transform:translateX(${poz < 15 ? "-8%" : poz > 85 ? "-92%" : "-50%"})">Dziś ${W.fmtCena(pr)}<br>▼</div>
+                <div class="kr-pasek">${N.map((n, j) => `<span class="z${j}">${n}</span>`).join("")}</div>
+                <div class="kr-ceny mut">${B.map((b, j) => `<span style="left:${20 * (j + 1)}%">${W.fmtCena(pr * b / peg)}</span>`).join("")}</div></div>
+                <p class="mut male">Cena, przy której PEG wyniósłby 0,5 / 1 / 2 / 3 (przy dzisiejszym zysku i prognozie wzrostu). PEG ${W.fmtNum(peg)} — <a href="#wycena">szczegóły i zmiana założeń ↓</a></p>`
+                : '<p class="mut">Brak PEG (zysk ≤ 0 albo brak prognozy wzrostu) — zob. <a href="#wycena">DCF ↓</a>.</p>'}`;
+        }
+        const wiersze = ["Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena"].map((n) => { const [a, b] = zalicz(KR_IDX[n]); return [n, a, b]; });
+        const suma = wiersze.reduce((s, x) => s + x[1], 0), wsz = wiersze.reduce((s, x) => s + x[2], 0);
+        const ow = (K.ostrzezenia || []).length, brak = wiersze.flatMap(([n]) => { const l = lista77(); return l ? KR_IDX[n].map((j) => l[j]).filter((k) => k && !k[2]).map((k) => k[0]) : []; });
+        return `<div class="kr-sum">
+          <div class="kr-sum-w"><span>Faza</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
+          ${wiersze.map(([n, a, b]) => `<div class="kr-sum-w"><span>${n}${n === "Wycena" && K.etykieta ? ` <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span>${b ? kropki(a, b) : ""}<b>${b ? `${a} z ${b}` : "–"}</b></div>`).join("")}
+          <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : ""}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
+          ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
+          ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
+          <p class="mut male">To zestawienie faktów, nie rekomendacja — decyzję podejmujesz sam. W testach 2015–2026 portfel spółek 7/7 (PEG 0–1) dawał 18–21 % rocznie wobec 14 % dla S&amp;P 500 (etapy 67–68).</p>`;
+    }
+    function krok(i) {
+        if (i !== undefined) S.krok = i;
+        const k = S.krok || 0, el = $("krok");
+        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Krótka ocena spółki według kryteriów 7/7 — przejdź kolejne kroki albo od razu zobacz podsumowanie.</div>
+          <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
+          <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
+          <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
+        el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => krok(+b.dataset.kr)));
+        if (k === 1 && $("kr-wykres")) { const y = (K.hist && K.hist.y) || []; if (y.length) WY.slupki($("kr-wykres"), y.map((r) => r[0].slice(0, 4)), [{ nazwa: "Przychody", kolor: "#2a78d6", w: y.map((r) => r[1]) }, { nazwa: "Zysk netto", kolor: "#16a34a", w: y.map((r) => r[2]) }], usdOs, 220); }
+    }
+
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
         el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Z Yahoo Finance (ok. 4–5 lat rocznie, ostatnie kwartały)." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
@@ -419,6 +535,6 @@
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
+        domyslne(); top(); krok(0); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();

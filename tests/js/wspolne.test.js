@@ -103,3 +103,13 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
     assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
 });
 
+
+test("faza spółki (etap 101): trzy pytania", () => {
+    const q = (a, b) => [["2025-03", 0, a], ["2025-06", 0, a], ["2025-09", 0, a], ["2025-12", 0, a], ["2026-03", 0, b], ["2026-06", 0, b], ["2026-09", 0, b], ["2026-12", 0, b]];
+    assert.strictEqual(W.faza({ rev_cagr3: -0.02, om: 0.2 }).nr, 5);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.3, om: -0.1 }, q(-10, -5)).nr, 2);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.3, om: -0.1 }, q(-5, -10)).nr, 1);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.1, om: 0.2, div: 0 }).nr, 3);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.1, om: 0.2, div: 0, skup_netto_mc: 0.01 }).nr, 4);
+    assert.strictEqual(W.faza({ om: 0.2 }), null);
+});
