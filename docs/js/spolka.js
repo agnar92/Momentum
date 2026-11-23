@@ -23,7 +23,7 @@
         if (W.ok(m.roe)) fakty.push(`ROE ${W.fmtPct(m.roe, 0)}`);
         if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} ${WAL})` : `dług netto ${W.fmtUsd(-m.net_cash)} ${WAL}`);
         const typ = K.typy && K.typy[0];
-        const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">szczegóły PEG / DCF ↓</a></div>` : "";
+        const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">PEG / DCF w podsumowaniu ↓</a></div>` : "";
         $("top").innerHTML = `
           <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}</h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div>
@@ -660,19 +660,27 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           </div></div>
           ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
-          <p class="mut male">Zestawienie faktów z danych — decyzję podejmujesz sam.</p>`;
+          <p class="mut male">Zestawienie faktów z danych — decyzję podejmujesz sam.</p>
+          <div id="wycena" class="kr-wycena"></div>`;
     }
+    document.addEventListener("click", (e) => {
+        const a = e.target.closest && e.target.closest('a[href="#wycena"]');
+        if (!a || !K) return;
+        e.preventDefault(); krok(KROKI.length - 1);
+        $("wycena").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     let krokRozmiar = null;
     window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K) krok(); }, 200); });
     function krok(i) {
         if (i !== undefined) S.krok = i;
         const k = S.krok || 0, el = $("krok");
         SZER = el.clientWidth - 32 || 1000;
-        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Krótka ocena spółki według kryteriów 7/7 — przejdź kolejne kroki albo od razu zobacz podsumowanie.</div>
+        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Ocena spółki według kryteriów 7/7 — przejdź kolejne kroki; na końcu podsumowanie z panelem PEG / DCF. Pozostałe dane i oceny — w <a href="#szczegoly">Szczegółach ↓</a>.</div>
           <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
         el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => krok(+b.dataset.kr)));
+        if (k === KROKI.length - 1) wycena();  // panel PEG / DCF (edytowalny) na końcu podsumowania
     }
 
     function sprawozdania(tryb) {
@@ -712,6 +720,6 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); krok(0); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
+        domyslne(); top(); krok(0); liczby(); wykresCeny("1r"); metryki(); strategie(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();
