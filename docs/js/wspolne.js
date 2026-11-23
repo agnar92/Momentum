@@ -187,23 +187,41 @@
         return out;
     }
 
-    // fazy rozwoju spółki (użytkownik: „sprzedaż jest, ale nie ma jeszcze zysku, potem duża sprzedaż i zyski, potem payout — dywidendy lub skup”):
-    // każdy rok obrotowy (i ostatnie 12 mies.) klasyfikujemy z danych: 5 Schyłek — przychody niższe niż 3 lata wcześniej; zysk ≤ 0: 2 Hiperwzrost, gdy strata
-    // mniejsza niż rok wcześniej, inaczej 1 Start; zysk > 0: 4 Zwrot kapitału, gdy dywidendy + skup ≥ 20 % zysku; 2 Hiperwzrost, gdy przychody ≥ 25 % r/r przy marży < 10 %
-    // (świeżo po progu rentowności); inaczej 3 Dźwignia operacyjna (zyski rosną, gotówka zostaje w firmie)
+    // fazy rozwoju spółki — DŁUGOTERMINOWE (użytkownik: „myślałem, że to długoterminowe fazy rozwoju spółki, a nie sentyment w rok”):
+    // każdy rok obrotowy (i ostatnie 12 mies.) oceniamy z okna 3 lat, a fazy 1 → 2 → 3 → 4 tylko idą do przodu (spółka nie wraca do „Startu”
+    // ani nie przestaje być dojrzałą przez jeden słaby rok czy cykl):
+    //   suma zysku z 3 lat ≤ 0 — 1 Start (2 Hiperwzrost, gdy strata maleje); zysk z 3 lat > 0 — 4 Zwrot kapitału, gdy dywidendy + skup z 3 lat ≥ 20 %
+    //   zysku z 3 lat; 2 Hiperwzrost, gdy przychody rosną ≥ 25 % rocznie (3 lata) przy marży < 10 %; inaczej 3 Dźwignia operacyjna;
+    //   5 Schyłek — dwa lata z rzędu przychody niższe niż 5 lat wcześniej i średnia przychodów z 3 lat niższa niż z 3 poprzednich lat
+    //   (trwały spadek, nie jeden dołek cyklu); gdy przychody wrócą, spółka wraca do swojej fazy.
+    // d.ltm = ostatni punkt to 12 mies. (nakłada się na ostatni rok obrotowy, więc okno to: 12 mies. + 2 lata obrotowe przed ostatnim).
     const FAZY = ["Start", "Hiperwzrost", "Dźwignia operacyjna", "Zwrot kapitału", "Schyłek"];
     function fazyLat(d) {
-        const { rev, zysk, wyplaty } = d, out = [];
-        for (let i = 0; i < rev.length; i++) {
-            const r = rev[i], z = zysk[i];
+        const { rev, zysk, wyplaty } = d, n = rev.length, out = [];
+        const suma = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
+        const srednia = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length >= 2 ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+        let maks = 0, spadekPoprz = false;
+        for (let i = 0; i < n; i++) {
+            const r = rev[i];
             if (!ok(r) || r <= 0) { out.push(null); continue; }
-            const g = d.g && ok(d.g[i]) ? d.g[i] : (i > 0 && ok(rev[i - 1]) && rev[i - 1] > 0 ? r / rev[i - 1] - 1 : null);
-            const spadek = d.spadek && d.spadek[i] !== undefined && d.spadek[i] !== null ? d.spadek[i] : (i >= 3 && ok(rev[i - 3]) ? r < rev[i - 3] : null);
-            if (spadek) { out.push(5); continue; }
-            if (!ok(z)) { out.push(null); continue; }
-            if (z <= 0) { out.push(i > 0 && ok(zysk[i - 1]) && z > zysk[i - 1] ? 2 : 1); continue; }
-            if (ok(wyplaty[i]) && wyplaty[i] >= 0.2 * z) { out.push(4); continue; }
-            out.push(ok(g) && g >= 0.25 && z / r < 0.10 ? 2 : 3);
+            const b = d.ltm && i === n - 1 ? i - 1 : i, okno = [b - 2, b - 1, i], wczesniej = [b - 5, b - 4, b - 3];
+            const r5 = b - 5 >= 0 && ok(rev[b - 5]) ? rev[b - 5] : null, r3 = b - 3 >= 0 && ok(rev[b - 3]) ? rev[b - 3] : null;
+            const s3 = srednia(rev, okno), s3w = srednia(rev, wczesniej);
+            const spadek = !!(s3 !== null && s3w !== null && s3 < s3w && (r5 !== null ? r < r5 : r3 !== null && r < r3));
+            const z3 = suma(zysk, okno), w3 = suma(wyplaty, okno), p3 = suma(rev, okno);
+            const g3 = r3 !== null && r3 > 0 ? Math.pow(r / r3, 1 / 3) - 1 : (i > 0 && ok(rev[i - 1]) && rev[i - 1] > 0 ? r / rev[i - 1] - 1 : null);
+            let f = null;
+            if (z3 !== null) {
+                if (z3 <= 0) f = i > 0 && ok(zysk[i - 1]) && ok(zysk[i]) && zysk[i] > zysk[i - 1] ? 2 : 1;
+                else if (w3 !== null && w3 >= 0.2 * z3) f = 4;
+                else if (ok(g3) && g3 >= 0.25 && p3 && z3 / p3 < 0.10) f = 2;
+                else f = 3;
+                maks = Math.max(maks, f);
+            }
+            // schyłek tylko przy trwałym spadku (drugi rok z rzędu); dla ostatnich 12 mies. „poprzedni rok” = ostatni rok obrotowy
+            const trwaly = spadek && (d.ltm && i === n - 1 ? out[i - 1] === 5 || spadekPoprz : spadekPoprz);
+            out.push(trwaly ? 5 : (maks || null));
+            if (!(d.ltm && i === n - 1)) spadekPoprz = spadek;
         }
         return out;
     }

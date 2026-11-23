@@ -98,13 +98,15 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
   thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,
-  potem payout — dywidendy lub inne”): `W.fazyLat({rev, zysk, wyplaty})` classifies EVERY fiscal year + „12 m” from data: 5 Schyłek (revenue below 3 years earlier;
-  last point: revenue 3Y CAGR < 0), profit ≤ 0 → 2 Hiperwzrost if loss smaller than a year before else 1 Start, profit > 0 → 4 Zwrot kapitału if dividends + buybacks
-  ≥ 20 % of operating profit, 2 Hiperwzrost if revenue ≥ 25 % y/y at margin < 10 %, else 3 Dźwignia operacyjna; current phase = last point. Charts are DATA ONLY
+  potem payout — dywidendy lub inne”): `W.fazyLat({rev, zysk, wyplaty, ltm})` = LONG-TERM phases (user: „myślałem, że to długoterminowe fazy rozwoju
+  spółki, a nie sentyment w rok” — MU jumped 4/1/4/3): each FY + „12 m” judged on a 3-year window (sum of operating profit, sum of dividends + buybacks),
+  computed over the WHOLE history (up to 12 FY) and only then sliced for display; phases 1 → 2 → 3 → 4 only move forward (running max): 3-year profit ≤ 0 → 1 Start
+  (2 if loss shrinking), payouts ≥ 20 % of 3-year profit → 4, revenue ≥ 25 %/yr (3 y) at margin < 10 % → 2, else 3; 5 Schyłek only for a PERSISTENT decline (two
+  years in a row: revenue below 5 years earlier AND 3-year average below the previous 3 years), afterwards back to the reached phase; current phase = last point. Charts are DATA ONLY
   (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”, „czemu słupkowy?”; no schematic curves, no test texts — „nie interesują mnie twoje
   testy”): 3 questions with revenue / operating profit (fallback net income) lines, buybacks / share count (min–max scale) / dividends paid, then ONE lifecycle chart
-  (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn 1:1 in px (`SZER`,
-  redrawn on resize; phone shows 5 years). Missing 12 m payouts are never drawn — for classification only the last FY payout ratio is used. Data: `hist.y` [5] operating
+  (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn full width (`SZER`, CSS width 100 %, taller on phones;
+  redrawn on resize; phone shows 5 years). P/E history: time-based x axis, year ticks at 1 January, line broken where P/E is missing (loss). Missing 12 m payouts are never drawn (the 3-year window uses what exists). Data: `hist.y` [5] operating
   income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps = splits older than the 5-year price history) and `hist.ltm`
   [end, rev, op, buybacks, dividends, shares]. Phase texts `CYKL`.
   Other steps borrow data-computable parts of the user's screenshots (user: „wsiąść części z tych zdjęć”): Wzrost — revenue / net income lines with y/y % at each point

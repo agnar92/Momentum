@@ -406,8 +406,9 @@
     const tn = (b) => (b === true ? '<b class="kr-tak">Tak.</b>' : b === false ? '<b class="kr-nie">Nie.</b>' : '<b class="mut">Brak danych.</b>');
     // --- wykresy fazy: tylko dane z raportów (lata obrotowe + ostatnie 12 mies.), każdy punkt to liczba z raportu ---
     function seriaFazy() {
-        const y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), l = K.hist && K.hist.ltm;  // telefon: 5 lat, żeby podpisy się mieściły
-        const zLtm = l && l[0] && (!y.length || l[0] > y[y.length - 1][0]);
+        // fazę liczymy z całej historii (do 12 lat), na wykresie pokazujemy ostatnie lata (telefon 5, komputer 8)
+        const y = (K.hist && K.hist.y) || [], l = K.hist && K.hist.ltm;
+        const zLtm = !!(l && l[0] && (!y.length || l[0] > y[y.length - 1][0]));
         const et = y.map((r) => "FY" + r[0].slice(2, 4)).concat(zLtm ? ["12 m"] : []);
         const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [il === null ? null : l[il]] : []);
         const op = kol(5, 2), maOp = op.some(W.ok);
@@ -417,15 +418,9 @@
         if (zLtm && !W.ok(rev[rev.length - 1]) && W.ok(M.rev_ttm)) rev[rev.length - 1] = M.rev_ttm;
         const skup = kol(6, 3), dyw = kol(7, 4), akcje = kol(8, 5);
         const wyplaty = skup.map((v, i) => (W.ok(v) || W.ok(dyw[i]) ? (v || 0) + (dyw[i] || 0) : null));
-        // ostatni punkt: wzrost i spadek z danych 12 mies. (rev_1y, rev_cagr3); brak danych o wypłatach → dywidenda / skup netto z bieżących wskaźników
-        const g = rev.map(() => null), spadek = rev.map(() => null), n = rev.length - 1;
-        if (W.ok(M.rev_1y)) g[n] = M.rev_1y;
-        if (W.ok(M.rev_cagr3)) spadek[n] = M.rev_cagr3 < 0;
-        // do klasyfikacji (nie na wykres): brak wypłat w ostatnich 12 mies. → udział wypłat w zysku z ostatniego roku obrotowego
-        const wypF = wyplaty.slice();
-        if (!W.ok(wypF[n]) && n > 0 && W.ok(wyplaty[n - 1]) && W.ok(zysk[n - 1]) && zysk[n - 1] > 0 && W.ok(zysk[n])) wypF[n] = wyplaty[n - 1] / zysk[n - 1] * zysk[n];
-        const fazy = W.fazyLat({ rev, zysk, wyplaty: wypF, g, spadek });
-        return { et, rev, zysk, zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto", skup, dyw, akcje, wyplaty, fazy };
+        const fazy = W.fazyLat({ rev, zysk, wyplaty, ltm: zLtm });
+        const ile = (SZER < 700 ? 5 : 8) + (zLtm ? 1 : 0), o = (a) => a.slice(-ile);
+        return { et: o(et), rev: o(rev), zysk: o(zysk), zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto", skup: o(skup), dyw: o(dyw), akcje: o(akcje), wyplaty: o(wyplaty), fazy: o(fazy) };
     }
     function fazaTeraz(sf) {
         const k = sf.fazy.length - 1, nr = sf.fazy[k];
@@ -457,7 +452,7 @@
     const KOL_FAZ = { 1: "var(--czerwony)", 2: "var(--zolty)", 3: "var(--niebieski)", 4: "var(--zielony)", 5: "var(--tekst2)" };
     function wykresFaz(sf) {
         // jeden wykres jak schemat cyklu, ale z danych spółki: przychody, zysk, wypłaty (dywidendy + skup); tło = faza w danym roku
-        const n = sf.et.length, S_ = Math.max(280, SZER - 40), H = 230, L = 8, R = S_ - 70, gora = 34, dol = H - 26;
+        const n = sf.et.length, S_ = Math.max(280, SZER - 30), H = SZER < 700 ? 280 : 250, L = 8, R = S_ - 66, gora = 34, dol = H - 26;
         const wsz = [...sf.rev, ...sf.zysk, ...sf.wyplaty].filter(W.ok);
         if (n < 2 || !wsz.length) return "";
         const mn = Math.min(0, ...wsz), mx = Math.max(...wsz), zak = mx - mn || 1, krok = (R - L) / n;
@@ -491,11 +486,11 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${sf.et.map((e, i) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}${tipy}</svg>
           <div class="kr-leg male"><span style="color:var(--niebieski)">● przychody</span><span style="color:var(--zielony)">● ${esc(sf.zyskNazwa)}</span><span style="color:var(--fiolet)">● dywidendy + skup akcji</span>
             </div>
-          <div class="kr-leg male"><span class="mut">Tło — faza w danym roku:</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
+          <div class="kr-leg male"><span class="mut">Tło — faza (okno 3 lat, długoterminowo):</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
     }
     function liniaRr(et, serie, wys = 210) {
         // linie z raportów; przy każdym punkcie zmiana rok do roku (zielona / czerwona)
-        const S_ = Math.max(280, SZER - 40), n = et.length, L = 10, R = S_ - 70, gora = 26, dol = wys - 26;
+        const S_ = Math.max(280, SZER - 4), n = et.length, L = 10, R = S_ - 66, gora = 26, dol = wys - 26;
         const wsz = serie.flatMap((x) => x.w).filter(W.ok);
         if (n < 2 || !wsz.length) return "";
         const mn = Math.min(0, ...wsz), mx = Math.max(...wsz), zak = mx - mn || 1, kr = (R - L) / n;
@@ -536,21 +531,23 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         return { d: dd, pe, t1: kw_(1 / 3), t2: kw_(2 / 3), med: kw_(0.5), teraz: pe[pe.length - 1], eps: eps0 };
     }
     function wykresPe(h) {
-        const S_ = Math.max(280, SZER - 40), H = 220, L = 40, R = S_ - 74, gora = 12, dol = H - 24, n = h.pe.length;
+        const S_ = Math.max(280, SZER - 4), H = SZER < 700 ? 280 : 240, L = 40, R = S_ - 70, gora = 12, dol = H - 24, n = h.pe.length;
         const mx = Math.max(...h.pe) * 1.05, mn = Math.min(...h.pe) * 0.95;
         // skala logarytmiczna: skoki P/E (np. 250× przy chwilowo niskim zysku) nie spłaszczają reszty wykresu
-        const lg = Math.log, X = (i) => L + (i / (n - 1)) * (R - L), Y = (v) => gora + (1 - (lg(v) - lg(mn)) / (lg(mx) - lg(mn))) * (dol - gora);
+        const t0 = Date.parse(h.d[0]), t1 = Date.parse(h.d[n - 1]) || t0 + 1, lg = Math.log, X = (i) => L + ((Date.parse(h.d[i]) - t0) / (t1 - t0)) * (R - L), Y = (v) => gora + (1 - (lg(v) - lg(mn)) / (lg(mx) - lg(mn))) * (dol - gora);
         const zaj = [], odsun = (y) => { let v = y; while (zaj.some((z) => Math.abs(z - v) < 13)) v -= 13; zaj.push(v); return v; };
         const pas = (a, b, kl) => `<rect x="${L}" y="${Y(Math.min(b, mx))}" width="${R - L}" height="${Math.max(0, Y(Math.max(a, mn)) - Y(Math.min(b, mx)))}" class="${kl}"/>`;
         const cena = (pe) => W.fmtCena(pe * h.eps);
-        const lata = [...new Set(h.d.map((x) => x.slice(0, 4)))].map((r) => [r, h.d.findIndex((x) => x.startsWith(r))]).filter(([, i]) => i > 8);
+        const Xd = (t) => L + ((t - t0) / (t1 - t0)) * (R - L), lata = [];
+        for (let r = +h.d[0].slice(0, 4) + 1; r <= +h.d[n - 1].slice(0, 4); r++) { const x = Xd(Date.parse(r + "-01-01")); if (x - L > 24 && R - x > 20) lata.push([String(r), x]); }
         return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="P/E z 5 lat">
           ${pas(mn, h.t1, "kr-pas-t")}${pas(h.t1, h.t2, "kr-pas-n")}${pas(h.t2, mx, "kr-pas-d")}
           ${[h.t1, h.med, h.t2].map((v) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="kr-zero"/><text x="${L - 4}" y="${ty}" class="kr-tx" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
             <text x="${R + 6}" y="${ty}" class="kr-tx">${esc(cena(v))}</text>`; }).join("")}
-          <polyline points="${h.pe.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}" fill="none" stroke-width="2" style="stroke:var(--tekst)"/>
+          ${(() => { const odc = [[]]; h.pe.forEach((v, i) => { if (i > 0 && Date.parse(h.d[i]) - Date.parse(h.d[i - 1]) > 21 * 864e5) odc.push([]); odc[odc.length - 1].push(`${X(i).toFixed(1)},${Y(v).toFixed(1)}`); });
+              return odc.filter((o) => o.length > 1).map((o) => `<polyline points="${o.join(" ")}" fill="none" stroke-width="2" style="stroke:var(--tekst)"/>`).join(""); })()}
           <circle cx="${X(n - 1)}" cy="${Y(h.teraz)}" r="5" style="fill:var(--zolty)"><title>dziś: P/E ${esc(W.fmtNum(h.teraz, 1))}</title></circle>
-          ${lata.map(([r, i]) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`).join("")}</svg>
+          ${lata.map(([r, x]) => `<line x1="${x}" x2="${x}" y1="${dol}" y2="${dol + 4}" class="kr-os"/><text x="${x}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`).join("")}</svg>
           <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span>
             <span class="mut">po prawej: cena przy tym P/E i dzisiejszym zysku</span></div>`;
     }
