@@ -1410,3 +1410,18 @@ K5 28 %; K1 − K5 +2,4 [−11,2; +16,5]. FCF ≤ 0: −9,0 pp, strata 35 % (vs 
 −34,0 pp [−47,7; −15,7] (obie połowy ujemne: −19,6 / −31,8; n 33 / 91), ≤ 20 vs > 20 −19,1 [−32,9; −7,8] (−9,9 / −12,9), ≤ 30 −18,5 [−32,4; −3,8]; lepsze od mediany: tanie 39–57 %
 vs drogie 69–72 %. Hipoteza — tak w części (tanie P/FCF nie pomaga, FCF ≤ 0 gorzej), ale najmniejsze straty ma środek (P/FCF ok. 15–35), a wśród silnych spółek niskie
 P/FCF to sygnał ostrzegawczy (najpewniej szczyt cyklu / jednorazowo wysoki FCF), nie okazja. Małe grupy — wynik do potwierdzenia.
+
+## Etap 98: spółki z ujemnym kapitałem własnym (bez ROE) — czy skup akcji albo ROA / ROCE coś mówią (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „jak nie ma ROE, to sprawdzaj skup akcji, bo odkup zawsze ruszy cenę do góry?”. Dane, zbiór, starty, miara i bootstrap jak w etapach 92–97. Grupa: kapitał
+własny < 0 (wartość księgowa / kapitalizacja < 0). Porównania wewnątrz grupy: (1) skup netto 12 mies. > 2 % kapitalizacji vs reszta; (2) liczba akcji 3 lata ≤ −2 %
+vs reszta; (3) ROA ≥ 10 % vs < 10 %; (4) ROCE ≥ 15 % vs < 15 %; (5) cała grupa vs wszystkie spółki (czy ujemny kapitał sam w sobie szkodzi). Miary: mediana nadwyżki
+12 / 36 mies., odsetek lepszych od mediany, strata po 36 mies. Hipoteza: grupa mała (kilkadziesiąt spółek rocznie), więc przedziały szerokie; skup nie daje pewnej przewagi
+(etap 93: skup wbrew Lynchowi), ROA / ROCE też w granicach szumu; ujemny kapitał sam w sobie nie szkodzi (to często dojrzałe firmy ze skupem).
+
+Wynik etapu 98 (2026-11-23). Spółek z ujemnym kapitałem w zbiorze: 7–31 rocznie (rośnie z czasem). Ujemny vs dodatni kapitał, 36 mies.: +10,7 pp [+4,5; +20,6], lepsze
+od mediany 61 % vs 49 %, strata 15 % vs 23 % (12 mies. +3,9 [−0,0; +11,1]). Wewnątrz ujemnego kapitału: skup netto > 2 % +4,0 [−16,6; +27,4] (62 vs 56 % lepszych),
+akcje 3 lata ≤ −2 % +9,3 [−33,5; +32,2] — w granicach szumu; ROA ≥ 10 % −22,3 [−46,4; −15,4] (54 vs 72 %), ROCE ≥ 15 % −15,0 [−42,8; +6,7]. Hipoteza: skup nie daje pewnej
+przewagi — tak; ROA / ROCE w granicach szumu — nie (wyższe ROA raczej gorzej; mała grupa, ok. 75 vs 75 obserwacji); ujemny kapitał nie szkodzi — tak, a nawet lepiej
+(to głównie dojrzałe, rentowne firmy oddające gotówkę akcjonariuszom). Wniosek: brak ROE przy ujemnym kapitale nie jest sygnałem ostrzegawczym; skupu nie dodajemy jako
+zamiennika ROE.
