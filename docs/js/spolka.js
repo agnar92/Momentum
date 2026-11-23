@@ -667,7 +667,35 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const a = e.target.closest && e.target.closest('a[href="#wycena"]');
         if (!a || !K) return;
         e.preventDefault(); krok(KROKI.length - 1);
-        $("wycena").scrollIntoView({ behavior: "smooth", block: "start" });
+        przewinDo($("wycena"));
+    });
+    // „Więcej”: pełny scoring i szczegóły pod oceną krok po kroku (domyślnie zwinięte; stan w localStorage)
+    const SZ_KLUCZ = "fundamenta_szczegoly";
+    let szczRys = false;
+    function szczegoly(otworz, przewin) {
+        const tr = $("szczegoly-tresc"), b = $("wiecej");
+        tr.hidden = !otworz;
+        b.setAttribute("aria-expanded", String(otworz));
+        b.textContent = otworz ? "Zwiń szczegóły ▴" : "Więcej: pełny scoring i szczegóły ▾";
+        try { localStorage.setItem(SZ_KLUCZ, otworz ? "1" : "0"); } catch (e) { /* tryb prywatny */ }
+        if (otworz && !szczRys) { szczRys = true; liczby(); metryki(); strategie(); zyskZd(); lynch(); wykresCeny("1r"); sprawozdania(GPW ? "y" : "q"); }
+        if (otworz && przewin) przewinDo($("szczegoly"));
+    }
+    function przyciskWiecej() {
+        $("wiecej").addEventListener("click", () => szczegoly($("szczegoly-tresc").hidden, true));
+        let st = null;
+        try { st = localStorage.getItem(SZ_KLUCZ); } catch (e) { /* tryb prywatny */ }
+        if (st === "1") szczegoly(true, false);
+    }
+    function przewinDo(el) {
+        // przewiń do początku elementu z uwzględnieniem przyklejonego nagłówka strony
+        const g = document.querySelector(".gora"), h = g ? g.getBoundingClientRect().height : 0;
+        window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - h - 8), behavior: "smooth" });
+    }
+    document.addEventListener("click", (e) => {
+        const a = e.target.closest && e.target.closest('a[href="#szczegoly"]');
+        if (!a) return;
+        e.preventDefault(); szczegoly(true, true);
     });
     let krokRozmiar = null;
     window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K) krok(); }, 200); });
@@ -679,7 +707,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
-        el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => krok(+b.dataset.kr)));
+        el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => { krok(+b.dataset.kr); przewinDo(el); }));
         if (k === KROKI.length - 1) wycena();  // panel PEG / DCF (edytowalny) na końcu podsumowania
     }
 
@@ -720,6 +748,6 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); krok(0); liczby(); wykresCeny("1r"); metryki(); strategie(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
+        domyslne(); top(); krok(0); liczby(); metryki(); strategie(); zyskZd(); lynch(); przyciskWiecej();
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();

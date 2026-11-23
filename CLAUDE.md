@@ -117,6 +117,10 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   `#krok` (main) → heading „Szczegóły” (`#szczegoly`) → liczby + price chart, metryki (scores), strategie, zysk-zd, lynch, sprawozdania. The PEG / DCF panel
   (`#wycena`, `wycena()`) is rendered INSIDE step 6 „Podsumowanie” (`krok` calls `wycena()` when the last step is shown); every `a[href="#wycena"]` opens step 6
   and scrolls to the panel (delegated click handler).
+  Details are COLLAPSED behind a „Więcej: pełny scoring i szczegóły” button under `#krok` (user: „poniżej krok po kroku przycisk więcej … rozwijamy cały
+  scoring dodatkowy”; `#szczegoly-tresc` hidden, `szczegoly(otworz)` draws charts on first open because they size from the element width, state in localStorage
+  `fundamenta_szczegoly`, `a[href="#szczegoly"]` opens it). Clicking any step / Dalej / Wstecz scrolls to the top of `#krok` (`przewinDo`, minus the sticky header;
+  user: „jeżeli klikam następny, daj stronę na początek tego kroku”).
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
