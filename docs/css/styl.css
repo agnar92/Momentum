@@ -215,3 +215,16 @@ td.zawin { white-space: normal; min-width: 180px; }
 .ly-w { display: grid; grid-template-columns: 22px 1fr auto; gap: 2px 10px; padding: 6px 0; border-bottom: 1px solid var(--linia); font-size: 13px; }
 .ly-wart { text-align: right; }
 @media (max-width: 600px) { .ly-w { grid-template-columns: 22px 1fr; } .ly-wart { grid-column: 2; text-align: left; font-size: 12px; } }
+/* GPW: lista na telefonie (nr, spółka, ocena ogólna; wzrost / siła / wycena pod spodem) */
+@media (max-width: 700px) {
+  #lista-gpw tr[data-t] { display: grid; grid-template-columns: 26px 1fr 1fr 1fr auto; grid-template-areas: "nr firma firma firma ogolna" ". o1 o2 o3 ."; padding: 8px 0; border-bottom: 1px solid var(--linia); align-items: center; }
+  #lista-gpw tr[data-t] td { border: 0; padding: 2px 3px; }
+  #lista-gpw tr[data-t] td:nth-child(1) { grid-area: nr; } #lista-gpw tr[data-t] td:nth-child(2) { grid-area: firma; white-space: normal; } #lista-gpw tr[data-t] td:nth-child(3) { grid-area: ogolna; }
+  #lista-gpw tr[data-t] td:nth-child(4) { grid-area: o1; text-align: left; } #lista-gpw tr[data-t] td:nth-child(5) { grid-area: o2; text-align: left; } #lista-gpw tr[data-t] td:nth-child(6) { grid-area: o3; text-align: left; }
+  #lista-gpw tr[data-t] td[data-l]::before { content: attr(data-l) " "; font-size: 11px; color: var(--tekst2); }
+  #lista-gpw tr[data-t] td:nth-child(3)::before { content: ""; }
+  #lista-gpw tr[data-t] td[data-l] .ocena { min-width: 34px; padding: 2px 5px; }
+  #lista-gpw tr[data-t] td:nth-child(n+7) { display: none; }
+  #lista-gpw thead { display: none; }
+  #lista-gpw tr.szczeg, #lista-gpw tr.szczeg td { display: block; }
+}

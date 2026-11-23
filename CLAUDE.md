@@ -58,6 +58,16 @@ Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, s
 total]}, zw, …) and `docs/data/spolki/<T>.json` (card: m, pct, oceny, typy, strategie, peg, dcf, hist{q: [end, rev, ni, fcf, cash, debt] last 40
 quarters, y: [end, rev, ni, fcf] fiscal years}, ceny{d, c}, dcf_param).
 
+## GPW (`gpw.py`, `docs/gpw.html`, `js/gpw.js`)
+
+User, Nov 2026: „to samo dla GPW … trzeba zmniejszyć procenty wzrostowe, bo to wolniejszy rynek”; chosen universe WIG20 + mWIG40 + sWIG80 (composition from
+biznesradar.pl index pages, fallback `docs/data/gpw_sklad.json`), same excluded sectors as USA (yfinance sector names), data from yfinance `.WA` (info, ~4–5
+annual statements, quarterly TTM, weekly prices; cache dir 6 days) → `docs/data/gpw.json` (rows: t, n, s, i, ind, m, st, et, oceny, pct, ceny). Lowered growth
+thresholds `GPW_PROGI` (Jakość: revenue 3y CAGR > 5 %; 7/7: revenue 3y > +16 %, revenue / earnings 1y > 3 %; consistent growth > 6 % in ≥ 2 of 3 years), others
+as USA; PEG from past 3-year earnings CAGR (no analyst forecasts) → labels; scores = percentiles among GPW stocks, same weights. NOT backtested (no history) —
+stated on the page. Page: list with filters (sector, index, Jakość 7/7, Siła ≥ 7, without ⬇), click row → inline details; mobile layout `#lista-gpw`.
+CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „Siła finansowa ≥ 7” filter (stage 95: the only factor with a confirmed edge).
+
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
 - `portfel.html` + `js/portfel.js` (user, Nov 2026: „metoda budowania pozycji w portfelu … average costing, bez time the market”, then „dokupować, kiedy PEG
@@ -110,7 +120,8 @@ session's `/home/user/ndx` (not in the repo). Key results behind the site: stage
 screen: 15–30-slot portfolio 18–21 %/yr vs SPY 14 % in 2015–2026), 70–72 (low PEG helps stable growers), 74–75 (ROE / ROA / rising ROE / ROCE), 89 (position building: DCA + × 2 after a ≥ 15 % drop; PEG tilt
 and waiting for cheap prices not better; lump sum beat 12 tranches 5/7), 90 (std-dev channel from a video: 89 % of trades profitable but only
 +0.7 pp vs SPY over 12 months — buys in market-wide crashes; portfolio 5.4 %/yr vs SPY 14.5 %, mostly in cash), 91 (same on monthly closes, 12 variants: none beats SPY in both halves with idle
-cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
+cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 95 („Prosty wybór” 6-point counter: 5–6 pts 63 % beat the median in 3 years but
+only in 2018–23, CI includes 0 → not on the site; Siła ≥ 7 alone +16 pp [+2.5; +26.8] → list filter), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
 `dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
 confirmed). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default

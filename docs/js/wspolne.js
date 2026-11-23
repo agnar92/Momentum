@@ -100,7 +100,7 @@
         return rows.filter((r) => (!q || r.t.toLowerCase().includes(q) || (r.n || "").toLowerCase().includes(q))
             && (!f.sektor || r.s === f.sektor) && (!f.typ || r.typ === f.typ) && (!f.wycena || r.et === f.wycena)
             && (!f.strategia || (r.st[f.strategia] && r.st[f.strategia][0] >= (f.min || r.st[f.strategia][1])))
-            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw));
+            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)));
     }
     // znacznik jakości: spełnia wszystkie 7 kryteriów listy „Jakość” (etapy 74–75, 83)
     const JAKOSC = "Jakość (7 kryteriów)";

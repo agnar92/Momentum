@@ -212,3 +212,18 @@ def test_pierwszy_kwartal_z_polrocza():
             ["2026-01-01", "2026-09-30", 850.0, "2026-11-01"], ["2026-07-01", "2026-09-30", 350.0, "2026-11-01"]]
     q = F.kwartalne(rows)
     assert q == {"2026-03-31": 270.0, "2026-06-30": 230.0, "2026-09-30": 350.0}     # I kw. = 6 mies. − II kw.
+
+
+def test_gpw_metryki_i_progi():
+    import gpw
+    d = dict(info=dict(marketCap=1e9, currentPrice=10.0, trailingPE=10.0),
+             rev={"2022-12-31": 100.0, "2023-12-31": 110.0, "2024-12-31": 121.0, "2025-12-31": 133.1},
+             ni={"2022-12-31": 10.0, "2023-12-31": 12.0, "2024-12-31": 14.0, "2025-12-31": 20.0},
+             eq={"2022-12-31": 80.0, "2025-12-31": 100.0}, assets={"2025-12-31": 150.0}, lc={"2025-12-31": 30.0}, op={"2025-12-31": 25.0},
+             debt={"2025-12-31": 20.0}, fcf={"2025-12-31": 15.0}, cash={"2025-12-31": 30.0})
+    m = gpw.metryki(d)
+    assert abs(m["rev_cagr3"] - 0.10) < 1e-9 and m["lata_wzrostu"] == 3 and abs(m["roe"] - 0.2) < 1e-9
+    assert abs(m["peg"] - 10 / (100 * ((20 / 10) ** (1 / 3) - 1))) < 1e-9 and m["spadek_2l"] is None
+    st = gpw.strategie(m)
+    assert st["Jakość (7 kryteriów, GPW)"][0][2] is True          # przychody 10 %/rok > próg GPW 5 %
+    assert gpw.etykieta(0.4) == "Bardzo tania" and gpw.etykieta(None) is None
