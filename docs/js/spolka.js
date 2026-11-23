@@ -385,11 +385,12 @@
     // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
     // Tylko fakty z danych i kryteria z testów; bez werdyktu „kup / sprzedaj” (spółki wybiera użytkownik).
     // cykl życia wg Lyncha („One Up on Wall Street”, rozdz. o szybko rosnących; opisy własne, skrócone)
-    const CYKL = { 1: "Start: spółka dopracowuje model i jeszcze nie zarabia — wg Lyncha najbardziej ryzykowny etap.",
-        2: "Szybka ekspansja: przychody rosną co najmniej 15 % rocznie, spółka wchodzi na nowe rynki — wg Lyncha tu zarabia się najwięcej; pytanie brzmi, jak długo to potrwa.",
-        3: "Dojrzewanie: szybki wzrost hamuje, rynek się nasyca i nie ma już łatwej drogi do dalszej ekspansji — wg Lyncha tu kończy się szybki wzrost kursu.",
-        4: "Dojrzałość: przychody rosną umiarkowanie (do 15 % rocznie) — spółka stabilnie lub wolno rosnąca; zarabia się na wzroście zysku, dywidendzie i rozsądnej cenie.",
-        5: "Schyłek: przychody spadają od 3 lat — wg Lyncha trzeba sprawdzić, czy to przejściowe (cykl, restrukturyzacja), czy trwałe." };
+    // opisy faz rozwoju (własne, skrócone)
+    const CYKL = { 1: "Start: sprzedaż już jest, ale spółka jeszcze nie zarabia, a strata nie maleje — najbardziej ryzykowny etap.",
+        2: "Hiperwzrost: sprzedaż szybko rośnie, strata maleje albo spółka dopiero przekroczyła próg rentowności.",
+        3: "Dźwignia operacyjna: spółka zarabia, zyski rosną szybciej niż sprzedaż, a gotówka zostaje w firmie na dalszy rozwój.",
+        4: "Zwrot kapitału: spółka zarabia więcej, niż potrzebuje na rozwój, i oddaje gotówkę akcjonariuszom — dywidendy i skup akcji.",
+        5: "Schyłek: sprzedaż jest niższa niż 3 lata wcześniej — trzeba sprawdzić, czy to przejściowe (cykl, restrukturyzacja), czy trwałe." };
     const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
     const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
     const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
@@ -405,13 +406,32 @@
     const tn = (b) => (b === true ? '<b class="kr-tak">Tak.</b>' : b === false ? '<b class="kr-nie">Nie.</b>' : '<b class="mut">Brak danych.</b>');
     // --- wykresy fazy: tylko dane z raportów (lata obrotowe + ostatnie 12 mies.), każdy punkt to liczba z raportu ---
     function seriaFazy() {
-        const y = ((K.hist && K.hist.y) || []).slice(-6), l = K.hist && K.hist.ltm;
+        const y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), l = K.hist && K.hist.ltm;  // telefon: 5 lat, żeby podpisy się mieściły
         const zLtm = l && l[0] && (!y.length || l[0] > y[y.length - 1][0]);
         const et = y.map((r) => "FY" + r[0].slice(2, 4)).concat(zLtm ? ["12 m"] : []);
-        const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [l[il]] : []);
+        const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [il === null ? null : l[il]] : []);
         const op = kol(5, 2), maOp = op.some(W.ok);
-        return { et, rev: kol(1, 1), zysk: maOp ? op : y.map((r) => r[2]).concat(zLtm ? [null] : []), zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto",
-            skup: kol(6, 3), dyw: kol(7, 4), akcje: kol(8, 5), lata: y.map((r) => r[0].slice(0, 4)) };
+        const zysk = maOp ? op : kol(2, null);
+        if (!maOp && zLtm && W.ok(M.ni_ttm)) zysk[zysk.length - 1] = M.ni_ttm;
+        const rev = kol(1, 1);
+        if (zLtm && !W.ok(rev[rev.length - 1]) && W.ok(M.rev_ttm)) rev[rev.length - 1] = M.rev_ttm;
+        const skup = kol(6, 3), dyw = kol(7, 4), akcje = kol(8, 5);
+        const wyplaty = skup.map((v, i) => (W.ok(v) || W.ok(dyw[i]) ? (v || 0) + (dyw[i] || 0) : null));
+        // ostatni punkt: wzrost i spadek z danych 12 mies. (rev_1y, rev_cagr3); brak danych o wypłatach → dywidenda / skup netto z bieżących wskaźników
+        const g = rev.map(() => null), spadek = rev.map(() => null), n = rev.length - 1;
+        if (W.ok(M.rev_1y)) g[n] = M.rev_1y;
+        if (W.ok(M.rev_cagr3)) spadek[n] = M.rev_cagr3 < 0;
+        // do klasyfikacji (nie na wykres): brak wypłat w ostatnich 12 mies. → udział wypłat w zysku z ostatniego roku obrotowego
+        const wypF = wyplaty.slice();
+        if (!W.ok(wypF[n]) && n > 0 && W.ok(wyplaty[n - 1]) && W.ok(zysk[n - 1]) && zysk[n - 1] > 0 && W.ok(zysk[n])) wypF[n] = wyplaty[n - 1] / zysk[n - 1] * zysk[n];
+        const fazy = W.fazyLat({ rev, zysk, wyplaty: wypF, g, spadek });
+        return { et, rev, zysk, zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto", skup, dyw, akcje, wyplaty, fazy };
+    }
+    function fazaTeraz(sf) {
+        const k = sf.fazy.length - 1, nr = sf.fazy[k];
+        if (!nr) return null;
+        const z = sf.zysk[k], w = sf.wyplaty[k];
+        return { nr, nazwa: W.FAZY[nr - 1], pyt: { przychody: W.ok(M.rev_cagr3) ? M.rev_cagr3 >= 0 : null, zysk: W.ok(z) ? z > 0 : null, zwrot: W.ok(w) ? w > 0 : null } };
     }
     const kw = (v) => (v === 0 ? "0" : W.ok(v) ? W.fmtUsd(v) : "–");
     const szt = (v) => (W.ok(v) ? (v >= 1e9 ? W.fmtNum(v / 1e9, 2) + " mld" : W.fmtNum(v / 1e6, 0) + " mln") : "–");
@@ -434,22 +454,44 @@
           <text x="${X(ost[0])}" y="${Y(ost[1]) - 10}" class="kr-tx kr-tx-b" text-anchor="end">${esc(fmt(ost[1]))}</text>
           ${et.map((e, i) => `<text x="${X(i)}" y="${wys - 4}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}</svg>`;
     }
-    function tempoWzrostu(sf) {
-        // przychody r/r w każdym roku obrotowym (z raportów) i ostatnie 12 mies.; linia przerywana = próg szybkiej ekspansji Lyncha (15 %)
-        const r = sf.rev, g = r.map((v, i) => (i > 0 && W.ok(v) && W.ok(r[i - 1]) && r[i - 1] > 0 ? v / r[i - 1] - 1 : null));
-        if (sf.et[sf.et.length - 1] === "12 m" && W.ok(M.rev_1y)) g[g.length - 1] = M.rev_1y;
-        const p = g.map((v, i) => [i, v]).filter((x) => W.ok(x[1]) && x[0] > 0);
-        if (p.length < 2) return "";
-        const n = sf.et.length - 1, gm = p.map((x) => x[1]), mx = Math.max(0.2, ...gm), mn = Math.min(0, ...gm), zak = mx - mn;
-        const S_ = Math.max(260, SZER - 60), sz = (S_ - 44) / n, Y = (v) => 22 + (1 - (v - mn) / zak) * 108, X = (i) => 40 + (i - 1) * sz;
-        const kol = (v) => (v >= 0.15 ? "var(--zielony)" : v >= 0 ? "var(--niebieski)" : "var(--czerwony)");
-        return `<div class="mut male" style="margin-top:12px">Wzrost przychodów rok do roku (z raportów) — próg szybkiej ekspansji wg Lyncha: 15 %</div>
-          <svg viewBox="0 0 ${S_} 160" width="${S_}" height="160" class="kr-tempo" role="img">
-          <line x1="4" x2="${S_ - 4}" y1="${Y(0)}" y2="${Y(0)}" class="kr-os"/>
-          <line x1="4" x2="${S_ - 4}" y1="${Y(0.15)}" y2="${Y(0.15)}" class="kr-prog"/><text x="4" y="${Y(0.15) - 4}" class="kr-tx kr-tx-prog" text-anchor="start">15 %</text>
-          ${p.map(([i, v]) => `<rect x="${X(i) + sz * 0.2}" y="${Math.min(Y(v), Y(0))}" width="${sz * 0.6}" height="${Math.max(1, Math.abs(Y(v) - Y(0)))}" rx="3" style="fill:${kol(v)}"><title>${esc(sf.et[i])}: ${esc(W.fmtPct(v, 1, true))}</title></rect>
-            <text x="${X(i) + sz / 2}" y="${v >= 0 ? Y(v) - 5 : Y(v) + 13}" class="kr-tx kr-tx-b" text-anchor="middle">${esc(W.fmtPct(v, 0, true))}</text>
-            <text x="${X(i) + sz / 2}" y="156" class="kr-tx kr-tx-os" text-anchor="middle">${esc(sf.et[i])}</text>`).join("")}</svg>`;
+    const KOL_FAZ = { 1: "var(--czerwony)", 2: "var(--zolty)", 3: "var(--niebieski)", 4: "var(--zielony)", 5: "var(--tekst2)" };
+    function wykresFaz(sf) {
+        // jeden wykres jak schemat cyklu, ale z danych spółki: przychody, zysk, wypłaty (dywidendy + skup); tło = faza w danym roku
+        const n = sf.et.length, S_ = Math.max(280, SZER - 40), H = 230, L = 8, R = S_ - 70, gora = 34, dol = H - 26;
+        const wsz = [...sf.rev, ...sf.zysk, ...sf.wyplaty].filter(W.ok);
+        if (n < 2 || !wsz.length) return "";
+        const mn = Math.min(0, ...wsz), mx = Math.max(...wsz), zak = mx - mn || 1, krok = (R - L) / n;
+        const X = (i) => L + krok * (i + 0.5), Y = (v) => gora + (1 - (v - mn) / zak) * (dol - gora);
+        let pasy = "", et = "";
+        for (let i = 0; i < n; i++) {
+            const f = sf.fazy[i];
+            if (f) pasy += `<rect x="${L + krok * i}" y="${gora - 4}" width="${krok}" height="${dol - gora + 8}" style="fill:${KOL_FAZ[f]};opacity:.09"/>`;
+            if (f && f !== sf.fazy[i - 1]) {
+                pasy += `<line x1="${L + krok * i}" x2="${L + krok * i}" y1="${gora - 22}" y2="${dol + 4}" style="stroke:${KOL_FAZ[f]};opacity:.5"/>`;
+                et += `<text x="${L + krok * i + 4}" y="${gora - 12}" class="kr-tx kr-tx-b" style="fill:${KOL_FAZ[f]}">${f}${krok * (sf.fazy.slice(i).findIndex((x) => x !== f) === -1 ? n - i : sf.fazy.slice(i).findIndex((x) => x !== f)) > 120 ? " " + esc(W.FAZY[f - 1]) : ""}</text>`;
+            }
+        }
+        const zajete = [];
+        const etY = (y) => { let v = y; while (zajete.some((z) => Math.abs(z - v) < 13)) v += 13; zajete.push(v); return v; };
+        const linia = (w, kolor, gr) => {
+            const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+            if (p.length < 2) return "";
+            const o = p[p.length - 1];
+            return `<polyline points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke-width="${gr}" stroke-linejoin="round" style="stroke:${kolor}"/>
+              ${p.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === o[0] ? 4 : 2.5}" style="fill:${kolor}"/>`).join("")}
+              <text x="${X(o[0]) + 8}" y="${etY(Y(o[1]) + 4)}" class="kr-tx kr-tx-b" style="fill:${kolor}">${esc(kw(o[1]))}</text>`;
+        };
+        const tipy = sf.et.map((e, i) => `<rect x="${L + krok * i}" y="${gora - 4}" width="${krok}" height="${dol - gora + 8}" fill="transparent"><title>${esc(e)}${sf.fazy[i] ? " · faza " + sf.fazy[i] + ": " + W.FAZY[sf.fazy[i] - 1] : ""}
+przychody: ${kw(sf.rev[i])}
+${sf.zyskNazwa}: ${kw(sf.zysk[i])}
+dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
+        return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="Przychody, zysk i wypłaty dla akcjonariuszy rok po roku">${pasy}${et}
+          ${mn < 0 ? `<line x1="${L}" x2="${R}" y1="${Y(0)}" y2="${Y(0)}" class="kr-zero"/>` : `<line x1="${L}" x2="${R}" y1="${Y(0)}" y2="${Y(0)}" class="kr-os"/>`}
+          ${linia(sf.rev, "var(--niebieski)", 3)}${linia(sf.zysk, "var(--zielony)", 3)}${linia(sf.wyplaty, "var(--fiolet)", 2.5)}
+          ${sf.et.map((e, i) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}${tipy}</svg>
+          <div class="kr-leg male"><span style="color:var(--niebieski)">● przychody</span><span style="color:var(--zielony)">● ${esc(sf.zyskNazwa)}</span><span style="color:var(--fiolet)">● dywidendy + skup akcji</span>
+            </div>
+          <div class="kr-leg male"><span class="mut">Tło — faza w danym roku:</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
     }
     function etapy(nr) {
         return `<div class="kr-etapy">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : i + 1 < nr ? "za" : ""}"><span>${i + 1}</span><small>${esc(n)}</small></div>`).join("")}</div>`;
@@ -460,10 +502,10 @@
     }
     const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
     function krokTresc(i) {
-        const f = W.faza(M, K.hist && K.hist.q);
+        const SF = seriaFazy(), f = fazaTeraz(SF);
         const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
         if (i === 0) {
-            const p = f ? f.pyt : {}, sf = seriaFazy();
+            const p = f ? f.pyt : {}, sf = SF;
             const z = sf.zysk.filter(W.ok), zOst = z[z.length - 1], zRos = z.length >= 2 && zOst > z[z.length - 2];
             const zw = [];
             if (W.ok(M.div) && M.div > 0) zw.push(`dywidenda ${W.fmtPct(M.div, 1)} rocznie`);
@@ -480,8 +522,8 @@
               <div class="pole kr-zwrot"><div class="kr-q"><span class="kr-nr">3</span><b>Czy oddaje gotówkę akcjonariuszom?</b></div>
                 <div class="kr-odp">${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div>
                 <div class="kr-pody">${pod("Skup akcji (rocznie)", sf.skup, "var(--fiolet)", kw)}${pod("Liczba akcji (mniej = skup)", sf.akcje, "var(--fiolet)", szt, false)}${pod("Dywidendy wypłacone (rocznie)", sf.dyw, "var(--fiolet)", kw)}</div></div>
-              ${f ? `<div class="kr-faza${f.nr === 3 ? " kr-faza-ost" : ""}"><div class="kr-faza-t">Faza w cyklu życia spółki (wg Lyncha): <b>${f.nr}: ${esc(f.nazwa)}</b></div>
-                ${etapy(f.nr)}<p class="male" style="margin:10px 0 0">${esc(CYKL[f.nr])}</p>${tempoWzrostu(sf)}</div>`
+              ${f ? `<div class="kr-faza"><div class="kr-faza-t">${esc(K.t)} jest w fazie <b>${f.nr}: ${esc(f.nazwa)}</b></div>
+                ${etapy(f.nr)}<p class="male" style="margin:10px 0 6px">${esc(CYKL[f.nr])}</p>${wykresFaz(sf)}</div>`
                 : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}`;
         }
         if (i === 1) {
@@ -520,7 +562,7 @@
         const suma = wiersze.reduce((s, x) => s + x[1], 0), wsz = wiersze.reduce((s, x) => s + x[2], 0);
         const ow = (K.ostrzezenia || []).length, brak = wiersze.flatMap(([n]) => { const l = lista77(); return l ? KR_IDX[n].map((j) => l[j]).filter((k) => k && !k[2]).map((k) => k[0]) : []; });
         return `<div class="kr-sum">
-          <div class="kr-sum-w"><span>Faza (cykl Lyncha)</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
+          <div class="kr-sum-w"><span>Faza rozwoju</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
           ${wiersze.map(([n, a, b]) => `<div class="kr-sum-w"><span>${n}${n === "Wycena" && K.etykieta ? ` <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span>${b ? kropki(a, b) : ""}<b>${b ? `${a} z ${b}` : "–"}</b></div>`).join("")}
           <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : ""}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
           ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}

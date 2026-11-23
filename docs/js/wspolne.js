@@ -187,29 +187,25 @@
         return out;
     }
 
-    // cykl życia spółki wg Lyncha (etap 103): 5 Schyłek — przychody 3 lata CAGR < 0; bez zysku operacyjnego: 2 Szybka ekspansja (strata maleje i przychody 3 lata ≥ 15 %)
-    // albo 1 Start; z zyskiem: 2 Szybka ekspansja (przychody 3 lata i 1 rok ≥ 15 %), 3 Dojrzewanie (3 lub 5 lat ≥ 15 %, ostatni rok < 15 % — hamowanie), 4 Dojrzałość (reszta)
-    const FAZY = ["Start", "Szybka ekspansja", "Dojrzewanie", "Dojrzałość", "Schyłek"];
-    // etap 103 (36 mies., top 500 USA 2012–2023): [mediana nadwyżki nad medianą zbioru (pp), % spółek ze stratą, potwierdzone]; wszystkie: strata 23 %
-    const FAZA_TEST = { 1: [-22.0, 43, false], 2: [-2.0, 30, false], 3: [-9.8, 27, true], 4: [1.4, 21, false], 5: [2.4, 19, false] };
-    function faza(m, q) {
-        if (!m) return null;
-        const g3 = m.rev_cagr3, g1 = m.rev_1y, g5 = m.rev_cagr5, om = ok(m.om) ? m.om : (ok(m.op_ttm) && ok(m.rev_ttm) && m.rev_ttm > 0 ? m.op_ttm / m.rev_ttm : null);
-        const zwrot = (ok(m.div) && m.div > 0) || (ok(m.skup_netto_mc) && m.skup_netto_mc > 0);
-        const pyt = { przychody: ok(g3) ? g3 >= 0 : null, szybko: ok(g3) ? g3 >= 0.15 : null, hamuje: ok(g1) && ok(g3) ? g1 < g3 : null, zysk: ok(om) ? om > 0 : null, zwrot };
-        if (!ok(g3) || !ok(g1)) return null;
-        let nr;
-        if (g3 < 0) nr = 5;
-        else if (!ok(om)) return null;
-        else if (om <= 0) {
-            const t = ttmSeria(q || [], 2).filter((x) => ok(x[1]));
-            const n = t.length, popr = n >= 5 && t[n - 1][1] > t[n - 5][1];
-            pyt.poprawa = n >= 5 ? popr : null;
-            nr = popr && g3 >= 0.15 ? 2 : 1;
-        } else if (g3 >= 0.15 && g1 >= 0.15) nr = 2;
-        else if ((g3 >= 0.15 || (ok(g5) && g5 >= 0.15)) && g1 < 0.15) nr = 3;
-        else nr = 4;
-        return { nr, nazwa: FAZY[nr - 1], pyt, om, test: FAZA_TEST[nr] };
+    // fazy rozwoju spółki (użytkownik: „sprzedaż jest, ale nie ma jeszcze zysku, potem duża sprzedaż i zyski, potem payout — dywidendy lub skup”):
+    // każdy rok obrotowy (i ostatnie 12 mies.) klasyfikujemy z danych: 5 Schyłek — przychody niższe niż 3 lata wcześniej; zysk ≤ 0: 2 Hiperwzrost, gdy strata
+    // mniejsza niż rok wcześniej, inaczej 1 Start; zysk > 0: 4 Zwrot kapitału, gdy dywidendy + skup ≥ 20 % zysku; 2 Hiperwzrost, gdy przychody ≥ 25 % r/r przy marży < 10 %
+    // (świeżo po progu rentowności); inaczej 3 Dźwignia operacyjna (zyski rosną, gotówka zostaje w firmie)
+    const FAZY = ["Start", "Hiperwzrost", "Dźwignia operacyjna", "Zwrot kapitału", "Schyłek"];
+    function fazyLat(d) {
+        const { rev, zysk, wyplaty } = d, out = [];
+        for (let i = 0; i < rev.length; i++) {
+            const r = rev[i], z = zysk[i];
+            if (!ok(r) || r <= 0) { out.push(null); continue; }
+            const g = d.g && ok(d.g[i]) ? d.g[i] : (i > 0 && ok(rev[i - 1]) && rev[i - 1] > 0 ? r / rev[i - 1] - 1 : null);
+            const spadek = d.spadek && d.spadek[i] !== undefined && d.spadek[i] !== null ? d.spadek[i] : (i >= 3 && ok(rev[i - 3]) ? r < rev[i - 3] : null);
+            if (spadek) { out.push(5); continue; }
+            if (!ok(z)) { out.push(null); continue; }
+            if (z <= 0) { out.push(i > 0 && ok(zysk[i - 1]) && z > zysk[i - 1] ? 2 : 1); continue; }
+            if (ok(wyplaty[i]) && wyplaty[i] >= 0.2 * z) { out.push(4); continue; }
+            out.push(ok(g) && g >= 0.25 && z / r < 0.10 ? 2 : 3);
+        }
+        return out;
     }
 
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
@@ -286,7 +282,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

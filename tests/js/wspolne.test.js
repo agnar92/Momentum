@@ -104,14 +104,9 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
 });
 
 
-test("cykl życia wg Lyncha (etap 103)", () => {
-    const q = (a, b) => [["2025-03", 0, a], ["2025-06", 0, a], ["2025-09", 0, a], ["2025-12", 0, a], ["2026-03", 0, b], ["2026-06", 0, b], ["2026-09", 0, b], ["2026-12", 0, b]];
-    assert.strictEqual(W.faza({ rev_cagr3: -0.02, rev_1y: 0.05, om: 0.2 }).nr, 5);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.3, rev_1y: 0.3, om: -0.1 }, q(-10, -5)).nr, 2);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.3, rev_1y: 0.3, om: -0.1 }, q(-5, -10)).nr, 1);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.25, rev_1y: 0.2, om: 0.2 }).nr, 2);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.25, rev_1y: 0.08, om: 0.2 }).nr, 3);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.10, rev_1y: 0.05, rev_cagr5: 0.2, om: 0.2 }).nr, 3);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.08, rev_1y: 0.06, rev_cagr5: 0.07, om: 0.2 }).nr, 4);
-    assert.strictEqual(W.faza({ om: 0.2 }), null);
+test("fazy rozwoju spółki z danych rok po roku", () => {
+    const f = W.fazyLat({ rev: [10, 20, 40, 70, 90, 100, 80], zysk: [-5, -3, 2, 15, 25, 30, 20], wyplaty: [0, 0, 0, 1, 10, 12, 10] });
+    assert.deepStrictEqual(f, [1, 2, 2, 3, 4, 4, 4]);
+    assert.deepStrictEqual(W.fazyLat({ rev: [100, 95, 90, 85], zysk: [10, 9, 8, 7], wyplaty: [0, 0, 0, 0] }), [3, 3, 3, 5]);
+    assert.deepStrictEqual(W.fazyLat({ rev: [10, 12], zysk: [-2, -3], wyplaty: [null, null] }), [1, 1]);
 });

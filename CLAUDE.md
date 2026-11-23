@@ -97,14 +97,16 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
-  thresholds work); `W.faza(m, hist.q)` = Peter LYNCH's company life cycle (user: „chcę analizę Petera Lyncha cykli spółki”, NOT technical analysis —
-  the Weinstein price-stage section from stage 102 was removed from the card): 1 Start / 2 Szybka ekspansja / 3 Dojrzewanie / 4 Dojrzałość / 5 Schyłek (revenue 3Y CAGR < 0
-  → 5; no operating profit → 2 if loss shrinking and revenue 3Y ≥ 15 % else 1; profitable → 2 if revenue 3Y and 1Y ≥ 15 %, 3 if 3Y or 5Y ≥ 15 % but 1Y < 15 %, else 4);
-  Step 1 charts are DATA ONLY (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”; no schematic curves, no test texts on the card — user: „nie
-  interesują mnie twoje testy”): revenue and operating profit (fallback net income) per fiscal year + „12 m”, buybacks / share count (min–max scale) / dividends paid,
-  revenue y/y bars with the 15 % line, 5-step phase stepper; charts drawn 1:1 in px (`SZER` = section width, redrawn on resize). Data: `hist.y` columns [5] operating
-  income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps year to year = splits older than the 5-year price history) and
-  `hist.ltm` [end, rev, op, buybacks, dividends, shares]. Lynch texts `CYKL`; Dojrzewanie (stage 103: −11 pp / 36 m) gets a red frame.
+  thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,
+  potem payout — dywidendy lub inne”): `W.fazyLat({rev, zysk, wyplaty})` classifies EVERY fiscal year + „12 m” from data: 5 Schyłek (revenue below 3 years earlier;
+  last point: revenue 3Y CAGR < 0), profit ≤ 0 → 2 Hiperwzrost if loss smaller than a year before else 1 Start, profit > 0 → 4 Zwrot kapitału if dividends + buybacks
+  ≥ 20 % of operating profit, 2 Hiperwzrost if revenue ≥ 25 % y/y at margin < 10 %, else 3 Dźwignia operacyjna; current phase = last point. Charts are DATA ONLY
+  (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”, „czemu słupkowy?”; no schematic curves, no test texts — „nie interesują mnie twoje
+  testy”): 3 questions with revenue / operating profit (fallback net income) lines, buybacks / share count (min–max scale) / dividends paid, then ONE lifecycle chart
+  (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn 1:1 in px (`SZER`,
+  redrawn on resize; phone shows 5 years). Missing 12 m payouts are never drawn — for classification only the last FY payout ratio is used. Data: `hist.y` [5] operating
+  income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps = splits older than the 5-year price history) and `hist.ltm`
+  [end, rev, op, buybacks, dividends, shares]. Phase texts `CYKL`.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in

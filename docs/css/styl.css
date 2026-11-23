@@ -273,7 +273,6 @@ td.zawin { white-space: normal; min-width: 180px; }
   :root:not([data-motyw="jasny"]) .kr-pasek .z2 { background: #3d2f0c; color: #fcd34d; } :root:not([data-motyw="jasny"]) .kr-pasek .z3 { background: #431c0a; color: #fdba74; } :root:not([data-motyw="jasny"]) .kr-pasek .z4 { background: #451a1a; color: #fca5a5; }
 }
 @media (max-width: 700px) { .kr-pyt { grid-template-columns: 1fr; } .kr-pasek { font-size: 9px; } .kr-cagr b { font-size: 15px; } }
-.kr-faza-ost { border-color: var(--czerwony); }
 @media (max-width: 700px) { .kr-etapy small { font-size: 10px; overflow-wrap: anywhere; } }
 .kr-q { display: flex; align-items: center; gap: 2px; } .kr-odp { margin: 4px 0 2px; }
 .kr-zwrot { margin-top: 10px; border: 1px solid var(--linia); border-radius: 10px; padding: 10px 12px; background: var(--tlo2); }
@@ -283,3 +282,4 @@ td.zawin { white-space: normal; min-width: 180px; }
 .kr-zero, .kr-os { stroke: var(--siatka); stroke-width: 1; } .kr-zero { stroke-dasharray: 3 3; } .kr-prog { stroke: var(--zielony); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .kr-tempo { display: block; max-width: 100%; height: auto; overflow: visible; } .kr-tx-prog { fill: var(--zielony-t); font-weight: 600; } .kr-brak { padding: 24px 0; text-align: center; }
 @media (max-width: 700px) { .kr-pody { grid-template-columns: 1fr; } }
+.kr-leg { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
