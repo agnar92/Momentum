@@ -104,9 +104,13 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
 });
 
 
-test("fazy rozwoju spółki z danych rok po roku", () => {
-    const f = W.fazyLat({ rev: [10, 20, 40, 70, 90, 100, 80], zysk: [-5, -3, 2, 15, 25, 30, 20], wyplaty: [0, 0, 0, 1, 10, 12, 10] });
-    assert.deepStrictEqual(f, [1, 2, 2, 3, 4, 4, 4]);
-    assert.deepStrictEqual(W.fazyLat({ rev: [100, 95, 90, 85], zysk: [10, 9, 8, 7], wyplaty: [0, 0, 0, 0] }), [3, 3, 3, 5]);
-    assert.deepStrictEqual(W.fazyLat({ rev: [10, 12], zysk: [-2, -3], wyplaty: [null, null] }), [1, 1]);
+test("fazy rozwoju spółki: okno 3 lat, tylko do przodu, schyłek przy trwałym spadku", () => {
+    const f = W.fazyLat({ rev: [10, 20, 40, 70, 90, 100, 110, 120], zysk: [-5, -3, 2, 15, 25, 30, 33, 36], wyplaty: [0, 0, 0, 1, 10, 12, 14, 15] });
+    assert.deepStrictEqual(f, [1, 2, 2, 3, 4, 4, 4, 4]);
+    // spółka cykliczna (jak MU): rok ze stratą i dołek przychodów nie cofają fazy ani nie dają schyłku
+    const c = W.fazyLat({ rev: [30, 23, 21, 28, 31, 15, 25, 37, 133], zysk: [15, 7, 3, 6, 10, -6, 1, 10, 99], wyplaty: [0.1, 2.7, 0.3, 1.3, 2.9, 0.9, 0.8, 0.5, 1.3] });
+    assert.deepStrictEqual(c, [3, 3, 3, 4, 4, 4, 4, 4, 4]);
+    // trwały spadek przychodów → schyłek
+    const s = W.fazyLat({ rev: [100, 100, 100, 95, 90, 85, 80, 75], zysk: [10, 10, 10, 9, 8, 7, 6, 5], wyplaty: [5, 5, 5, 5, 5, 5, 5, 5] });
+    assert.deepStrictEqual(s.slice(-2), [5, 5]);
 });
