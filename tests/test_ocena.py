@@ -205,3 +205,10 @@ def test_lynch_fazy_i_sygnaly():
     assert abs(O.lynch(dict(eps_next5=0.15, div=0.02, pe=17.0), "Wolno rosnąca")["wskaznik"] - 1.0) < 1e-9
     h = dict(q=[[f"2025-{mm:02d}-28", 0, 10, 0, 0, 0] for mm in range(1, 13)])
     assert abs(O.pe_mediana(h, (["2024-01-01"], [100.0]), 4) - 10.0) < 1e-9    # 100 × 4 ÷ 40
+
+
+def test_pierwszy_kwartal_z_polrocza():
+    rows = [["2026-01-01", "2026-06-30", 500.0, "2026-08-01"], ["2026-04-01", "2026-06-30", 230.0, "2026-08-01"],
+            ["2026-01-01", "2026-09-30", 850.0, "2026-11-01"], ["2026-07-01", "2026-09-30", 350.0, "2026-11-01"]]
+    q = F.kwartalne(rows)
+    assert q == {"2026-03-31": 270.0, "2026-06-30": 230.0, "2026-09-30": 350.0}     # I kw. = 6 mies. − II kw.

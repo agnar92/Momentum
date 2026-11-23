@@ -245,7 +245,8 @@ def metryki(ex, fv, dzis=None, splity=()):
     op12, ods12, pp12, pod12, no12 = ost12("op"), ost12("odsetki"), ost12("przed_pod"), ost12("podatek"), ost12("nonop")
     if op12 is not None and m.get("ni_ttm") is not None:
         st_ = pod12 / pp12 if pod12 is not None and pp12 and pp12 > 0 else 0.21
-        st_ = min(0.30, max(0.10, st_))
+        # stopa < 10 % to zwykle jednorazowa korzyść podatkowa (np. ALNY: rozwiązanie odpisu na aktywa podatkowe, −1,9 mld) — wtedy ostrożnie 21 %
+        st_ = 0.21 if st_ < 0.10 else min(0.30, st_)
         ni_n = (op12 - (ods12 or 0)) * (1 - st_)
         m["ni_norm"], m["stopa_pod"], m["op_ttm"], m["odsetki_ttm"] = ni_n, st_, op12, ods12
         m["roznica_norm"] = m["ni_ttm"] - ni_n                       # o ile zysk z raportu różni się od znormalizowanego
