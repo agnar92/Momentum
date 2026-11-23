@@ -18,7 +18,8 @@
         if (a >= 1e6) return s + (a / 1e6).toFixed(d).replace(".", ",") + " mln";
         return s + a.toFixed(2).replace(".", ",");
     }
-    function fmtCena(x) { return ok(x) ? "$" + x.toFixed(2).replace(".", ",") : "–"; }
+    // waluta kart: USD (domyślnie) albo zł (karta spółki GPW ustawia W.WALUTA = "zł")
+    function fmtCena(x) { return !ok(x) ? "–" : (typeof W !== "undefined" && W.WALUTA === "zł") ? x.toFixed(2).replace(".", ",") + " zł" : "$" + x.toFixed(2).replace(".", ","); }
 
     // DCF: przychody rosną g przez `lata`, potem wzrost liniowo do tg przez `wyg` lat; FCF = przychody × marża
     function dcf(p) {
@@ -199,8 +200,8 @@
     };
     // skład oceny grupy: punkty 0-100 każdego wskaźnika (percentyl wśród 500 spółek); brak danych = neutralne 50 pkt; ocena = średnia / 10
     const BRAK = 0.5;
-    function skladOceny(pct, grupa) {
-        const el = GRUPY[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
+    function skladOceny(pct, grupa, grupy) {
+        const el = (grupy || GRUPY)[grupa].map(([p, n]) => ({ pole: p, nazwa: n, pkt: ok(pct[p]) ? Math.round(100 * pct[p]) : null }));
         const z = el.filter((x) => x.pkt !== null);
         const suma = z.reduce((a, x) => a + pct[x.pole], 0) + BRAK * (el.length - z.length);
         const ocena = z.length >= 2 ? Math.round(10 * suma / el.length * 10) / 10 : null;
@@ -260,7 +261,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
