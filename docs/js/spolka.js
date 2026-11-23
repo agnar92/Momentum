@@ -5,6 +5,10 @@
     const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const slug = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l").replace(/\s+/g, "-");
     const t = (new URLSearchParams(location.search).get("t") || "NVDA").toUpperCase();
+    // karta spółki GPW (?r=gpw): dane z data/gpw/spolki/, kwoty w zł, porównania na tle spółek GPW (gpw.py)
+    const GPW = new URLSearchParams(location.search).get("r") === "gpw";
+    if (GPW) W.WALUTA = "zł";
+    const WAL = GPW ? "zł" : "USD", ZB = GPW ? "spółek GPW" : "500 spółek", ZB2 = GPW ? "spółek GPW (WIG20 + mWIG40 + sWIG80)" : "500 największych spółek";
     let K = null, M = null;
     const oc = (x) => `<span class="ocena ${W.klasaOceny(x)}">${W.ok(x) ? W.fmtNum(x, 1) : "–"}</span>`;
     const usdOs = (v) => W.fmtUsd(v, 0);
@@ -17,7 +21,7 @@
         if (W.ok(m.rev_1y)) fakty.push(`przychody ${W.fmtPct(m.rev_1y, 0, true)} r/r`);
         if (W.ok(m.nm)) fakty.push(`marża netto ${W.fmtPct(m.nm, 0)}`);
         if (W.ok(m.roe)) fakty.push(`ROE ${W.fmtPct(m.roe, 0)}`);
-        if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} USD)` : `dług netto ${W.fmtUsd(-m.net_cash)} USD`);
+        if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} ${WAL})` : `dług netto ${W.fmtUsd(-m.net_cash)} ${WAL}`);
         const typ = K.typy && K.typy[0];
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">szczegóły PEG / DCF ↓</a></div>` : "";
         $("top").innerHTML = `
@@ -41,6 +45,7 @@
     const czytajPf = () => { try { return JSON.parse(localStorage.getItem(PF_KLUCZ)) || {}; } catch (e) { return {}; } };
     function przyciskPortfela() {
         const el = $("do-portfela"); if (!el) return;
+        if (GPW) { el.innerHTML = '<span class="mut male">Portfel obejmuje na razie spółki z USA.</span>'; return; }
         const pf = czytajPf(), jest = (pf.pozycje || []).some((p) => p.t === K.t);
         el.innerHTML = jest ? `<span class="pill p-niedowartosciowana">✓ W portfelu</span> <a href="portfel.html" style="color:inherit">przejdź do portfela →</a> <button id="pf-usun" class="male" style="margin-left:6px">Usuń z portfela</button>`
             : '<button id="pf-dodaj" class="akt">＋ Dodaj do portfela</button>';
@@ -66,14 +71,15 @@
         }
     }
     function wlasne() {
+        if (GPW) return "";
         const brak = W.POLA_WLASNE.filter(([p]) => !W.ok(ORIG.pct[p]) || p in WL);
         if (!brak.length) return "";
         const S = K.med500 || {};
         const wart = (p, j) => { const v = WL[p]; return W.ok(v) ? String(Math.round((j === "%" ? 100 * v : v) * 100) / 100).replace(".", ",") : ""; };
-        const med = (p, j) => W.ok(S[p]) ? `mediana 500 spółek ${j === "%" ? W.fmtPct(S[p], 1) : W.fmtNum(S[p])}` : "";
+        const med = (p, j) => W.ok(S[p]) ? `mediana ${ZB} ${j === "%" ? W.fmtPct(S[p], 1) : W.fmtNum(S[p])}` : "";
         const n = Object.keys(WL).length;
         return `<details class="wlasne"${n ? " open" : ""}><summary>✎ ${n ? `Ocena uwzględnia Twoje dane (${n})` : "Uzupełnij brakujące dane samodzielnie"}</summary>
-          <div class="mut male" style="margin:6px 0">Wpisz wartości, których brakuje (np. z raportu spółki). Ocena przeliczy się na tle wszystkich 500 spółek; dane zostają tylko w tej przeglądarce i widać je też na liście (✎).</div>
+          <div class="mut male" style="margin:6px 0">Wpisz wartości, których brakuje (np. z raportu spółki). Ocena przeliczy się na tle wszystkich ${ZB}; dane zostają tylko w tej przeglądarce i widać je też na liście (✎).</div>
           <div class="pola-wlasne">${brak.map(([p, nz, j]) => `<label><span>${esc(nz)}${j ? " (%)" : ""}</span><input data-wl="${p}" data-j="${j}" inputmode="decimal" value="${wart(p, j)}" placeholder="${med(p, j)}"></label>`).join("")}</div>
           <div style="display:flex;gap:8px;margin-top:8px"><button id="wl-zapisz">Przelicz ocenę</button>${n ? '<button id="wl-usun" class="drugi">Usuń moje dane</button>' : ""}</div></details>`;
     }
@@ -110,9 +116,9 @@
         const sp = m.spadek_2l ? `<div class="ostrzezenie">⬇ <b>Fundamenty słabną 2 lata z rzędu:</b> ${esc(m.spadek_2l.join(" i "))} ${m.spadek_2l.length > 1 ? "spadają" : "spada"} rok do roku teraz i rok wcześniej — wg Twojej reguły sygnał do sprzedaży (badanie, etap 77: takie spółki w 5 lat średnio −4 pp względem średniej).</div>` : "";
         const ow = (K.ostrzezenia || []).length ? `<div class="ostrzezenie">❗ <b>Ostrzeżenia (realność prognozy, jakość zysku, zdarzenia):</b><ul style="margin:4px 0 0 18px;padding:0">${K.ostrzezenia.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
         $("liczby").innerHTML = ostrz + sp + ow + wlasne() + `
-          <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle 500 największych spółek</div></div>${oc(o.ogolna)}</div>
+          <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle ${ZB2}</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
-          <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} · <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a></div>
+          <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} ${GPW ? "" : `· <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a>`}</div>
           <div class="liczby" style="margin-top:12px">
             <div><small>Cena</small><b>${W.fmtCena(m.price)}</b></div><div><small>EPS (12 mies.)</small><b>${W.fmtNum(m.eps)}</b></div>
             <div><small>Kapitalizacja</small><b>${W.fmtUsd(m.mcap)}</b></div><div><small>Wielkość (kapit.)</small><b>#${K.rank}</b></div>
@@ -127,7 +133,7 @@
           <button data-o="1r" class="${okres === "1r" ? "akt" : ""}">1 rok</button><button data-o="5l" class="${okres === "5l" ? "akt" : ""}">5 lat</button></div></div><div id="cena-svg"></div>`;
         if (K.ceny) {
             const n = okres === "1r" ? 53 : K.ceny.c.length;
-            WY.linia($("cena-svg"), K.ceny.d.slice(-n), K.ceny.c.slice(-n), (v) => "$" + W.fmtNum(v, 0));
+            WY.linia($("cena-svg"), K.ceny.d.slice(-n), K.ceny.c.slice(-n), (v) => (GPW ? W.fmtNum(v, 0) + " zł" : "$" + W.fmtNum(v, 0)));
         } else $("cena-svg").innerHTML = '<p class="mut">Brak notowań.</p>';
         el.querySelectorAll("button[data-o]").forEach((b) => b.addEventListener("click", () => wykresCeny(b.dataset.o)));
     }
@@ -137,20 +143,21 @@
         const S = K.med500 || {};
         // n: nazwa, v: wartość (tekst), pole: percentyl (ocena), med: [pole mediany, formatowanie, dopisek]
         const w = (n, v, pole, med) => {
+            if (GPW && !(pole && W.ok(p[pole])) && /^[\s–·%]*(rocznie)?[\s–·%]*$/.test(String(v).replace(/<[^>]+>/g, ""))) return "";     // GPW: wskaźnika brak w danych
             const d = pole ? W.opisPercentyla(p[pole]) : null;
-            const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana 500 spółek: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
+            const mtxt = med && W.ok(S[med[0]]) ? `<span class="mut male">mediana ${ZB}: ${med[1](S[med[0]])}${med[2] ? " " + med[2] : ""}</span>` : "";
             const moje = pole && pole in WL ? ' <span class="moje" title="Twoje dane">✎</span>' : "";
             return `<div class="wiersz"><span>${n}: <b>${v}</b>${moje}<br>${mtxt}</span>${d ? `<span class="${d.k}">${d.t}</span>` : ""}</div>`;
         };
         const zl = W.ok(m.hist_lat) ? ` (z ${W.fmtNum(m.hist_lat, 1)} lat — młoda spółka)` : "";
         const pr = (x) => W.fmtPct(x, 1), pz = (x) => W.fmtPct(x, 1, true), nm2 = (x) => W.fmtNum(x), cal = (x) => W.fmtNum(x, 0);
         const sklad = (g) => {
-            const s = W.skladOceny(p, g);
+            const s = W.skladOceny(p, g, K.grupy);
             return `<details class="sklad"><summary>Jak powstała ocena ${W.fmtNum(K.oceny[g], 1)} (${s.liczone} wskaźników)</summary>
               ${s.el.map((x) => `<div class="pkt ${x.pkt === null ? "nie-liczy" : ""}"><span>${esc(x.nazwa)}</span><span class="pas"><i style="width:${x.pkt || 0}%"></i></span><b title="${x.pkt === null ? "brak danych — liczone jako 50 pkt (środek stawki)" : ""}">${x.pkt === null ? "50*" : x.pkt}</b></div>`).join("")}
-              <div class="mut" style="margin-top:6px">Punkty = percentyl wśród 500 spółek (100 = najlepsza). Ocena = średnia punktów ÷ 10; 50* = brak danych, liczone neutralnie jako środek stawki (żeby brak danych nie zawyżał ani nie zaniżał oceny).</div></details>`;
+              <div class="mut" style="margin-top:6px">Punkty = percentyl wśród ${ZB} (100 = najlepsza). Ocena = średnia punktów ÷ 10; 50* = brak danych, liczone neutralnie jako środek stawki (żeby brak danych nie zawyżał ani nie zaniżał oceny).</div></details>`;
         };
-        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie ze wszystkimi 500 spółkami (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej). Pod wartością: mediana wszystkich 500 spółek jako punkt odniesienia.</div>
+        $("metryki").innerHTML = `<h2>Wskaźniki spółki</h2><div class="pod">Porównanie ze wszystkimi ${GPW ? "spółkami GPW z listy" : "500 spółkami"} (top x % = lepiej niż 100 − x % spółek; przy wycenie „wyżej” = taniej). Pod wartością: mediana wszystkich ${ZB} jako punkt odniesienia.</div>
           <div class="kol3">
             <div class="kol k-wzrost"><div class="naglowek-kol">📈 Wzrost</div>
               ${w("Przychody 1 rok (12 mies.)", pz(m.rev_1y), "rev_1y", ["rev_1y", pz])}${w("Przychody kwartał r/r", pz(m.rev_q_yoy))}${w("Zysk netto 1 rok", pz(m.ni_1y), "ni_1y", ["ni_1y", pz])}
@@ -163,14 +170,14 @@
             <div class="kol k-sila"><div class="naglowek-kol">🛡️ Siła finansowa</div>
               ${w("Marża brutto", pr(m.gm), "gm", ["gm", pr])}${w("Marża operacyjna", pr(m.om), "om", ["om", pr])}${w("Marża netto", pr(m.nm), "nm", ["nm", pr])}
               ${w("ROE", pr(m.roe), "roe", ["roe", pr])}${w("ROA", pr(m.roa), "roa", ["roa", pr])}${w("ROIC (zysk oper. po podatku ÷ kapitał zaangażowany)", pr(m.roic), "roic", ["roic", pr])}${w("ROCE", pr(m.roce), "roce", ["roce", pr])}
-              ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " USD · marża " + pr(m.fcf_margin), "fcf_margin", ["fcf_margin", pr, "(marża FCF)"])}${w("Dług / kapitał", W.fmtNum(m.de), "de", ["de", nm2])}
-              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " USD · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}${w("Liczba akcji, zmiana 3 lata", W.ok(m.akcje_3l) ? pz(m.akcje_3l) + (m.akcje_3l < -0.005 ? " (skup akcji)" : m.akcje_3l > 0.005 ? " (nowe akcje)" : "") : "–", "akcje_3l", ["akcje_3l", pz])}
+              ${w("Wolne przepływy (FCF, 12 mies.)", W.fmtUsd(m.fcf_ttm) + " " + WAL + " · marża " + pr(m.fcf_margin), "fcf_margin", ["fcf_margin", pr, "(marża FCF)"])}${w("Dług / kapitał", W.fmtNum(m.de), "de", ["de", nm2])}
+              ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " " + WAL + " · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}${w("Liczba akcji, zmiana 3 lata", W.ok(m.akcje_3l) ? pz(m.akcje_3l) + (m.akcje_3l < -0.005 ? " (skup akcji)" : m.akcje_3l > 0.005 ? " (nowe akcje)" : "") : "–", "akcje_3l", ["akcje_3l", pz])}
               ${w("Capex / przychody (inwestycje w majątek)", pr(m.capex_przych), "capex_przych", ["capex_przych", pr])}${w("Wzrost kapitału własnego 3 lata (rocznie)", pz(m.kapital_3l), "kapital_3l", ["kapital_3l", pz])}
               ${w("Zysk dodatni (lata z 5)", W.ok(m.zysk_dodatni_lata) ? m.zysk_dodatni_lata + " z 5" : "–")}${w("Zmienność zysku 5 lat (mniej = stabilniej)", W.ok(m.zmiennosc_zysku) ? W.fmtNum(m.zmiennosc_zysku) : "–")}
               <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
               ${w("P/E", W.fmtNum(m.pe), "pe", ["pe", nm2])}${w("Forward P/E", W.fmtNum(m.fpe), null, ["fpe", nm2])}${w("P/S", W.fmtNum(m.ps), "ps", ["ps", nm2])}${w("P/B", W.fmtNum(m.pb), null, ["pb", nm2])}
-              ${w("PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg", ["peg", nm2])}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf", ["pfcf", nm2])}
+              ${w(GPW ? "PEG (P/E ÷ wzrost zysku 3 lata)" : "PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg", ["peg", nm2])}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf", ["pfcf", nm2])}
               ${w("Stopa FCF", pr(m.fcf_yield), "fcf_yield", ["fcf_yield", pr])}${w("Stopa dywidendy", pr(m.div), null, ["div", pr])}${w("Potencjał DCF", pz(m.dcf_pot), "dcf_pot", ["dcf_pot", pz])}
               <div class="wiersz"><span>Ocena wyceny</span>${oc(K.oceny.wycena)}</div>${sklad("wycena")}</div>
           </div>`;
@@ -182,8 +189,8 @@
             if (/≥ 30 % długu/.test(n) && v >= 9.9) return "brak długu";
             if (/Dług|PEG/.test(n)) return W.fmtNum(v);
             if (/FCF > 0/.test(n)) return W.fmtUsd(v);
-            if (/Lata|≥ 3 z 5|z 10 lat/.test(n)) return String(v);
-            if (/Kapitalizacja/.test(n)) return W.fmtUsd(v) + " USD";
+            if (/Lata|≥ 3 z 5|≥ 2 z 3|z 10 lat/.test(n)) return String(v);
+            if (/Kapitalizacja/.test(n)) return W.fmtUsd(v) + " " + WAL;
             if (/2 × w 10 lat/.test(n)) return W.fmtNum(v, 1) + " ×";
             if (/ROE wyższe/.test(n)) return (n.match(/niż (.*)$/) || ["", ""])[1] + " " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
             return W.fmtPct(v, 1);
@@ -205,7 +212,7 @@
         S.g = d ? d.g : W.ok(M.dcf_g) ? M.dcf_g : (W.ok(M.rev_cagr3) ? Math.max(0, Math.min(0.25, M.rev_cagr3)) : 0.08);
         S.marza = d ? d.marza : W.ok(M.dcf_marza) ? M.dcf_marza : (W.ok(M.fcf_margin) && M.fcf_margin > 0 ? M.fcf_margin : 0.1);
         S.r = p.r; S.tg = p.tg; S.lata = p.lata; S.wyg = p.wygaszanie;
-        S.eps = M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps; S.geps = W.ok(M.eps_next5) ? M.eps_next5 : (W.ok(M.rev_cagr5) ? M.rev_cagr5 : 0.1);
+        S.eps = M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps; S.geps = W.ok(M.eps_next5) ? M.eps_next5 : GPW && W.ok(M.ni_cagr3) ? M.ni_cagr3 : (W.ok(M.rev_cagr5) ? M.rev_cagr5 : 0.1);
     }
     const parDcf = () => ({ rev: W.ok(M.dcf_rev) ? M.dcf_rev : M.rev_ttm, marza: S.marza, g: S.g, akcje: M.shares, gotowka: M.cash || 0, dlug: W.ok(M.dcf_dlug) ? M.dcf_dlug : (M.debt || 0), r: S.r, tg: S.tg, lata: S.lata, wyg: S.wyg });
     function margines5() {
@@ -227,11 +234,13 @@
         $("wyc-tresc").innerHTML = `<div class="siatka2">
           <div class="wej wej-peg">
             <label>Cena<input type="number" value="${W.ok(M.price) ? M.price.toFixed(2) : ""}" disabled><span class="mut">rynek</span></label>
-            <label class="szer">EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">z P/E Finviz: ${W.fmtNum(M.eps)}</span>
+            <label class="szer">EPS (12 mies.)<input id="w-eps" type="number" step="0.01" value="${W.ok(S.eps) ? S.eps.toFixed(2) : ""}"><span class="mut">${GPW ? "z P/E" : "z P/E Finviz"}: ${W.fmtNum(M.eps)}</span>
               ${W.ok(M.eps_norm) ? `<div class="chipy"><button data-e="${M.eps}">z raportu (GAAP) ${W.fmtNum(M.eps)}</button><button data-e="${M.eps_norm}">znormalizowany ${W.fmtNum(M.eps_norm)}</button></div>` : ""}
               ${M.peg_norm_uzyte ? `<div class="male" style="color:var(--brazowy-t);margin-top:4px">Zysk z raportu różni się o ponad 15 % od zysku z podstawowej działalności — domyślnie liczymy PEG ze znormalizowanego (zob. „Jakość zysku”).</div>` : ""}</label>
             <label class="szer">Oczekiwany wzrost EPS rocznie (%)<input id="w-geps" type="number" step="0.5" value="${(100 * S.geps).toFixed(1)}">
-              <div class="chipy"><button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button></div></label>
+              <div class="chipy">${GPW ? `<button data-g="${M.ni_cagr3}">zysk 3 lata ${W.fmtPct(M.ni_cagr3, 0)}</button><button data-g="${M.rev_cagr3}">przychody 3 lata ${W.fmtPct(M.rev_cagr3, 0)}</button><button data-g="${M.rev_1y}">przychody 1 rok ${W.fmtPct(M.rev_1y, 0)}</button>`
+                : `<button data-g="${M.eps_next5}">prognoza 5 lat ${W.fmtPct(M.eps_next5, 0)}</button><button data-g="${M.rev_cagr5}">przychody 5 lat ${W.fmtPct(M.rev_cagr5, 0)}</button><button data-g="${M.eps_ny}">EPS przyszły rok ${W.fmtPct(M.eps_ny, 0)}</button>`}</div>
+              ${GPW ? '<div class="male mut" style="margin-top:4px">GPW: brak prognoz analityków — domyślnie wzrost zysku z 3 lat (po jednorazowym skoku zysku zaniża PEG; wpisz realny wzrost).</div>' : ""}</label>
             <label>P/E (wyliczone)<input type="number" value="${W.ok(pe) ? pe.toFixed(2) : ""}" disabled><span class="mut">cena ÷ EPS</span></label>
           </div>
           <div class="karta ciemna" style="margin:0">
@@ -304,6 +313,7 @@
     // --- sprawozdania -------------------------------------------------------------------------------------------------
     // --- jakość zysku i zdarzenia (fakty z SEC, bez interpretacji) ------------------------------------------------------
     function zyskZd() {
+        if (GPW) { $("zysk-zd").hidden = true; return; }
         const el = $("zysk-zd"), m = M, zd = K.zdarzenia || [];
         const wr = (n, v, b) => `<div class="jz-w${b ? " jz-suma" : ""}"><span>${n}</span><b>${v}</b></div>`;
         const wr3 = (n, a, b) => `<div class="jz-w jz-3"><span>${n}</span><b>${a}</b><b>${b}</b></div>`;
@@ -374,7 +384,7 @@
 
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
-        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">Z raportów SEC (pierwsza publikacja, bez późniejszych korekt).</div></div>
+        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Z Yahoo Finance (ok. 4–5 lat rocznie, ostatnie kwartały)." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
           <div class="zakladki">${[["q", "Kwartalnie"], ["ttm", "12 mies. (TTM)"], ["y", "Rocznie"]].map(([k, n]) => `<button data-tr="${k}" class="${tryb === k ? "akt" : ""}">${n}</button>`).join("")}</div></div>
           <div class="mut male">Rachunek wyników</div><div id="sp-rw"></div>
           <div class="siatka2" style="margin-top:12px"><div><div class="mut male">Wolne przepływy (FCF = przepływy operacyjne − nakłady)</div><div id="sp-cf"></div></div>
@@ -394,21 +404,21 @@
     }
 
     function szukaj() {
-        fetch("data/lista.json").then((r) => r.json()).then((d) => {
-            LISTA = d.rows;
+        fetch(GPW ? "data/gpw.json" : "data/lista.json").then((r) => r.json()).then((d) => {
+            LISTA = GPW ? d.rows.map((r) => ({ t: r.t, n: r.n, o: r.oceny })) : d.rows;
             $("tickery").innerHTML = d.rows.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join("");
             if (K) liczby();
         }).catch(() => {});
-        $("q").addEventListener("change", (e) => { const v = e.target.value.trim().toUpperCase(); if (v) location.href = "spolka.html?t=" + encodeURIComponent(v); });
+        $("q").addEventListener("change", (e) => { const v = e.target.value.trim().toUpperCase(); if (v) location.href = "spolka.html?t=" + encodeURIComponent(v) + (GPW ? "&r=gpw" : ""); });
     }
 
     szukaj();
-    fetch(`data/spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((k) => {
+    fetch(`data/${GPW ? "gpw/" : ""}spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((k) => {
         K = k; M = k.m; document.title = `${k.n} (${k.t}) · Fundamenta`;
         ORIG = { pct: { ...k.pct }, oceny: { ...k.oceny }, m: { ...k.m } };
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
-        fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania("q");
-    }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). Lista obejmuje 500 największych spółek USA.`; });
+        if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
+        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
+    }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();

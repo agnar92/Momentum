@@ -439,10 +439,12 @@ def oceny(rows):
 
 
 # --- typ spółki (kategorie Petera Lyncha, reguły własne) -------------------------------------------------------------
-def typy(m, sektor):
-    """[(typ, dopasowanie 0-100, uzasadnienie)] posortowane malejąco."""
+def typy(m, sektor, duza=20e9, g_off=0.0):
+    """[(typ, dopasowanie 0-100, uzasadnienie)] posortowane malejąco. GPW: `duza` w zł, `g_off` > 0 obniża progi wzrostu (wolniejszy rynek)."""
     g5 = m.get("rev_cagr5")
     n5 = m.get("eps_next5")
+    g5 = g5 + g_off if g5 is not None else None
+    n5 = n5 + g_off if n5 is not None else None
     mc = m.get("mcap") or 0
     div = m.get("div") or 0
     lata = [x for x in (m.get("rev_lata") or []) if x is not None]
@@ -453,7 +455,7 @@ def typy(m, sektor):
         out.append(("Szybko rosnąca", _clip(100 * (szyb - 0.10) / 0.15), "przychody / prognoza EPS rosną ≥ 20 % rocznie"))
     if g5 is not None:
         stab = 100 - 100 * abs(g5 - 0.12) / 0.08
-        if mc < 20e9:
+        if mc < duza:
             stab -= 30
         if zm is not None and zm > 0.25:
             stab -= 30

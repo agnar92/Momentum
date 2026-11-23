@@ -142,11 +142,27 @@ def metryki(d):
         if len(s) >= 3 and s[-1] < s[-2] < s[-3]:
             sp.append(nm_)
     m["spadek_2l"] = sp or None
+    # pola karty spółki (te same nazwy co w USA)
+    m["fcf_ttm"], m["cash"], m["debt"], m["roe_sec"] = fcf, cash, debt, m.get("roe")
+    m["shares"] = (m["mcap"] / m["price"]) if m["mcap"] and m["price"] else inf.get("sharesOutstanding")
+    m["eps"] = m["price"] / m["pe"] if m["price"] and m["pe"] and m["pe"] > 0 else None
+    if cash is not None:
+        m["net_cash"] = cash - debt
+    if m.get("ni_cagr3") is not None:
+        m["ni_3y"] = (1 + m["ni_cagr3"]) ** 3 - 1
+    if m.get("pfcf"):
+        m["fcf_yield"] = 1 / m["pfcf"]
+    if len(g) >= 3:
+        m["rev_lata_10"] = sum(x > 0.10 for x in g[-5:])
     c = [x[1] for x in d.get("ceny") or []]
     if len(c) >= 53:
         m["zw_1r"] = c[-1] / c[-53] - 1
     if len(c) >= 52:
         m["od_maks_12m"] = c[-1] / max(c[-52:]) - 1
+    if len(c) >= 2:
+        def zw_(n):
+            return c[-1] / c[-1 - n] - 1 if len(c) > n else None
+        m["zw"] = {"1t": zw_(1), "1m": zw_(4), "1r": zw_(52), "5l": zw_(len(c) - 1) if len(c) >= 250 else None}
     return m
 
 
@@ -161,20 +177,20 @@ def strategie(m):
     return {
         "Jakość (7 kryteriów, GPW)": [
             (f"Przychody 3 lata > {100 * P['rev_cagr3']:.0f} % rocznie", m.get("rev_cagr3"), _gt(m.get("rev_cagr3"), P["rev_cagr3"])),
-            ("Dług / kapitał 0–1", m.get("de"), de_ok), ("FCF > 0", m.get("fcf_margin"), _gt(m.get("fcf_margin"), 0)),
+            ("Dług / kapitał 0–1", m.get("de"), de_ok), ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_margin"), 0)),
             ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)), ("ROA > 10 %", m.get("roa"), _gt(m.get("roa"), 0.10)),
-            ("ROE wyższe niż 3 lata temu", m.get("roe"), m.get("roe") is not None and m.get("roe_wcz") is not None and m["roe"] >= m["roe_wcz"]),
+            ("ROE wyższe niż 3 lata temu", m.get("roe_wcz"), m.get("roe") is not None and m.get("roe_wcz") is not None and m["roe"] >= m["roe_wcz"]),
             ("ROCE > 15 %", m.get("roce"), _gt(m.get("roce"), 0.15))],
         "7/7 (niskie ryzyko, GPW)": [
             (f"Przychody 3 lata > +{100 * P['rev_3y']:.0f} %", m.get("rev_3y"), _gt(m.get("rev_3y"), P["rev_3y"])),
             (f"Przychody 1 rok > {100 * P['rok']:.0f} %", m.get("rev_1y"), _gt(m.get("rev_1y"), P["rok"])),
             (f"Zysk 1 rok > {100 * P['rok']:.0f} %", m.get("ni_1y"), _gt(m.get("ni_1y"), P["rok"])),
             ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)), ("Dług / kapitał 0–1", m.get("de"), de_ok),
-            ("FCF > 0", m.get("fcf_margin"), _gt(m.get("fcf_margin"), 0)),
+            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_margin"), 0)),
             ("PEG 0–2 (z przeszłego wzrostu zysku)", m.get("peg"), m.get("peg") is not None and 0 < m["peg"] < 2)],
         "Konsekwentny wzrost (GPW)": [
             (f"Przychody > {100 * P['lata_wzrostu']:.0f} % w ≥ 2 z 3 lat", m.get("lata_wzrostu"), m.get("lata_wzrostu") is not None and m["lata_wzrostu"] >= 2),
-            ("Dług / kapitał < 1", m.get("de"), m.get("de") is not None and m["de"] < 1), ("FCF > 0", m.get("fcf_margin"), _gt(m.get("fcf_margin"), 0))],
+            ("Dług / kapitał < 1", m.get("de"), m.get("de") is not None and m["de"] < 1), ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_margin"), 0))],
     }
 
 
@@ -225,6 +241,58 @@ def _czysc(x):
     return x
 
 
+NAZWY = {"rev_1y": "Przychody 1 rok", "rev_cagr3": "Przychody 3 lata (rocznie)", "ni_1y": "Zysk netto 1 rok", "ni_cagr3": "Zysk netto 3 lata (rocznie)",
+         "lata_wzrostu": "Lata ze wzrostem przychodów > 6 % (z 3)", "gm": "Marża brutto", "om": "Marża operacyjna", "nm": "Marża netto", "roe": "ROE", "roa": "ROA",
+         "roce": "ROCE", "fcf_margin": "Marża FCF", "de": "Dług / kapitał", "net_cash_mc": "Gotówka netto / kapitalizacja", "pe": "P/E", "peg": "PEG (z przeszłego wzrostu)",
+         "ps": "P/S", "pfcf": "P/FCF"}
+DANE = {}
+
+
+def karty(rows, katalog, dane):
+    """Karty spółek GPW w formacie karty USA (spolka.html?r=gpw): oceny, typ Lyncha (progi GPW), PEG z przeszłego wzrostu zysku, DCF, sprawozdania, ceny."""
+    from momentum import ocena
+    os.makedirs(katalog, exist_ok=True)
+    for f in os.listdir(katalog):
+        os.remove(os.path.join(katalog, f))
+    med = {}
+    for gr, pola in GRUPY.items():
+        for p, _ in pola:
+            v = sorted(r["m"][p] for r in rows if r["m"].get(p) is not None)
+            if v:
+                med[p] = v[len(v) // 2]
+    for nr, r in enumerate(rows, 1):
+        m, d = r["m"], dane.get(r["t"]) or {}
+        # typ Lyncha: wzrost z 3 lat (zamiast 5), progi obniżone o 3 pp, „duża spółka” ≥ 5 mld zł (zamiast 20 mld USD)
+        mt = dict(m, rev_cagr5=m.get("rev_cagr3"), eps_next5=None)
+        typy = ocena.typy(mt, r["s"], duza=5e9, g_off=0.03)
+        zam = (("≥ 20 % rocznie", "≥ 17 % rocznie (próg GPW)"), ("duża spółka, przychody +8–18 % rocznie", "duża jak na GPW (≥ 5 mld zł), przychody +5–15 % rocznie"),
+               ("przychody < 8 % rocznie", "przychody < 5 % rocznie (próg GPW)"))
+        def _opis(c):
+            for o, n in zam:
+                c = c.replace(o, n)
+            return c
+        typy = [(a_, b_, _opis(c_)) for a_, b_, c_ in typy]
+        hist = dict(q=[[e, v, (d.get("q_ni") or {}).get(e), None, None, None] for e, v in sorted((d.get("q_rev") or {}).items())],
+                    y=[[e, v, (d.get("ni") or {}).get(e), (d.get("fcf") or {}).get(e), None] for e, v in sorted((d.get("rev") or {}).items())])
+        try:
+            dcf = ocena.dcf_scenariusze(m, hist, r["s"])
+        except Exception:  # noqa: BLE001
+            dcf = None
+        m["dcf"] = dcf["base"]["wartosc"] if dcf else None
+        m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None
+        typ = typy[0][0] if typy else None
+        n_ = sum(1 for p in NAZWY if p in (r.get("pct") or {}))
+        ceny = d.get("ceny") or []
+        karta = dict(t=r["t"], n=r["n"], sector=r["s"], industry=r["i"], country="Polska", www=r.get("www"), rank=nr, m=m, pct=r.get("pct") or {}, oceny=r["oceny"],
+                     typy=typy, strategie=r["st"], peg=ocena.peg_scenariusze(m.get("pe"), m.get("ni_cagr3")), dcf=dcf, etykieta=r["et"], hist=hist,
+                     zw=m.get("zw") or {}, kompletnosc=dict(liczone=n_, wszystkie=len(NAZWY), niepelne=n_ < 0.75 * len(NAZWY), kategorie=[]), med500=med,
+                     ostrzezenia=([f"Fundamenty słabną 2 lata z rzędu: {' i '.join(m['spadek_2l'])}."] if m.get("spadek_2l") else []),
+                     zdarzenia=None, lynch=ocena.lynch(m, typ, None), ceny={"d": [x[0] for x in ceny], "c": [x[1] for x in ceny]} if ceny else None,
+                     grupy={g: [[p, NAZWY[p]] for p, _ in pola] for g, pola in GRUPY.items()}, generated_at=dt.date.today().isoformat(), dcf_param=ocena.DCF, gpw=True)
+        r["typ"] = typ
+        json.dump(_czysc(karta), open(os.path.join(katalog, f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cache", default=None)
@@ -253,6 +321,7 @@ def main(argv=None):
             wykl.append(t)
             continue
         m = metryki(d)
+        DANE[t] = d
         rows.append(dict(t=t, n=inf.get("longName") or inf.get("shortName") or t, s=inf.get("sector"), i=inf.get("industry"), ind=ind[t], www=inf.get("website"),
                          m=m, st=strategie(m), et=etykieta(m.get("peg")), ceny=d.get("ceny")[-260:] if d.get("ceny") else None))
         if (n + 1) % 20 == 0:
@@ -264,6 +333,7 @@ def main(argv=None):
         return 1
     oceny(rows)
     rows.sort(key=lambda r: -(r["m"].get("mcap") or 0))
+    karty(rows, os.path.join(os.path.dirname(a.out), "gpw", "spolki"), DANE)
     out = dict(generated_at=dt.date.today().isoformat(), progi=GPW_PROGI, wykluczone=wykl, bez_danych=bledy, rows=rows)
     json.dump(_czysc(out), open(a.out, "w"), ensure_ascii=False, separators=(",", ":"))
     print(f"Zapisano {len(rows)} spółek GPW; wykluczone sektory: {len(wykl)}; bez danych: {len(bledy)} ({', '.join(bledy[:20])}).")

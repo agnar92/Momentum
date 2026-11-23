@@ -65,7 +65,11 @@ biznesradar.pl index pages, fallback `docs/data/gpw_sklad.json`), same excluded 
 annual statements, quarterly TTM, weekly prices; cache dir 6 days) → `docs/data/gpw.json` (rows: t, n, s, i, ind, m, st, et, oceny, pct, ceny). Lowered growth
 thresholds `GPW_PROGI` (Jakość: revenue 3y CAGR > 5 %; 7/7: revenue 3y > +16 %, revenue / earnings 1y > 3 %; consistent growth > 6 % in ≥ 2 of 3 years), others
 as USA; PEG from past 3-year earnings CAGR (no analyst forecasts) → labels; scores = percentiles among GPW stocks, same weights. NOT backtested (no history) —
-stated on the page. Page: list with filters (sector, index, Jakość 7/7, Siła ≥ 7, without ⬇), click row → inline details; mobile layout `#lista-gpw`.
+stated on the page. Page: list with filters (sector, index, Jakość 7/7, Siła ≥ 7, without ⬇); click → full company card `spolka.html?t=X&r=gpw`
+(user: „dlaczego dla GPW nie zrobiłeś takiego panelu jak dla akcji USA”; ▸ = quick inline preview); `gpw.karty` writes `docs/data/gpw/spolki/<T>.json` in the USA
+card format (m with USA field names, pct, oceny, `grupy` = GPW score components for `W.skladOceny`, typy via `ocena.typy(duza=5e9 zł, g_off=0.03)` with GPW texts,
+PEG scenarios from 3-year earnings growth, DCF via `ocena.dcf_scenariusze`, Lynch checklist, annual / quarterly hist, weekly prices). spolka.js `GPW` mode:
+prices in zł (`W.WALUTA`), texts „spółek GPW”, USA-only rows without data hidden, no 8-K / normalized-earnings section, no portfolio button, search stays on GPW.
 CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „Siła finansowa ≥ 7” filter (stage 95: the only factor with a confirmed edge).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)

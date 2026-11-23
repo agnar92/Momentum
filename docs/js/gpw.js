@@ -32,13 +32,17 @@
         const f = KL[SORT.k];
         rows = rows.slice().sort((a, b) => { const x = f(a), y = f(b); if (x == null) return 1; if (y == null) return -1; return (x > y ? 1 : x < y ? -1 : 0) * SORT.dir; });
         $("ile").textContent = `${rows.length} z ${ROWS.length} spółek`;
-        document.querySelector("#lista-gpw tbody").innerHTML = rows.map((r, i) => `<tr data-t="${esc(r.t)}"><td class="n mut">${i + 1}</td>
+        document.querySelector("#lista-gpw tbody").innerHTML = rows.map((r, i) => `<tr data-t="${esc(r.t)}"><td class="n mut"><span class="podglad" title="Szybki podgląd" style="cursor:pointer">${OTW === r.t ? "▾" : "▸"}</span> ${i + 1}</td>
             <td class="firma"><b>${esc(r.n)}</b>${sp(r, J) === 7 ? ' <span class="jakosc">✔ Jakość 7/7</span>' : ""}${r.m.spadek_2l ? ' <span class="spadek" title="Fundamenty słabną 2 lata z rzędu">⬇</span>' : ""}<small>${esc(r.t)} · ${esc(r.ind)} · ${esc(r.s || "")}</small></td>
             <td class="n ogolna" data-l="Ogólna">${oc(r.oceny.ogolna)}</td><td class="n" data-l="Wzrost">${oc(r.oceny.wzrost)}</td><td class="n" data-l="Siła">${oc(r.oceny.sila)}</td><td class="n" data-l="Wycena">${oc(r.oceny.wycena)}</td>
             <td class="n">${W.ok(r.m.pe) ? W.fmtNum(r.m.pe, 1) : "–"}</td><td class="n">${W.ok(r.m.peg) ? W.fmtNum(r.m.peg) : "–"}</td>
             <td>${r.et ? `<span class="pill p-${slug(r.et)}">${esc(r.et)}</span>` : "–"}</td><td class="n">${sp(r, J)}/7</td><td class="n">${sp(r, L7)}/7</td>
             <td class="n ${(r.m.zw_1r || 0) >= 0 ? "plus" : "minus"}">${W.ok(r.m.zw_1r) ? W.fmtPct(r.m.zw_1r, 0, true) : "–"}</td><td class="n">${mld(r.m.mcap)}</td></tr>${OTW === r.t ? szczegoly(r) : ""}`).join("");
-        document.querySelectorAll("#lista-gpw tbody tr[data-t]").forEach((tr) => tr.addEventListener("click", () => { OTW = OTW === tr.dataset.t ? null : tr.dataset.t; rysuj(); }));
+        // kliknięcie: pełna karta spółki (jak w USA); ▸ w kolumnie # — szybki podgląd w wierszu
+        document.querySelectorAll("#lista-gpw tbody tr[data-t]").forEach((tr) => tr.addEventListener("click", (e) => {
+            if (e.target.closest(".podglad")) { OTW = OTW === tr.dataset.t ? null : tr.dataset.t; rysuj(); return; }
+            location.href = `spolka.html?t=${encodeURIComponent(tr.dataset.t)}&r=gpw`;
+        }));
     }
     document.querySelectorAll("#lista-gpw th[data-k]").forEach((th) => th.addEventListener("click", () => { SORT = { k: th.dataset.k, dir: SORT.k === th.dataset.k ? -SORT.dir : -1 }; rysuj(); }));
     ["q", "sektor", "ind", "jak", "sila", "bez"].forEach((id) => $(id).addEventListener("input", rysuj));
