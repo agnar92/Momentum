@@ -1356,3 +1356,21 @@ portfela użytkownika wg typów obok podziału Lyncha i wyników etapu 86 (bez z
 Wynik etapu 94 (2026-11-22). Stabilnie rosnące po wzroście kursu ≥ 100 % w 3 lata vs < 100 %: 12 mies. +1,4 pp [−5,9; +10,9], 36 mies. +8,7 [−15,5; +29,9]
 (vs < 50 %: +1,8 / +9,9). Hipoteza (nie gorzej) — tak; reguła Lyncha „sprzedaj stabilnie rosnącą po 2×” niepotwierdzona (raczej odwrotnie). Strona Portfel:
 informacyjna tabela składu wg typów (udział użytkownika, podział Lyncha 20/40/40, mediana 5 lat z etapu 86), bez zmian w regułach dokupu.
+
+## Etap 95: „Prosty wybór” — licznik potwierdzonych cech dobrej spółki (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „prosty algorytm oceniający, co zwiększa prawdopodobieństwo dobrej spółki, bo mamy ich za dużo do decyzji”. Licznik 0–6 punktów z cech, które
+wcześniejsze etapy potwierdziły (bez nowych progów): P1 Jakość 7/7 (etap 83), P2 ocena Siła finansowa ≥ 7 (etap 76: najsilniejsza grupa), P3 przychody > 10 %
+w ≥ 3 z 5 lat (etap 58), P4 ROA ≥ 10 % (etap 88), P5 przepływy operacyjne ≥ 30 % długu (etap 88), P6 brak ⬇ — przychody i zysk nie spadają 2 lata z rzędu (etap 77).
+Wycena (PEG) celowo poza licznikiem — o cenie decyduje reguła dokupu użytkownika. Dane i zbiór jak w etapach 92–94 (top 500 USA PIT bez wykluczonych sektorów,
+starty w styczniu 2012–2023), brak danych = punkt niezaliczony. Miary dla grup 0–2 / 3–4 / 5–6 punktów: mediana nadwyżki zwrotu 12 i 36 mies. nad medianą zbioru,
+odsetek spółek lepszych od mediany („prawdopodobieństwo”), odsetek ze stratą po 36 mies.; różnica 5–6 vs 0–2 z bootstrapem po latach (B = 2000), połowy 2012–2017
+i 2018–2023. Uwaga: wszystkie cechy wybrano na tych samych danych — wynik będzie optymistyczny (ryzyko dopasowania). Reguła dla strony: pokazujemy licznik,
+jeśli 5–6 pkt ma wyższą medianę 36 mies. niż 0–2 pkt z przedziałem > 0 i odsetek lepszych od mediany > 50 % w obu połowach.
+Hipoteza: 5–6 pkt — ok. 60 % spółek lepszych od mediany w 3 lata (vs ok. 45 % dla 0–2), różnica kilka–kilkanaście pp.
+
+Wynik etapu 95 (2026-11-23). 36 mies.: 5–6 pkt — 81 obserwacji, mediana nadwyżki +17,3 pp, lepsze od mediany 63 %, ze stratą 17 % (wszystkie: 50 % / 23 %); 3–4 pkt
++1,6 pp / 51 %; 0–2 pkt −0,5 pp / 49 %. Połowy: 2012–2017 5–6 pkt tylko 14 obserwacji, −21,3 pp, 29 % lepszych (gorzej); 2018–2023 67 obserwacji, +24,0 pp, 70 %.
+5–6 vs 0–2: 36 mies. +17,8 pp [−1,1; +40,0], 12 mies. +9,0 [−11,3; +24,4]. Pojedynczo (36 mies.): Siła ≥ 7 +16,2 [+2,5; +26,8] — jedyna z przedziałem > 0; Jakość 7/7
++13,5 [−2,1; +32,2]; przychody > 10 % w 3/5 lat +6,6 [−0,4; +12,1]; ROA ≥ 10 % +3,7; OCF/dług +0,6; brak ⬇ +3,6. Reguła dla strony NIE spełniona (przedział obejmuje 0,
+w 2012–2017 grupa 5–6 pkt gorsza). Hipoteza (ok. 60 % vs 45 %) — liczbowo tak w całości (63 % vs 49 %), ale wynik niestabilny w czasie i oparty na małej grupie.
