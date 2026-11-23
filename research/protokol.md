@@ -1374,3 +1374,22 @@ Wynik etapu 95 (2026-11-23). 36 mies.: 5–6 pkt — 81 obserwacji, mediana nadw
 5–6 vs 0–2: 36 mies. +17,8 pp [−1,1; +40,0], 12 mies. +9,0 [−11,3; +24,4]. Pojedynczo (36 mies.): Siła ≥ 7 +16,2 [+2,5; +26,8] — jedyna z przedziałem > 0; Jakość 7/7
 +13,5 [−2,1; +32,2]; przychody > 10 % w 3/5 lat +6,6 [−0,4; +12,1]; ROA ≥ 10 % +3,7; OCF/dług +0,6; brak ⬇ +3,6. Reguła dla strony NIE spełniona (przedział obejmuje 0,
 w 2012–2017 grupa 5–6 pkt gorsza). Hipoteza (ok. 60 % vs 45 %) — liczbowo tak w całości (63 % vs 49 %), ale wynik niestabilny w czasie i oparty na małej grupie.
+
+## Etap 96: dywidenda 5 lat z rzędu a jakość; PEGY vs PEG (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, co daje 5 lat wypłacanej dywidendy, czy do parametrów jakości coś daje; czy PEGY jest lepszy czy gorszy niż PEG”. Dane, zbiór, starty, miara
+(nadwyżka nad medianą zbioru 12 / 36 mies.) i bootstrap po latach jak w etapach 92–95. (A) D5 = dywidenda (suma wypłat z przepływów, SEC) wypłacona w każdym z 5 ostatnich
+lat obrotowych. Porównania: D5 vs spółki bez dywidendy w ostatnim roku — wszystkie spółki; w Jakość 7/7; w Siła ≥ 7; w Jakość 7/7 lub Siła ≥ 7; dodatkowo odsetek ze stratą
+po 36 mies. i najgorszy decyl (miara stabilności — użytkownik woli stabilność). (B) PEG = P/E ÷ (100 × CAGR zysku 5 lat), PEGY = P/E ÷ (100 × CAGR zysku 5 lat + 100 ×
+stopa dywidendy) — oba z tego samego przeszłego wzrostu (prognoz historycznych nie mamy); spółki z P/E > 0 i wzrostem > 0. Dla każdego: korelacja rang ze zwrotem
+(średnia z startów, znak ujemny = niższy wskaźnik → lepiej) oraz dolna tercyla − górna tercyla (36 mies.) z bootstrapem; także różnica PEGY − PEG w tercylach.
+Hipotezy: (A) D5 zmniejsza odsetek strat i dolny ogon, ale nie podnosi mediany; w grupach jakości różnica w granicach szumu; (B) PEGY ≈ PEG (różnica rzędu 1–2 pp,
+w granicach szumu), bo stopy dywidendy w tym zbiorze są małe względem wzrostu.
+
+Wynik etapu 96 (2026-11-23). (A) D5 − bez dywidendy, 36 mies.: wszystkie +5,8 pp [+0,9; +13,1]; Jakość 7/7 +15,5 [−0,6; +43,1]; Siła ≥ 7 +6,3 [−10,1; +27,8];
+Jakość lub Siła +7,9 [−3,9; +21,8]. Stabilność (36 mies.): strata — wszystkie 20 % vs 27 %, Jakość 7/7 13 % vs 27 %, Siła ≥ 7 7 % vs 20 %, Jakość lub Siła 10 % vs 23 %;
+najgorsze 10 % nadwyżki: −54 vs −70 pp, −26 vs −52, −15 vs −50, −25 vs −52. Hipoteza (A) — tak: dywidenda przez 5 lat wyraźnie zmniejsza ryzyko straty i dolny ogon
+(w grupach jakości o połowę), mediana tylko lekko wyżej (we wszystkich spółkach +5,8 pp, przedział > 0; w grupach jakości w granicach szumu). (B) PEG i PEGY z przeszłego
+wzrostu: korelacja rang z 36 mies. +0,077 i +0,084 (dodatnia = niski wskaźnik → GORZEJ), tania minus droga tercyla −10,3 [−18,0; −1,7] i −9,3 [−16,8; +2,1] pp; tanie
+tercyle pokrywają się w 59 %; tanie tylko wg PEGY vs tylko wg PEG +6,2 [−26,7; +21,2] (n 18/21). Hipoteza (B) — tak: PEGY ≈ PEG; oba liczone z przeszłego wzrostu
+zysku nie wskazują lepszych spółek (raczej odwrotnie). PEG na stronie liczony z prognozy analityków — niesprawdzalny (brak historii prognoz).
