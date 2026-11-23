@@ -382,6 +382,207 @@
             <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Potwierdzone w testach 2012–2026 (etapy 92–93): u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata) i dywidenda rosnąca 5 lat (+11 pp), u stabilnie rosnących wysoka marża netto (+28 pp). Pozostałe reguły Lyncha — w metodzie.</p></div></div>`;
     }
 
+    // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
+    // Tylko fakty z danych i kryteria z testów; bez werdyktu „kup / sprzedaj” (spółki wybiera użytkownik).
+    // cykl życia wg Lyncha („One Up on Wall Street”, rozdz. o szybko rosnących; opisy własne, skrócone)
+    // opisy faz rozwoju (własne, skrócone)
+    const CYKL = { 1: "Start: sprzedaż już jest, ale spółka jeszcze nie zarabia, a strata nie maleje — najbardziej ryzykowny etap.",
+        2: "Hiperwzrost: sprzedaż szybko rośnie, strata maleje albo spółka dopiero przekroczyła próg rentowności.",
+        3: "Dźwignia operacyjna: spółka zarabia, zyski rosną szybciej niż sprzedaż, a gotówka zostaje w firmie na dalszy rozwój.",
+        4: "Zwrot kapitału: spółka zarabia więcej, niż potrzebuje na rozwój, i oddaje gotówkę akcjonariuszom — dywidendy i skup akcji.",
+        5: "Schyłek: sprzedaż jest niższa niż 3 lata wcześniej — trzeba sprawdzić, czy to przejściowe (cykl, restrukturyzacja), czy trwałe." };
+    const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
+    const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
+    const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
+    const KR_IDX = { Wzrost: [0, 1, 2], "Rentowność": [3], "Bezpieczeństwo": [4, 5], Wycena: [6] };
+    function fmtKryt(co, v) {
+        if (!W.ok(v)) return "–";
+        if (/FCF|Wolne|Kapitalizacja/.test(co)) return W.fmtUsd(v) + " " + WAL;
+        if (/PEG|Dług/.test(co)) return W.fmtNum(v);
+        if (/ w ≥ | z 10 lat|lat\)$/.test(co) && Math.abs(v) >= 1 && Number.isInteger(v)) return String(v);
+        return W.fmtPct(v, 0, true);
+    }
+    const kropki = (n, z) => `<span class="kr-kropki">${Array.from({ length: z }, (_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
+    const tn = (b) => (b === true ? '<b class="kr-tak">Tak.</b>' : b === false ? '<b class="kr-nie">Nie.</b>' : '<b class="mut">Brak danych.</b>');
+    // --- wykresy fazy: tylko dane z raportów (lata obrotowe + ostatnie 12 mies.), każdy punkt to liczba z raportu ---
+    function seriaFazy() {
+        const y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), l = K.hist && K.hist.ltm;  // telefon: 5 lat, żeby podpisy się mieściły
+        const zLtm = l && l[0] && (!y.length || l[0] > y[y.length - 1][0]);
+        const et = y.map((r) => "FY" + r[0].slice(2, 4)).concat(zLtm ? ["12 m"] : []);
+        const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [il === null ? null : l[il]] : []);
+        const op = kol(5, 2), maOp = op.some(W.ok);
+        const zysk = maOp ? op : kol(2, null);
+        if (!maOp && zLtm && W.ok(M.ni_ttm)) zysk[zysk.length - 1] = M.ni_ttm;
+        const rev = kol(1, 1);
+        if (zLtm && !W.ok(rev[rev.length - 1]) && W.ok(M.rev_ttm)) rev[rev.length - 1] = M.rev_ttm;
+        const skup = kol(6, 3), dyw = kol(7, 4), akcje = kol(8, 5);
+        const wyplaty = skup.map((v, i) => (W.ok(v) || W.ok(dyw[i]) ? (v || 0) + (dyw[i] || 0) : null));
+        // ostatni punkt: wzrost i spadek z danych 12 mies. (rev_1y, rev_cagr3); brak danych o wypłatach → dywidenda / skup netto z bieżących wskaźników
+        const g = rev.map(() => null), spadek = rev.map(() => null), n = rev.length - 1;
+        if (W.ok(M.rev_1y)) g[n] = M.rev_1y;
+        if (W.ok(M.rev_cagr3)) spadek[n] = M.rev_cagr3 < 0;
+        // do klasyfikacji (nie na wykres): brak wypłat w ostatnich 12 mies. → udział wypłat w zysku z ostatniego roku obrotowego
+        const wypF = wyplaty.slice();
+        if (!W.ok(wypF[n]) && n > 0 && W.ok(wyplaty[n - 1]) && W.ok(zysk[n - 1]) && zysk[n - 1] > 0 && W.ok(zysk[n])) wypF[n] = wyplaty[n - 1] / zysk[n - 1] * zysk[n];
+        const fazy = W.fazyLat({ rev, zysk, wyplaty: wypF, g, spadek });
+        return { et, rev, zysk, zyskNazwa: maOp ? "zysk operacyjny" : "zysk netto", skup, dyw, akcje, wyplaty, fazy };
+    }
+    function fazaTeraz(sf) {
+        const k = sf.fazy.length - 1, nr = sf.fazy[k];
+        if (!nr) return null;
+        const z = sf.zysk[k], w = sf.wyplaty[k];
+        return { nr, nazwa: W.FAZY[nr - 1], pyt: { przychody: W.ok(M.rev_cagr3) ? M.rev_cagr3 >= 0 : null, zysk: W.ok(z) ? z > 0 : null, zwrot: W.ok(w) ? w > 0 : null } };
+    }
+    const kw = (v) => (v === 0 ? "0" : W.ok(v) ? W.fmtUsd(v) : "–");
+    const szt = (v) => (W.ok(v) ? (v >= 1e9 ? W.fmtNum(v / 1e9, 2) + " mld" : W.fmtNum(v / 1e6, 0) + " mln") : "–");
+    let SZER = 1000;  // szerokość sekcji w px — wykresy rysujemy w skali 1:1, żeby napisy miały stały rozmiar
+    function mini(et, w, kolor, fmt, wys = 130, sz = 300, odZera = true) {
+        // wykres liniowy: punkty = wartości z raportów; podpisane pierwsza i ostatnia wartość, oś zera przy wartościach ujemnych
+        const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+        if (p.length < 2) return '<div class="mut male kr-brak">Brak danych w raportach.</div>';
+        const n = et.length, w0 = p.map((x) => x[1]), mx0 = Math.max(...w0), mn0 = Math.min(...w0);
+        // liczba akcji: skala od najmniejszej do największej wartości (zmiana o kilka % musi być widoczna); kwoty: od zera
+        const mn = odZera ? Math.min(0, mn0) : mn0 - (mx0 - mn0 || mx0 * 0.01) * 0.6, mx = odZera ? mx0 : mx0 + (mx0 - mn0 || mx0 * 0.01) * 0.2, zak = mx - mn || 1;
+        const X = (i) => 22 + (i / Math.max(1, n - 1)) * (sz - 44), Y = (v) => 26 + (1 - (v - mn) / zak) * (wys - 52);
+        const pierw = p[0], ost = p[p.length - 1];
+        const zero = mn < 0 ? `<line x1="10" x2="${sz - 10}" y1="${Y(0)}" y2="${Y(0)}" class="kr-zero"/>` : "";
+        const pole = !odZera ? "" : `<path d="M${X(pierw[0])},${Y(Math.max(mn, 0))} ${p.map(([i, v]) => `L${X(i)},${Y(v)}`).join(" ")} L${X(ost[0])},${Y(Math.max(mn, 0))}Z" style="fill:${kolor};opacity:.10"/>`;
+        return `<svg viewBox="0 0 ${sz} ${wys}" width="${sz}" height="${wys}" class="kr-mini" role="img">${zero}${pole}
+          <polyline points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke-width="2.5" stroke-linejoin="round" style="stroke:${kolor}"/>
+          ${p.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === ost[0] ? 4.5 : 2.5}" style="fill:${kolor}"><title>${esc(et[i])}: ${esc(fmt(v))}</title></circle>`).join("")}
+          <text x="${X(pierw[0])}" y="${Y(pierw[1]) - 9}" class="kr-tx" text-anchor="start">${esc(fmt(pierw[1]))}</text>
+          <text x="${X(ost[0])}" y="${Y(ost[1]) - 10}" class="kr-tx kr-tx-b" text-anchor="end">${esc(fmt(ost[1]))}</text>
+          ${et.map((e, i) => `<text x="${X(i)}" y="${wys - 4}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}</svg>`;
+    }
+    const KOL_FAZ = { 1: "var(--czerwony)", 2: "var(--zolty)", 3: "var(--niebieski)", 4: "var(--zielony)", 5: "var(--tekst2)" };
+    function wykresFaz(sf) {
+        // jeden wykres jak schemat cyklu, ale z danych spółki: przychody, zysk, wypłaty (dywidendy + skup); tło = faza w danym roku
+        const n = sf.et.length, S_ = Math.max(280, SZER - 40), H = 230, L = 8, R = S_ - 70, gora = 34, dol = H - 26;
+        const wsz = [...sf.rev, ...sf.zysk, ...sf.wyplaty].filter(W.ok);
+        if (n < 2 || !wsz.length) return "";
+        const mn = Math.min(0, ...wsz), mx = Math.max(...wsz), zak = mx - mn || 1, krok = (R - L) / n;
+        const X = (i) => L + krok * (i + 0.5), Y = (v) => gora + (1 - (v - mn) / zak) * (dol - gora);
+        let pasy = "", et = "";
+        for (let i = 0; i < n; i++) {
+            const f = sf.fazy[i];
+            if (f) pasy += `<rect x="${L + krok * i}" y="${gora - 4}" width="${krok}" height="${dol - gora + 8}" style="fill:${KOL_FAZ[f]};opacity:.09"/>`;
+            if (f && f !== sf.fazy[i - 1]) {
+                pasy += `<line x1="${L + krok * i}" x2="${L + krok * i}" y1="${gora - 22}" y2="${dol + 4}" style="stroke:${KOL_FAZ[f]};opacity:.5"/>`;
+                et += `<text x="${L + krok * i + 4}" y="${gora - 12}" class="kr-tx kr-tx-b" style="fill:${KOL_FAZ[f]}">${f}${krok * (sf.fazy.slice(i).findIndex((x) => x !== f) === -1 ? n - i : sf.fazy.slice(i).findIndex((x) => x !== f)) > 120 ? " " + esc(W.FAZY[f - 1]) : ""}</text>`;
+            }
+        }
+        const zajete = [];
+        const etY = (y) => { let v = y; while (zajete.some((z) => Math.abs(z - v) < 13)) v += 13; zajete.push(v); return v; };
+        const linia = (w, kolor, gr) => {
+            const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+            if (p.length < 2) return "";
+            const o = p[p.length - 1];
+            return `<polyline points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke-width="${gr}" stroke-linejoin="round" style="stroke:${kolor}"/>
+              ${p.map(([i, v]) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === o[0] ? 4 : 2.5}" style="fill:${kolor}"/>`).join("")}
+              <text x="${X(o[0]) + 8}" y="${etY(Y(o[1]) + 4)}" class="kr-tx kr-tx-b" style="fill:${kolor}">${esc(kw(o[1]))}</text>`;
+        };
+        const tipy = sf.et.map((e, i) => `<rect x="${L + krok * i}" y="${gora - 4}" width="${krok}" height="${dol - gora + 8}" fill="transparent"><title>${esc(e)}${sf.fazy[i] ? " · faza " + sf.fazy[i] + ": " + W.FAZY[sf.fazy[i] - 1] : ""}
+przychody: ${kw(sf.rev[i])}
+${sf.zyskNazwa}: ${kw(sf.zysk[i])}
+dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
+        return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="Przychody, zysk i wypłaty dla akcjonariuszy rok po roku">${pasy}${et}
+          ${mn < 0 ? `<line x1="${L}" x2="${R}" y1="${Y(0)}" y2="${Y(0)}" class="kr-zero"/>` : `<line x1="${L}" x2="${R}" y1="${Y(0)}" y2="${Y(0)}" class="kr-os"/>`}
+          ${linia(sf.rev, "var(--niebieski)", 3)}${linia(sf.zysk, "var(--zielony)", 3)}${linia(sf.wyplaty, "var(--fiolet)", 2.5)}
+          ${sf.et.map((e, i) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}${tipy}</svg>
+          <div class="kr-leg male"><span style="color:var(--niebieski)">● przychody</span><span style="color:var(--zielony)">● ${esc(sf.zyskNazwa)}</span><span style="color:var(--fiolet)">● dywidendy + skup akcji</span>
+            </div>
+          <div class="kr-leg male"><span class="mut">Tło — faza w danym roku:</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
+    }
+    function etapy(nr) {
+        return `<div class="kr-etapy">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : i + 1 < nr ? "za" : ""}"><span>${i + 1}</span><small>${esc(n)}</small></div>`).join("")}</div>`;
+    }
+    function kryteriaHtml(idx) {
+        const l = lista77(); if (!l) return '<p class="mut male">Brak kryteriów 7/7 dla tej spółki.</p>';
+        return `<div class="jz">${idx.map((i) => l[i]).filter(Boolean).map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart"><b>${esc(fmtKryt(co, v))}</b></span></div>`).join("")}</div>`;
+    }
+    const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
+    function krokTresc(i) {
+        const SF = seriaFazy(), f = fazaTeraz(SF);
+        const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
+        if (i === 0) {
+            const p = f ? f.pyt : {}, sf = SF;
+            const z = sf.zysk.filter(W.ok), zOst = z[z.length - 1], zRos = z.length >= 2 && zOst > z[z.length - 2];
+            const zw = [];
+            if (W.ok(M.div) && M.div > 0) zw.push(`dywidenda ${W.fmtPct(M.div, 1)} rocznie`);
+            if (W.ok(M.skup_netto_mc) && M.skup_netto_mc > 0) zw.push(`skup netto ${W.fmtPct(M.skup_netto_mc, 1)} kapitalizacji`);
+            const mob = SZER < 700, szG = mob ? SZER - 60 : (SZER - 90) / 2, szP = mob ? SZER - 80 : (SZER - 140) / 3;
+            const pod = (n, w, kolor, fmt, odZera = true) => `<div class="kr-pod"><div class="mut male">${n}</div>${mini(sf.et, w, kolor, fmt, 110, szP, odZera)}</div>`;
+            return `<div class="kr-pyt">
+              <div class="pole"><div class="kr-q"><span class="kr-nr">1</span><b>Czy przychody rosną?</b></div>
+                <div class="kr-odp">${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? `${W.fmtPct(M.rev_cagr3, 0, true)} rocznie przez 3 lata, ${W.fmtPct(M.rev_1y, 0, true)} w ostatnim roku` : ""}</div>
+                ${mini(sf.et, sf.rev, "var(--niebieski)", kw, 150, szG)}</div>
+              <div class="pole"><div class="kr-q"><span class="kr-nr">2</span><b>Czy zarabia?</b></div>
+                <div class="kr-odp">${tn(p.zysk)} ${W.ok(zOst) ? `${kw(zOst)} ${WAL} ${sf.zyskNazwa}${z.length >= 2 ? (zRos ? ", rośnie" : ", spada") : ""}` : ""}</div>
+                ${mini(sf.et, sf.zysk, "var(--zielony)", kw, 150, szG)}</div></div>
+              <div class="pole kr-zwrot"><div class="kr-q"><span class="kr-nr">3</span><b>Czy oddaje gotówkę akcjonariuszom?</b></div>
+                <div class="kr-odp">${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div>
+                <div class="kr-pody">${pod("Skup akcji (rocznie)", sf.skup, "var(--fiolet)", kw)}${pod("Liczba akcji (mniej = skup)", sf.akcje, "var(--fiolet)", szt, false)}${pod("Dywidendy wypłacone (rocznie)", sf.dyw, "var(--fiolet)", kw)}</div></div>
+              ${f ? `<div class="kr-faza"><div class="kr-faza-t">${esc(K.t)} jest w fazie <b>${f.nr}: ${esc(f.nazwa)}</b></div>
+                ${etapy(f.nr)}<p class="male" style="margin:10px 0 6px">${esc(CYKL[f.nr])}</p>${wykresFaz(sf)}</div>`
+                : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}`;
+        }
+        if (i === 1) {
+            const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
+            return `<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
+              <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div><div id="kr-wykres" style="margin-top:10px"></div>`;
+        }
+        if (i === 2) {
+            const j = listaJak(), dod = j ? j.filter(([co]) => /ROA|ROCE|3 lata temu/.test(co)) : [];
+            return `${kryteriaHtml(KR_IDX["Rentowność"])}
+              ${dod.length ? `<div class="mut male" style="margin:10px 0 4px">Dodatkowo z listy „Jakość (7 kryteriów)” (nie liczone do 7/7):</div><div class="jz">${dod.map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart">${esc(fmtKryt(co, v))}</span></div>`).join("")}</div>` : ""}
+              <div class="kr-cagr" style="margin-top:10px">${[["Marża brutto", M.gm], ["Marża operacyjna", M.om], ["Marża netto", M.nm]].map(([n, v]) => `<div><small>${n}</small><b>${W.fmtPct(v, 1)}</b></div>`).join("")}</div>`;
+        }
+        if (i === 3) {
+            const s = K.oceny && K.oceny.sila;
+            return `${kryteriaHtml(KR_IDX["Bezpieczeństwo"])}
+              <div class="kr-cagr" style="margin-top:10px"><div><small>Gotówka − dług</small><b class="${M.net_cash >= 0 ? "plus" : "minus"}">${W.ok(M.net_cash) ? W.fmtUsd(M.net_cash) + " " + WAL : "–"}</b></div>
+                <div><small>Siła finansowa (0–10)</small><b>${oc(s)}</b></div><div><small>Spadek 2 lata z rzędu (⬇)</small><b class="${M.spadek_2l ? "minus" : ""}">${M.spadek_2l ? "tak" : "nie"}</b></div></div>
+              <p class="mut male">Siła finansowa ≥ 7 to jedyny czynnik z wyraźną przewagą w naszych testach (etap 95: +16 pp w 3 lata).</p>`;
+        }
+        if (i === 4) {
+            const peg = M.peg, pr = M.price, B = [0.5, 1, 2, 3], N = ["Bardzo tania", "Niedowartościowana", "Uczciwie", "Droga", "Bardzo droga"];
+            let poz = null;
+            if (W.ok(peg) && peg > 0) { // pięć równych stref: 0–0,5 / 0,5–1 / 1–2 / 2–3 / 3–4+
+                const g = [0, ...B, 4], k = Math.min(4, g.filter((b) => b <= peg).length - 1);
+                poz = Math.max(2, Math.min(98, 20 * k + 20 * Math.min(1, (peg - g[k]) / (g[k + 1] - g[k]))));
+            }
+            return `${kryteriaHtml(KR_IDX.Wycena)}
+              ${poz !== null ? `<div class="kr-wyc"><div class="kr-wyc-teraz" style="left:${poz}%;transform:translateX(${poz < 15 ? "-8%" : poz > 85 ? "-92%" : "-50%"})">Dziś ${W.fmtCena(pr)}<br>▼</div>
+                <div class="kr-pasek">${N.map((n, j) => `<span class="z${j}">${n}</span>`).join("")}</div>
+                <div class="kr-ceny mut">${B.map((b, j) => `<span style="left:${20 * (j + 1)}%">${W.fmtCena(pr * b / peg)}</span>`).join("")}</div></div>
+                <p class="mut male">Cena, przy której PEG wyniósłby 0,5 / 1 / 2 / 3 (przy dzisiejszym zysku i prognozie wzrostu). PEG ${W.fmtNum(peg)} — <a href="#wycena">szczegóły i zmiana założeń ↓</a></p>`
+                : '<p class="mut">Brak PEG (zysk ≤ 0 albo brak prognozy wzrostu) — zob. <a href="#wycena">DCF ↓</a>.</p>'}`;
+        }
+        const wiersze = ["Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena"].map((n) => { const [a, b] = zalicz(KR_IDX[n]); return [n, a, b]; });
+        const suma = wiersze.reduce((s, x) => s + x[1], 0), wsz = wiersze.reduce((s, x) => s + x[2], 0);
+        const ow = (K.ostrzezenia || []).length, brak = wiersze.flatMap(([n]) => { const l = lista77(); return l ? KR_IDX[n].map((j) => l[j]).filter((k) => k && !k[2]).map((k) => k[0]) : []; });
+        return `<div class="kr-sum">
+          <div class="kr-sum-w"><span>Faza rozwoju</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
+          ${wiersze.map(([n, a, b]) => `<div class="kr-sum-w"><span>${n}${n === "Wycena" && K.etykieta ? ` <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span>${b ? kropki(a, b) : ""}<b>${b ? `${a} z ${b}` : "–"}</b></div>`).join("")}
+          <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : ""}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
+          ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
+          ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
+          <p class="mut male">To zestawienie faktów, nie rekomendacja — decyzję podejmujesz sam. W testach 2015–2026 portfel spółek 7/7 (PEG 0–1) dawał 18–21 % rocznie wobec 14 % dla S&amp;P 500 (etapy 67–68).</p>`;
+    }
+    let krokRozmiar = null;
+    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K && !(S.krok || 0)) krok(); }, 200); });
+    function krok(i) {
+        if (i !== undefined) S.krok = i;
+        const k = S.krok || 0, el = $("krok");
+        SZER = el.clientWidth - 32 || 1000;
+        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Krótka ocena spółki według kryteriów 7/7 — przejdź kolejne kroki albo od razu zobacz podsumowanie.</div>
+          <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
+          <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
+          <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
+        el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => krok(+b.dataset.kr)));
+        if (k === 1 && $("kr-wykres")) { const y = (K.hist && K.hist.y) || []; if (y.length) WY.slupki($("kr-wykres"), y.map((r) => r[0].slice(0, 4)), [{ nazwa: "Przychody", kolor: "#2a78d6", w: y.map((r) => r[1]) }, { nazwa: "Zysk netto", kolor: "#16a34a", w: y.map((r) => r[2]) }], usdOs, 220); }
+    }
+
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
         el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Z Yahoo Finance (ok. 4–5 lat rocznie, ostatnie kwartały)." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
@@ -419,6 +620,6 @@
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
+        domyslne(); top(); krok(0); liczby(); wykresCeny("1r"); metryki(); strategie(); wycena(); zyskZd(); lynch(); sprawozdania(GPW ? "y" : "q");
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();

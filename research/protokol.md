@@ -1410,3 +1410,92 @@ K5 28 %; K1 − K5 +2,4 [−11,2; +16,5]. FCF ≤ 0: −9,0 pp, strata 35 % (vs 
 −34,0 pp [−47,7; −15,7] (obie połowy ujemne: −19,6 / −31,8; n 33 / 91), ≤ 20 vs > 20 −19,1 [−32,9; −7,8] (−9,9 / −12,9), ≤ 30 −18,5 [−32,4; −3,8]; lepsze od mediany: tanie 39–57 %
 vs drogie 69–72 %. Hipoteza — tak w części (tanie P/FCF nie pomaga, FCF ≤ 0 gorzej), ale najmniejsze straty ma środek (P/FCF ok. 15–35), a wśród silnych spółek niskie
 P/FCF to sygnał ostrzegawczy (najpewniej szczyt cyklu / jednorazowo wysoki FCF), nie okazja. Małe grupy — wynik do potwierdzenia.
+
+## Etap 98: spółki z ujemnym kapitałem własnym (bez ROE) — czy skup akcji albo ROA / ROCE coś mówią (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „jak nie ma ROE, to sprawdzaj skup akcji, bo odkup zawsze ruszy cenę do góry?”. Dane, zbiór, starty, miara i bootstrap jak w etapach 92–97. Grupa: kapitał
+własny < 0 (wartość księgowa / kapitalizacja < 0). Porównania wewnątrz grupy: (1) skup netto 12 mies. > 2 % kapitalizacji vs reszta; (2) liczba akcji 3 lata ≤ −2 %
+vs reszta; (3) ROA ≥ 10 % vs < 10 %; (4) ROCE ≥ 15 % vs < 15 %; (5) cała grupa vs wszystkie spółki (czy ujemny kapitał sam w sobie szkodzi). Miary: mediana nadwyżki
+12 / 36 mies., odsetek lepszych od mediany, strata po 36 mies. Hipoteza: grupa mała (kilkadziesiąt spółek rocznie), więc przedziały szerokie; skup nie daje pewnej przewagi
+(etap 93: skup wbrew Lynchowi), ROA / ROCE też w granicach szumu; ujemny kapitał sam w sobie nie szkodzi (to często dojrzałe firmy ze skupem).
+
+Wynik etapu 98 (2026-11-23). Spółek z ujemnym kapitałem w zbiorze: 7–31 rocznie (rośnie z czasem). Ujemny vs dodatni kapitał, 36 mies.: +10,7 pp [+4,5; +20,6], lepsze
+od mediany 61 % vs 49 %, strata 15 % vs 23 % (12 mies. +3,9 [−0,0; +11,1]). Wewnątrz ujemnego kapitału: skup netto > 2 % +4,0 [−16,6; +27,4] (62 vs 56 % lepszych),
+akcje 3 lata ≤ −2 % +9,3 [−33,5; +32,2] — w granicach szumu; ROA ≥ 10 % −22,3 [−46,4; −15,4] (54 vs 72 %), ROCE ≥ 15 % −15,0 [−42,8; +6,7]. Hipoteza: skup nie daje pewnej
+przewagi — tak; ROA / ROCE w granicach szumu — nie (wyższe ROA raczej gorzej; mała grupa, ok. 75 vs 75 obserwacji); ujemny kapitał nie szkodzi — tak, a nawet lepiej
+(to głównie dojrzałe, rentowne firmy oddające gotówkę akcjonariuszom). Wniosek: brak ROE przy ujemnym kapitale nie jest sygnałem ostrzegawczym; skupu nie dodajemy jako
+zamiennika ROE.
+
+## Etap 99: propozycja portfela do 10 spółek wg typów Lyncha — 6 stabilnie / 2 szybko / 1 wolno rosnąca (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „zrób sugestie budowania portfela max do 10 spółek z różnych typów akcji Lyncha” (jego cel: 6 stabilnie, 2 szybko, 1 wolno rosnąca). Reguła doboru tylko
+z cech potwierdzonych wcześniej (bez nowych progów): wszędzie bez ⬇ (etapy 77, 92) i FCF > 0 (etap 97); stabilnie rosnące — Siła ≥ 7 lub Jakość 7/7 (etapy 83, 95),
+kolejność wg marży netto (etap 93), 6 spółek; szybko rosnące — Siła ≥ 7 lub Jakość 7/7, kolejność wg oceny Siła, 2 spółki; wolno rosnące — dywidenda rośnie 5 lat
+(etap 93), kolejność wg Siła, 1 spółka. Typy jak w etapie 92 (przybliżenie bez prognoz). Test: co roku w styczniu 2012–2023 wybór, równe wagi, trzymanie 12 mies.
+(i osobno 36 mies.), bez kosztów; porównanie ze średnią i medianą zbioru (równe wagi wszystkich spółek) w tym samym okresie. Miary: średni roczny zwrot portfela vs zbioru,
+lata lepsze od zbioru (z 12), najgorszy rok, odsetek spółek portfela ze stratą; połowy 2012–2017 / 2018–2023; bootstrap po latach dla różnicy średnich. Hipoteza: portfel
+lepszy od zbioru o kilka pp rocznie, w większości lat, z mniejszym odsetkiem strat; wynik niepewny (9 spółek, 12 startów). Reguła dla strony: propozycje pokazujemy
+(jako podpowiedź, użytkownik wybiera), jeśli portfel nie jest gorszy od zbioru w obu połowach; w przeciwnym razie — nie.
+
+**Wynik etapu 99** (`r124_etap99.py`, `wyniki/r124_etap99.md`): 12 mies., 10 startów 2012–2023: portfel +18,0 % vs zbiór +11,8 % (+6,2 pp [−0,7; +13,6]), lepiej w 6/10 lat,
+spółek ze stratą 24 vs 34 %; połowy: 2012–2017 −3,1 pp (1/4, średnio 4,8 spółki — w 2014 r. tylko 1, w 2015 r. 2), 2018–2023 +12,5 pp (5/6). 36 mies.: +76,1 vs +44,2 %
+(+32,0 pp [+6,6; +67,3]), 2012–2017 +8,0 pp, 2018–2023 +47,9 pp, strata 14 vs 24 %. **Reguła z protokołu NIE spełniona** (12 mies. w pierwszej połowie gorzej niż zbiór),
+przedział dla 12 mies. obejmuje 0 → propozycji nie dodajemy na stronę. Na plus (nie zmienia decyzji): mniej spółek ze stratą w obu horyzontach i lepszy wynik 36 mies.
+w obu połowach; w latach 2012–2017 reguła wybierała za mało spółek, żeby ocenić.
+
+## Etap 100: ta sama propozycja przy celu 6 / 2 / 2 (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik zmienił cel na 6 stabilnie / 2 szybko / 2 wolno rosnące. Reguła doboru i test bez zmian względem etapu 99 (tylko 2 zamiast 1 wolno rosnącej, kolejność wg Siła).
+Ta sama reguła dla strony: pokazujemy, jeśli portfel nie jest gorszy od zbioru w obu połowach (12 mies.). Spodziewamy się wyniku bardzo podobnego do etapu 99 (1 spółka różnicy).
+
+**Wynik etapu 100** (`r125_etap100.py`, `wyniki/r125_etap100.md`): 12 mies. +5,5 pp [−0,4; +11,5] (6/10 lat), 2012–2017 −2,7 pp (1/4, ~5,5 spółki), 2018–2023 +11,0 pp;
+36 mies. +30,2 pp [+8,1; +58,6], obie połowy dodatnie; spółek ze stratą 24 vs 34 % (12 m), 16 vs 24 % (36 m). Jak w etapie 99 — **reguła niespełniona** (pierwsza połowa
+12 mies. gorsza), propozycji nie dodajemy. Cel 6 / 2 / 2 w tabeli portfela ustawiony (decyzja użytkownika, nie z testu).
+
+## Etap 101: faza spółki (cykl życia 1–5) a zwrot (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik (zrzuty z innego serwisu, model 5 faz: start, hiperwzrost, dźwignia operacyjna, zwrot kapitału, schyłek): „wykres fazy … mówi czy mamy szanse na zarobek”.
+Faza z trzech pytań, nasze reguły (bez dopasowania progów): **5 Schyłek** — przychody 3 lata CAGR < 0; inaczej, gdy marża operacyjna TTM ≤ 0: **1 Start** (zysk netto TTM
+nie lepszy niż rok wcześniej) albo **2 Hiperwzrost** (strata się zmniejsza); gdy marża operacyjna > 0: **4 Zwrot kapitału** (dywidenda wypłacona w ostatnim roku obrotowym
+lub skup netto > 0), w przeciwnym razie **3 Dźwignia operacyjna**. Zbiór, starty i miary jak w etapach 92–98 (top 500 USA PIT bez wykluczonych sektorów, styczeń 2012–2023;
+nadwyżka nad medianą zbioru 12 / 36 mies., odsetek lepszych od mediany, odsetek ze stratą, połowy 2012–17 / 2018–23, bootstrap po latach). Porównania: każda faza vs
+pozostałe; fazy 3–4 vs 1, 2, 5. Hipoteza z filmu: fazy 3–4 lepsze, 5 gorsza. Reguła dla strony: fazę pokazujemy zawsze jako opis faktów (trzy pytania), a obok wynik
+testu; twierdzenie „faza X daje większą szansę” oznaczamy jako potwierdzone tylko, gdy różnica 36 mies. ma przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 101** (`r126_etap101.py`, `wyniki/r126_etap101.md`): żadna faza nie różni się od pozostałych istotnie (wszystkie przedziały 36 mies. obejmują 0, znaki zmieniają się
+między połowami). 3–4 vs 1, 2, 5: 36 mies. −1,5 pp [−6,5; +3,0]. Schyłek (przychody 3 lata w dół) NIE gorszy: +2,4 pp [−3,5; +10,2], strata 19 % (najniższa). Start: więcej
+spółek ze stratą (40 % / 12 m, 46 % / 36 m vs 30 / 23 %), ale mediana bez pewności (n = 68). W top 500 ~60 % spółek jest w fazie 4. **Twierdzenie „faza mówi o szansie na
+zarobek” niepotwierdzone** → na stronie faza tylko jako opis faktów z dopiskiem o wyniku testu.
+
+## Etap 102: fazy rynkowe Weinsteina (kurs vs średnia 30-tygodniowa) a zwrot (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „może możemy lepiej określić te fazy? … dużo traderów o tym mówi”. Traderzy mówią o fazach kursu (Stan Weinstein, „Secrets for Profiting in Bull and Bear
+Markets”, 1988; podobnie Wyckoff): 1 Baza, 2 Wzrost (kupuj), 3 Szczyt, 4 Spadek (unikaj). Reguła (miesięczne zamknięcia z badania jako przybliżenie tygodniowych:
+średnia 7 mies. ≈ 30 tyg.): nachylenie = średnia teraz ÷ średnia miesiąc wcześniej − 1; płaska, gdy |nachylenie| < 1 %. Rosnąca: kurs ≥ średniej → 2, poniżej → 3.
+Malejąca: kurs < średniej → 4, powyżej → 1. Płaska: średnia wyższa niż 6 mies. wcześniej → 3, inaczej → 1. Zbiór, starty (styczeń 2012–2023) i miary jak w etapie 101.
+Porównania: A) faza 2 vs 4 (wszystkie); B) każda faza vs pozostałe; C) wśród spółek jakościowych (Jakość 7/7 lub Siła ≥ 7) faza 4 vs pozostałe i faza 2 vs pozostałe;
+D) faza spółki z etapu 101 (4 Zwrot kapitału) × faza kursu 2. Hipoteza Weinsteina: 2 lepsza, 4 gorsza (głównie 12 mies.; z literatury o momentum możliwe odwrócenie
+w 36 mies.). Reguła dla strony: twierdzenie oznaczamy jako potwierdzone, gdy różnica 12 mies. (horyzont traderów) ma przedział bez zera i ten sam znak w obu połowach;
+fazę kursu pokazujemy na karcie jako opis (z wynikiem testu), a do kryteriów / zasad dokupu NIE dodajemy bez potwierdzenia.
+
+**Wynik etapu 102** (`r127_etap102.py`, `wyniki/r127_etap102.md`): faza 4 Spadek gorsza od pozostałych w obu połowach: 12 mies. −4,3 pp [−12,7; +2,3] (strata 39 vs 29 %),
+36 mies. −8,2 pp [−15,1; −0,6]; 2 Wzrost vs 4 Spadek: +4,5 pp [−1,7; +13,2] / 12 m, +8,6 [−0,3; +16,6] / 36 m. Faza 2 vs pozostałe ~+2 pp (szum), 3 Szczyt nie gorsza
+(+3,8 pp / 36 m), 1 Baza lekko gorsza (−4,0 / 36 m, przedział do 0). Jakość: za mało spółek w fazie 4 (n = 34), wynik niepewny. D (faza spółki 4 × kurs 2) — brak różnicy.
+Według reguły (12 mies., przedział bez zera) **niepotwierdzone**; kierunek zgodny z Weinsteinem dla fazy 4 i istotny na 36 mies. → na karcie faza kursu jako opis z wynikiem
+testu (faza 4: więcej spółek ze stratą), bez zmian w kryteriach i zasadach dokupu.
+
+## Etap 103: cykl życia spółki wg Lyncha (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „nie o to mi chodziło, to jest analiza techniczna … chcę analizę Petera Lyncha cykli spółki” (faza kursu z etapu 102 zdjęta z karty). Lynch („One Up on
+Wall Street”, rozdz. o szybko rosnących): spółka przechodzi fazę startu (dopracowanie modelu, największe ryzyko), szybkiej ekspansji (wchodzi na nowe rynki — tu się
+najwięcej zarabia), dojrzewania / nasycenia (nie ma już łatwej drogi wzrostu — tu kończy się szybki wzrost akcji), potem staje się stabilnie lub wolno rosnącą, a na końcu
+może tracić. Reguła (progi z typów Lyncha i naszego `ocena.faza`: 15 %): **5 Schyłek** — przychody 3 lata CAGR < 0; bez zysku operacyjnego: **2 Szybka ekspansja**, gdy
+strata maleje i przychody 3 lata ≥ 15 % rocznie, inaczej **1 Start**; z zyskiem: **2 Szybka ekspansja** — przychody 3 lata ≥ 15 % i 1 rok ≥ 15 %; **3 Dojrzewanie** —
+przychody 3 lub 5 lat ≥ 15 % rocznie, ale ostatni rok < 15 % (hamowanie); **4 Dojrzałość** — pozostałe (przychody 0–15 % rocznie). Zbiór, starty, miary jak w etapie 101.
+Hipotezy Lyncha: 2 lepsza od pozostałych; 3 gorsza od 2; 5 i 1 najgorsze. Reguła dla strony: fazę pokazujemy jako opis (trzy pytania + schemat); twierdzenie
+o fazie oznaczamy jako potwierdzone, gdy różnica 36 mies. ma przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 103** (`r128_etap103.py`, `wyniki/r128_etap103.md`): **3 Dojrzewanie gorsze od pozostałych: 36 mies. −11,0 pp [−19,1; −0,8], obie połowy ujemne (−20,0 / −1,6)
+→ potwierdzone** (12 mies. −2,8 [−10,6; +1,3]). 2 Szybka ekspansja wbrew Lynchowi nie lepsza: −2,7 pp [−14,5; +4,1] (2012–17 −20, 2018–23 +2). 1 Start −22,8 [−45,5; +15,5],
+strata 43 vs 23 %. 4 Dojrzałość +2,8 (szum), 5 Schyłek +2,3 (szum). 3 vs 2: −7,8 [−17,2; +8,0]. Na karcie: faza wg Lyncha jako opis, ⚠ dla Dojrzewania (potwierdzone);
+faza kursu Weinsteina (etap 102) zdjęta z karty na prośbę użytkownika.

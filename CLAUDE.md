@@ -95,6 +95,18 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
 - `spolka.html` + `js/spolka.js`: dark top card (summary facts, DCF valuation bar, type of stock), scores + key numbers, price 1Y / 5Y, metrics vs sector
   (3 columns), strategy checklists, valuation tabs PEG (EPS and growth editable, chips) / DCF (growth chips 1Y / 3Y / 5Y / EPS forecast, 5 / 7 / 10 years,
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
+- Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
+  Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
+  thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,
+  potem payout — dywidendy lub inne”): `W.fazyLat({rev, zysk, wyplaty})` classifies EVERY fiscal year + „12 m” from data: 5 Schyłek (revenue below 3 years earlier;
+  last point: revenue 3Y CAGR < 0), profit ≤ 0 → 2 Hiperwzrost if loss smaller than a year before else 1 Start, profit > 0 → 4 Zwrot kapitału if dividends + buybacks
+  ≥ 20 % of operating profit, 2 Hiperwzrost if revenue ≥ 25 % y/y at margin < 10 %, else 3 Dźwignia operacyjna; current phase = last point. Charts are DATA ONLY
+  (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”, „czemu słupkowy?”; no schematic curves, no test texts — „nie interesują mnie twoje
+  testy”): 3 questions with revenue / operating profit (fallback net income) lines, buybacks / share count (min–max scale) / dividends paid, then ONE lifecycle chart
+  (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn 1:1 in px (`SZER`,
+  redrawn on resize; phone shows 5 years). Missing 12 m payouts are never drawn — for classification only the last FY payout ratio is used. Data: `hist.y` [5] operating
+  income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps = splits older than the 5-year price history) and `hist.ltm`
+  [end, rev, op, buybacks, dividends, shares]. Phase texts `CYKL`.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
@@ -128,10 +140,11 @@ cash; best 120 months log −2σ 12.2 %/yr, DD −18 % vs SPY −34 %), 95 („P
 only in 2018–23, CI includes 0 → not on the site; Siła ≥ 7 alone +16 pp [+2.5; +26.8] → list filter), 96 (dividend paid 5 years: +5.8 pp / 36 m [+0.9; +13.1]; within
 Jakość 7/7 or Siła ≥ 7 halves the loss rate (13 vs 27 %, 7 vs 20 %) and the worst decile — stability, matches the 💰 badge; PEGY ≈ PEG, both from past
 growth do not pick winners), 97 (P/FCF among D/E < 1: thresholds 10–30 no effect, middle quintiles fewest losses, FCF ≤ 0 worst;
-among D/E < 1 and Siła ≥ 7 cheap P/FCF is WORSE: ≤ 15 −34 pp [−48; −16], both halves — not yet used on the site), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
+among D/E < 1 and Siła ≥ 7 cheap P/FCF is WORSE: ≤ 15 −34 pp [−48; −16], both halves — not yet used on the site), 98 (negative equity / no ROE, e.g. DELL: +10.7 pp / 36 m vs positive equity, losses 15 vs 23 %;
+buybacks inside the group = noise → not a ROE substitute), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
 `dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
-confirmed). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
-6 stabilnie / 2 szybko / 1 wolno rosnąca of 10 slots = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
+confirmed), 99 (suggested 6 / 2 / 1 portfolio by Lynch type from confirmed features: 12 m +6 pp but worse in 2012–17 (few stocks) → pre-registered rule failed, NOT on the site; 36 m +32 pp, fewer losers; stage 100 with 6 / 2 / 2: same picture, +5.5 pp / 12 m, not on the site), 101 (lifecycle phase 1–5: no phase differs, 3–4 vs rest −1.5 pp [−6.5; +3.0]; decline not worse; start more losers → description only), 102 (Weinstein price stages: stage 4 −4.3 pp / 12 m [−12.7; +2.3], −8.2 / 36 m [−15.1; −0.6]; rule failed; user did not want technical analysis → not on the site), 103 (Lynch life cycle: Dojrzewanie −11.0 pp / 36 m [−19.1; −0.8], both halves → ⚠ on the card; fast expansion not better). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
+6 stabilnie / 2 szybko / 2 wolno rosnące of 10 slots (user: „6/2/2”) = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
 procentowym udziale jednej spółki”), each stock's share of the account, Lynch's 20/40/40 and stage
 86 medians for reference; informational, dokup rules unchanged.

@@ -36,7 +36,7 @@ def metryki(ex, fv, dzis=None, splity=()):
              de=_f(fv.get("debtEq")), eps=p / pe if p and pe and pe > 0 else None)
     m["peg"] = pe / (100 * m["eps_next5"]) if pe and pe > 0 and m["eps_next5"] and m["eps_next5"] > 0 else None
     hist = dict(q=[], y=[])
-    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc", "skup", "emisja", "nonop", "odsetki", "przed_pod", "podatek")
+    q = {k: F.polacz(ex[k], F.kwartalne, k == "rev") for k in ("rev", "ni", "op", "ocf", "capex", "sbc", "skup", "emisja", "dyw", "nonop", "odsetki", "przed_pod", "podatek")
          if ex.get(k)}
     rt = F.ttm(q["rev"]) if "rev" in q else []
     nt = F.ttm(q["ni"]) if "ni" in q else []
@@ -315,10 +315,43 @@ def metryki(ex, fv, dzis=None, splity=()):
             else:
                 break
         m["dlug_rosnie_kw"] = n_
-    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc") if ex.get(k)}
+    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc", "op", "skup", "dyw") if ex.get(k)}
+
+    def akcje_na(e):
+        """liczba akcji na koniec roku obrotowego (dei, ± 120 dni), w dzisiejszych akcjach (po splitach)"""
+        z = [(d, v) for d, v in sh.items() if abs((F.D(d) - F.D(e)).days) <= 120] if sh else []
+        if not z:
+            return None
+        d0, v0 = min(z, key=lambda x: abs((F.D(x[0]) - F.D(e)).days))
+        for d, r in splity or ():
+            if F.D(d) > F.D(d0) and r > 0:
+                v0 *= r
+        return v0
+    # lata obrotowe: [koniec, przychody, zysk netto, FCF, SBC, zysk operacyjny, skup akcji, dywidendy, liczba akcji] — wykresy fazy na karcie
     for e in list(yr.get("rev", {}))[-12:]:
         ocf, cx = yr.get("ocf", {}).get(e), yr.get("capex", {}).get(e, 0.0)
-        hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0), _r(yr.get("sbc", {}).get(e), 0)])
+        sk, dv = yr.get("skup", {}).get(e), yr.get("dyw", {}).get(e)
+        hist["y"].append([e, _r(yr["rev"][e], 0), _r(yr.get("ni", {}).get(e), 0), _r(ocf - cx if ocf is not None else None, 0), _r(yr.get("sbc", {}).get(e), 0),
+                          _r(yr.get("op", {}).get(e), 0), _r(abs(sk) if sk is not None else (0 if yr.get("skup") else None), 0),
+                          _r(abs(dv) if dv is not None else (0 if yr.get("dyw") else None), 0), _r(akcje_na(e), 0)])
+    # splity spoza 5 lat notowań (np. NVDA 4:1 w 2021): skok liczby akcji ≈ całkowita wielokrotność rok do roku → przelicz wcześniejsze lata
+    ak = [r[8] for r in hist["y"]]
+    for k in range(len(ak) - 1, 0, -1):
+        a0, a1 = ak[k - 1], ak[k]
+        if a0 and a1 and a0 > 0:
+            r_ = a1 / a0
+            for mn in ((round(r_),) if r_ >= 1.8 else (1 / round(1 / r_),) if r_ <= 0.55 else ()):
+                if abs(r_ - mn) <= 0.12 * mn:
+                    for j in range(k):
+                        if hist["y"][j][8]:
+                            hist["y"][j][8] = _r(hist["y"][j][8] * mn, 0)
+                    ak = [r[8] for r in hist["y"]]
+    # ostatnie 12 mies. (punkt „12 m” na wykresach): przychody, zysk operacyjny, skup, dywidendy, liczba akcji
+    sk12, dv12 = ost12("skup"), ost12("dyw") if "dyw" in q else None
+    if dv12 is None and yr.get("dyw") and rt and abs((F.D(list(yr["dyw"])[-1]) - F.D(rt[-1][0])).days) <= 200:
+        dv12 = list(yr["dyw"].values())[-1]
+    hist["ltm"] = [rt[-1][0] if rt else None, _r(m.get("rev_ttm"), 0), _r(m.get("op_ttm"), 0), _r(abs(sk12) if sk12 is not None else None, 0),
+                   _r(abs(dv12) if dv12 is not None else None, 0), _r(akcje_na(list(sh)[-1]) if sh else None, 0)]
     return m, hist
 
 

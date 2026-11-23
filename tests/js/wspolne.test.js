@@ -103,3 +103,10 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
     assert.strictEqual(W.sredniKoszt(10, 8, 10, 12), 10);
 });
 
+
+test("fazy rozwoju spółki z danych rok po roku", () => {
+    const f = W.fazyLat({ rev: [10, 20, 40, 70, 90, 100, 80], zysk: [-5, -3, 2, 15, 25, 30, 20], wyplaty: [0, 0, 0, 1, 10, 12, 10] });
+    assert.deepStrictEqual(f, [1, 2, 2, 3, 4, 4, 4]);
+    assert.deepStrictEqual(W.fazyLat({ rev: [100, 95, 90, 85], zysk: [10, 9, 8, 7], wyplaty: [0, 0, 0, 0] }), [3, 3, 3, 5]);
+    assert.deepStrictEqual(W.fazyLat({ rev: [10, 12], zysk: [-2, -3], wyplaty: [null, null] }), [1, 1]);
+});
