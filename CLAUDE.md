@@ -133,6 +133,11 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
 - `deploy-pages.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest (`tests/test_ocena.py`), ESLint + `node --test` (`tests/js/wspolne.test.js`).
 
+## Workflow
+
+- After every pushed change ALWAYS open a new PR to `main` without asking (user, Nov 2026: „zawsze otwieraj nowy PR”); if the branch's PR is still open,
+  it is updated by the push instead.
+
 ## Commands
 
 ```bash
