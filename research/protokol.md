@@ -1393,3 +1393,20 @@ najgorsze 10 % nadwyżki: −54 vs −70 pp, −26 vs −52, −15 vs −50, −
 wzrostu: korelacja rang z 36 mies. +0,077 i +0,084 (dodatnia = niski wskaźnik → GORZEJ), tania minus droga tercyla −10,3 [−18,0; −1,7] i −9,3 [−16,8; +2,1] pp; tanie
 tercyle pokrywają się w 59 %; tanie tylko wg PEGY vs tylko wg PEG +6,2 [−26,7; +21,2] (n 18/21). Hipoteza (B) — tak: PEGY ≈ PEG; oba liczone z przeszłego wzrostu
 zysku nie wskazują lepszych spółek (raczej odwrotnie). PEG na stronie liczony z prognozy analityków — niesprawdzalny (brak historii prognoz).
+
+## Etap 97: P/FCF wśród spółek z długiem / kapitałem < 1 — warianty progów (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „sprawdź, jaki wpływ ma P/FCF na akcje z debt/equity below 1, przetestuj różne warianty P/FCF”. Dane, zbiór (top 500 USA PIT bez wykluczonych sektorów),
+starty w styczniu 2012–2023, miara (nadwyżka nad medianą zbioru 12 / 36 mies.), bootstrap po latach jak w etapach 92–96. Grupa bazowa: D/E 0–1 (jak w Jakość 7/7).
+P/FCF = kapitalizacja ÷ FCF 12 mies. (FCF ≤ 0 osobno). Warianty: (1) progi P/FCF ≤ 10 / ≤ 15 / ≤ 20 / ≤ 25 / ≤ 30 vs reszta grupy z FCF > 0; (2) kwintyle P/FCF;
+(3) FCF ≤ 0 vs FCF > 0; (4) to samo wewnątrz D/E < 1 i Siła ≥ 7. Miary: mediana nadwyżki, odsetek lepszych od mediany, odsetek ze stratą po 36 mies., połowy
+2012–2017 / 2018–2023. Etap 93 (wszystkie spółki): P/FCF ≤ 15 vs > 30 −3,5 pp [−14,9; +6,9]. Hipoteza: tanie P/FCF nie daje wyższej mediany (raczej najdroższy
+kwintyl też nie gorszy), ale FCF ≤ 0 wyraźnie gorzej; najtańszy kwintyl może mieć mniejsze straty. Reguła: wariant „działa”, jeśli przedział 36 mies. wyklucza 0 i znak
+jest taki sam w obu połowach.
+
+Wynik etapu 97 (2026-11-23). D/E < 1 (wszystkie z FCF > 0): progi P/FCF ≤ 10 / 15 / 20 / 25 / 30 vs wyżej — 36 mies. −4,5 / −4,4 / −0,7 / −0,8 / −0,1 pp, wszystkie przedziały
+obejmują 0, znaki różne w połowach; kwintyle: K1 (mediana P/FCF 11) −3,3 pp, K2–K4 (18–32) ok. 0, K5 (59) −5,8 pp; strata po 36 mies. K1 25 %, K2 18 %, K3 20 %, K4 24 %,
+K5 28 %; K1 − K5 +2,4 [−11,2; +16,5]. FCF ≤ 0: −9,0 pp, strata 35 % (vs FCF > 0: 12 mies. +8,2 [+1,6; +18,9]). D/E < 1 i Siła ≥ 7: TANIE P/FCF GORZEJ — ≤ 15 vs > 15
+−34,0 pp [−47,7; −15,7] (obie połowy ujemne: −19,6 / −31,8; n 33 / 91), ≤ 20 vs > 20 −19,1 [−32,9; −7,8] (−9,9 / −12,9), ≤ 30 −18,5 [−32,4; −3,8]; lepsze od mediany: tanie 39–57 %
+vs drogie 69–72 %. Hipoteza — tak w części (tanie P/FCF nie pomaga, FCF ≤ 0 gorzej), ale najmniejsze straty ma środek (P/FCF ok. 15–35), a wśród silnych spółek niskie
+P/FCF to sygnał ostrzegawczy (najpewniej szczyt cyklu / jednorazowo wysoki FCF), nie okazja. Małe grupy — wynik do potwierdzenia.
