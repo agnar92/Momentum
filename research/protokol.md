@@ -1466,3 +1466,20 @@ testu; twierdzenie „faza X daje większą szansę” oznaczamy jako potwierdzo
 między połowami). 3–4 vs 1, 2, 5: 36 mies. −1,5 pp [−6,5; +3,0]. Schyłek (przychody 3 lata w dół) NIE gorszy: +2,4 pp [−3,5; +10,2], strata 19 % (najniższa). Start: więcej
 spółek ze stratą (40 % / 12 m, 46 % / 36 m vs 30 / 23 %), ale mediana bez pewności (n = 68). W top 500 ~60 % spółek jest w fazie 4. **Twierdzenie „faza mówi o szansie na
 zarobek” niepotwierdzone** → na stronie faza tylko jako opis faktów z dopiskiem o wyniku testu.
+
+## Etap 102: fazy rynkowe Weinsteina (kurs vs średnia 30-tygodniowa) a zwrot (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „może możemy lepiej określić te fazy? … dużo traderów o tym mówi”. Traderzy mówią o fazach kursu (Stan Weinstein, „Secrets for Profiting in Bull and Bear
+Markets”, 1988; podobnie Wyckoff): 1 Baza, 2 Wzrost (kupuj), 3 Szczyt, 4 Spadek (unikaj). Reguła (miesięczne zamknięcia z badania jako przybliżenie tygodniowych:
+średnia 7 mies. ≈ 30 tyg.): nachylenie = średnia teraz ÷ średnia miesiąc wcześniej − 1; płaska, gdy |nachylenie| < 1 %. Rosnąca: kurs ≥ średniej → 2, poniżej → 3.
+Malejąca: kurs < średniej → 4, powyżej → 1. Płaska: średnia wyższa niż 6 mies. wcześniej → 3, inaczej → 1. Zbiór, starty (styczeń 2012–2023) i miary jak w etapie 101.
+Porównania: A) faza 2 vs 4 (wszystkie); B) każda faza vs pozostałe; C) wśród spółek jakościowych (Jakość 7/7 lub Siła ≥ 7) faza 4 vs pozostałe i faza 2 vs pozostałe;
+D) faza spółki z etapu 101 (4 Zwrot kapitału) × faza kursu 2. Hipoteza Weinsteina: 2 lepsza, 4 gorsza (głównie 12 mies.; z literatury o momentum możliwe odwrócenie
+w 36 mies.). Reguła dla strony: twierdzenie oznaczamy jako potwierdzone, gdy różnica 12 mies. (horyzont traderów) ma przedział bez zera i ten sam znak w obu połowach;
+fazę kursu pokazujemy na karcie jako opis (z wynikiem testu), a do kryteriów / zasad dokupu NIE dodajemy bez potwierdzenia.
+
+**Wynik etapu 102** (`r127_etap102.py`, `wyniki/r127_etap102.md`): faza 4 Spadek gorsza od pozostałych w obu połowach: 12 mies. −4,3 pp [−12,7; +2,3] (strata 39 vs 29 %),
+36 mies. −8,2 pp [−15,1; −0,6]; 2 Wzrost vs 4 Spadek: +4,5 pp [−1,7; +13,2] / 12 m, +8,6 [−0,3; +16,6] / 36 m. Faza 2 vs pozostałe ~+2 pp (szum), 3 Szczyt nie gorsza
+(+3,8 pp / 36 m), 1 Baza lekko gorsza (−4,0 / 36 m, przedział do 0). Jakość: za mało spółek w fazie 4 (n = 34), wynik niepewny. D (faza spółki 4 × kurs 2) — brak różnicy.
+Według reguły (12 mies., przedział bez zera) **niepotwierdzone**; kierunek zgodny z Weinsteinem dla fazy 4 i istotny na 36 mies. → na karcie faza kursu jako opis z wynikiem
+testu (faza 4: więcej spółek ze stratą), bez zmian w kryteriach i zasadach dokupu.

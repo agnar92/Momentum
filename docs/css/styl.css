@@ -272,3 +272,5 @@ td.zawin { white-space: normal; min-width: 180px; }
   :root:not([data-motyw="jasny"]) .kr-pasek .z2 { background: #3d2f0c; color: #fcd34d; } :root:not([data-motyw="jasny"]) .kr-pasek .z3 { background: #431c0a; color: #fdba74; } :root:not([data-motyw="jasny"]) .kr-pasek .z4 { background: #451a1a; color: #fca5a5; }
 }
 @media (max-width: 700px) { .kr-pyt { grid-template-columns: 1fr; } .kr-pasek { font-size: 9px; } .kr-cagr b { font-size: 15px; } }
+.kr-faza-k { border-color: var(--niebieski); }
+.kr-fazy-et.kr-4 { grid-template-columns: repeat(4, 1fr); }

@@ -210,6 +210,33 @@
         return { nr, nazwa: FAZY[nr - 1], pyt, om, test: FAZA_TEST[nr] };
     }
 
+    // faza kursu wg Weinsteina (etap 102): średnia 30-tygodniowa, nachylenie = średnia ÷ średnia 5 tyg. wcześniej − 1 (płaska, gdy |·| < 1 %);
+    // rosnąca: kurs ≥ średniej → 2 Wzrost, poniżej → 3 Szczyt; malejąca: kurs < średniej → 4 Spadek, powyżej → 1 Baza; płaska: średnia wyżej niż 26 tyg. wcześniej → 3, inaczej → 1
+    const FAZY_KURSU = ["Baza", "Wzrost", "Szczyt", "Spadek"];
+    // etap 102 (top 500 USA 2012–2023): [nadwyżka 12 mies. (pp), strata 12 mies. %, nadwyżka 36 mies. (pp), strata 36 mies. %]; wszystkie: strata 31 % / 22 %
+    const FAZA_KURSU_TEST = { 1: [-1.2, 28, -3.4, 20], 2: [0.6, 30, 1.3, 23], 3: [0.8, 28, 3.3, 18], 4: [-3.9, 39, -7.3, 28] };
+    function sredniaKr(c, n) {
+        const out = new Array(c.length).fill(null); let s = 0, k = 0;
+        for (let i = 0; i < c.length; i++) {
+            if (!ok(c[i])) { s = 0; k = 0; continue; }
+            s += c[i]; k++;
+            if (k > n) { s -= c[i - n]; k = n; }
+            if (k === n) out[i] = s / n;
+        }
+        return out;
+    }
+    function fazaKursu(c) {
+        if (!c || c.length < 30 + 26) return null;
+        const ma = sredniaKr(c, 30), i = c.length - 1, a = ma[i], a1 = ma[i - 5], a6 = ma[i - 26], cena = c[i];
+        if (![a, a1, a6, cena].every(ok) || a1 <= 0) return null;
+        const sl = a / a1 - 1;
+        let nr;
+        if (sl >= 0.01) nr = cena >= a ? 2 : 3;
+        else if (sl <= -0.01) nr = cena < a ? 4 : 1;
+        else nr = a >= a6 ? 3 : 1;
+        return { nr, nazwa: FAZY_KURSU[nr - 1], nachylenie: sl, odSredniej: cena / a - 1, ma, test: FAZA_KURSU_TEST[nr] };
+    }
+
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
     const GRUPY = {
         wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
@@ -284,7 +311,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, fazaKursu, FAZY_KURSU, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

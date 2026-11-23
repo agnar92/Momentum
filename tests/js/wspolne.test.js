@@ -113,3 +113,12 @@ test("faza spółki (etap 101): trzy pytania", () => {
     assert.strictEqual(W.faza({ rev_cagr3: 0.1, om: 0.2, div: 0, skup_netto_mc: 0.01 }).nr, 4);
     assert.strictEqual(W.faza({ om: 0.2 }), null);
 });
+
+test("faza kursu Weinsteina (etap 102)", () => {
+    const ciag = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+    assert.strictEqual(W.fazaKursu(ciag(80, (i) => 100 * Math.pow(1.01, i))).nr, 2);
+    assert.strictEqual(W.fazaKursu(ciag(80, (i) => 100 * Math.pow(0.99, i))).nr, 4);
+    assert.strictEqual(W.fazaKursu(ciag(80, (i) => (i < 70 ? 100 * Math.pow(1.01, i) : 100 * Math.pow(1.01, 69) * 0.8))).nr, 3);
+    assert.strictEqual(W.fazaKursu(ciag(40, () => 100)), null);
+    const ma = W.fazaKursu(ciag(80, () => 50)).ma; assert.strictEqual(ma[29], 50); assert.strictEqual(ma[28], null);
+});

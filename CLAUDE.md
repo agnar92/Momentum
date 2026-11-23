@@ -99,6 +99,9 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
   thresholds work); `W.faza(m, hist.q)` = lifecycle phase 1–5 from 3 questions (revenue 3Y CAGR ≥ 0, operating margin > 0, dividend or net buyback > 0; loss shrinking
   → 2 else 1; revenue down → 5); stage 101: phase does NOT predict returns → shown as description with the test result (`W.FAZA_TEST`); no buy/sell verdict.
+  Below it the TRADERS' price phase (user: „lepiej określić fazy … dużo traderów o tym mówi”): `W.fazaKursu(ceny.c)` = Weinstein stage 1 Baza / 2 Wzrost /
+  3 Szczyt / 4 Spadek from the 30-week SMA (slope vs 5 weeks ago, flat < ±1 %, flat → prior 26 weeks), chart of 2 years price + SMA, `FAZA_KURSU_TEST`; stage 102:
+  stage 4 worse in both halves (−4.3 pp / 12 m, CI incl. 0; −8.2 pp / 36 m significant) → description only, not in criteria or dokup rules.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
@@ -136,7 +139,7 @@ among D/E < 1 and Siła ≥ 7 cheap P/FCF is WORSE: ≤ 15 −34 pp [−48; −1
 buybacks inside the group = noise → not a ROE substitute), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
 `dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
-confirmed), 99 (suggested 6 / 2 / 1 portfolio by Lynch type from confirmed features: 12 m +6 pp but worse in 2012–17 (few stocks) → pre-registered rule failed, NOT on the site; 36 m +32 pp, fewer losers; stage 100 with 6 / 2 / 2: same picture, +5.5 pp / 12 m, not on the site), 101 (lifecycle phase 1–5: no phase differs, 3–4 vs rest −1.5 pp [−6.5; +3.0]; decline not worse; start more losers → description only). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
+confirmed), 99 (suggested 6 / 2 / 1 portfolio by Lynch type from confirmed features: 12 m +6 pp but worse in 2012–17 (few stocks) → pre-registered rule failed, NOT on the site; 36 m +32 pp, fewer losers; stage 100 with 6 / 2 / 2: same picture, +5.5 pp / 12 m, not on the site), 101 (lifecycle phase 1–5: no phase differs, 3–4 vs rest −1.5 pp [−6.5; +3.0]; decline not worse; start more losers → description only), 102 (Weinstein price stages: stage 4 −4.3 pp / 12 m [−12.7; +2.3], −8.2 / 36 m [−15.1; −0.6], losses 39 vs 29 %; rule (12 m) failed → description only). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
 6 stabilnie / 2 szybko / 2 wolno rosnące of 10 slots (user: „6/2/2”) = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
 procentowym udziale jednej spółki”), each stock's share of the account, Lynch's 20/40/40 and stage
 86 medians for reference; informational, dokup rules unchanged.
