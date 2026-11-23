@@ -40,10 +40,10 @@
     }
 
     // skład portfela wg typów Lyncha — LICZBA SPÓŁEK (użytkownik: „mówiłem o ilości spółek w portfelu i procentowym udziale jednej spółki”):
-    // jedna spółka = najwyżej 10 % konta → 10 miejsc; cel domyślnie 6 stabilnie / 2 szybko / 1 wolno rosnąca (60 / 20 / 10 %), edytowalny;
+    // jedna spółka = najwyżej 10 % konta → 10 miejsc; cel domyślnie 6 stabilnie / 2 szybko / 2 wolno rosnące (60 / 20 / 20 %; użytkownik: „6/2/2”), edytowalny;
     // obok podział Lyncha (10 spółek) i wynik typu w etapie 86; tylko informacja — reguły dokupu bez zmian
     const MIEJSC = Math.round(1 / W.DOKUP.limit);
-    const TYPY_PF = [["Stabilnie rosnąca", 6, 2, "+83 %"], ["Szybko rosnąca", 2, 4, "+56 %"], ["Wolno rosnąca", 1, 0, "+63 %"],
+    const TYPY_PF = [["Stabilnie rosnąca", 6, 2, "+83 %"], ["Szybko rosnąca", 2, 4, "+56 %"], ["Wolno rosnąca", 2, 0, "+63 %"],
         ["Cykliczna", 0, 0, "+78 %"], ["Wychodząca z kłopotów", 0, 4, "+58 %"], ["Ukryte aktywa", 0, 0, "–"]];
     const celTypu = (t, dom) => (S.celLiczba && W.ok(S.celLiczba[t]) ? S.celLiczba[t] : dom);
     function typyPf() {

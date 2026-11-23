@@ -1442,3 +1442,12 @@ spółek ze stratą 24 vs 34 %; połowy: 2012–2017 −3,1 pp (1/4, średnio 4,
 (+32,0 pp [+6,6; +67,3]), 2012–2017 +8,0 pp, 2018–2023 +47,9 pp, strata 14 vs 24 %. **Reguła z protokołu NIE spełniona** (12 mies. w pierwszej połowie gorzej niż zbiór),
 przedział dla 12 mies. obejmuje 0 → propozycji nie dodajemy na stronę. Na plus (nie zmienia decyzji): mniej spółek ze stratą w obu horyzontach i lepszy wynik 36 mies.
 w obu połowach; w latach 2012–2017 reguła wybierała za mało spółek, żeby ocenić.
+
+## Etap 100: ta sama propozycja przy celu 6 / 2 / 2 (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik zmienił cel na 6 stabilnie / 2 szybko / 2 wolno rosnące. Reguła doboru i test bez zmian względem etapu 99 (tylko 2 zamiast 1 wolno rosnącej, kolejność wg Siła).
+Ta sama reguła dla strony: pokazujemy, jeśli portfel nie jest gorszy od zbioru w obu połowach (12 mies.). Spodziewamy się wyniku bardzo podobnego do etapu 99 (1 spółka różnicy).
+
+**Wynik etapu 100** (`r125_etap100.py`, `wyniki/r125_etap100.md`): 12 mies. +5,5 pp [−0,4; +11,5] (6/10 lat), 2012–2017 −2,7 pp (1/4, ~5,5 spółki), 2018–2023 +11,0 pp;
+36 mies. +30,2 pp [+8,1; +58,6], obie połowy dodatnie; spółek ze stratą 24 vs 34 % (12 m), 16 vs 24 % (36 m). Jak w etapie 99 — **reguła niespełniona** (pierwsza połowa
+12 mies. gorsza), propozycji nie dodajemy. Cel 6 / 2 / 2 w tabeli portfela ustawiony (decyzja użytkownika, nie z testu).

@@ -132,7 +132,7 @@ among D/E < 1 and Siła ≥ 7 cheap P/FCF is WORSE: ≤ 15 −34 pp [−48; −1
 buybacks inside the group = noise → not a ROE substitute), 92 (Lynch sell signals: 1 of 12 confirmed — ⬇ for slow growers), 93 (other Lynch
 rules: confirmed high net margin for stalwarts (+28 pp / 36 m, `nm_gorna_tercyla_stab` in `buduj`) and dividend raised 5 years for slow growers (+11 pp,
 `dyw_rosnie_5`) — both on the card; buybacks contradicted (diluters +12 pp); the rest noise), 94 (stalwart after 2× — not worse, rule not
-confirmed), 99 (suggested 6 / 2 / 1 portfolio by Lynch type from confirmed features: 12 m +6 pp but worse in 2012–17 (few stocks) → pre-registered rule failed, NOT on the site; 36 m +32 pp, fewer losers). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
-6 stabilnie / 2 szybko / 1 wolno rosnąca of 10 slots = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
+confirmed), 99 (suggested 6 / 2 / 1 portfolio by Lynch type from confirmed features: 12 m +6 pp but worse in 2012–17 (few stocks) → pre-registered rule failed, NOT on the site; 36 m +32 pp, fewer losers; stage 100 with 6 / 2 / 2: same picture, +5.5 pp / 12 m, not on the site). Portfel shows a „Skład wg typów Petera Lyncha” table (`typyPf`): NUMBER of stocks by type vs the USER'S target count (`S.celLiczba`, editable, default
+6 stabilnie / 2 szybko / 2 wolno rosnące of 10 slots (user: „6/2/2”) = 1 ÷ `W.DOKUP.limit` — user: „więcej stabilnych …”, then „mówiłem o ilości spółek w portfelu i
 procentowym udziale jednej spółki”), each stock's share of the account, Lynch's 20/40/40 and stage
 86 medians for reference; informational, dokup rules unchanged.
