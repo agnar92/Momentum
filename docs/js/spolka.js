@@ -493,6 +493,75 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
             </div>
           <div class="kr-leg male"><span class="mut">Tło — faza w danym roku:</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
     }
+    function liniaRr(et, serie, wys = 210) {
+        // linie z raportów; przy każdym punkcie zmiana rok do roku (zielona / czerwona)
+        const S_ = Math.max(280, SZER - 40), n = et.length, L = 10, R = S_ - 70, gora = 26, dol = wys - 26;
+        const wsz = serie.flatMap((x) => x.w).filter(W.ok);
+        if (n < 2 || !wsz.length) return "";
+        const mn = Math.min(0, ...wsz), mx = Math.max(...wsz), zak = mx - mn || 1, kr = (R - L) / n;
+        const X = (i) => L + kr * (i + 0.5), Y = (v) => gora + (1 - (v - mn) / zak) * (dol - gora);
+        const rr = (w, i) => (i > 0 && W.ok(w[i]) && W.ok(w[i - 1]) && w[i - 1] > 0 ? w[i] / w[i - 1] - 1 : null);
+        const lin = serie.map(({ w, kolor }, si) => {
+            const p = w.map((v, i) => [i, v]).filter((x) => W.ok(x[1]));
+            if (p.length < 2) return "";
+            const o = p[p.length - 1];
+            return `<polyline points="${p.map(([i, v]) => `${X(i)},${Y(v)}`).join(" ")}" fill="none" stroke-width="3" stroke-linejoin="round" style="stroke:${kolor}"/>
+              ${p.map(([i, v]) => { const g = rr(w, i); return `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === o[0] ? 4.5 : 3.5}" style="fill:var(--karta);stroke:${kolor};stroke-width:2"><title>${esc(et[i])}: ${esc(kw(v))}${W.ok(g) ? " (" + W.fmtPct(g, 1, true) + " r/r)" : ""}</title></circle>`
+                + (W.ok(g) && kr > 34 ? `<text x="${X(i)}" y="${si === 0 || Y(v) + 17 > dol - 4 ? Y(v) - 9 : Y(v) + 17}" class="kr-tx kr-tx-b" text-anchor="middle" style="fill:${g >= 0 ? "var(--zielony-t)" : "var(--czerwony-t)"}">${esc(W.fmtPct(g, 0, true))}</text>` : ""); }).join("")}
+              <text x="${X(o[0]) + 9}" y="${Y(o[1]) + 4}" class="kr-tx kr-tx-b" style="fill:${kolor}">${esc(kw(o[1]))}</text>`;
+        }).join("");
+        return `<svg viewBox="0 0 ${S_} ${wys}" width="${S_}" height="${wys}" class="kr-tempo" role="img">
+          <line x1="${L}" x2="${R}" y1="${Y(0)}" y2="${Y(0)}" class="${mn < 0 ? "kr-zero" : "kr-os"}"/>${lin}
+          ${et.map((e, i) => `<text x="${X(i)}" y="${wys - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}</svg>
+          <div class="kr-leg male">${serie.map((x) => `<span style="color:${x.kolor}">● ${esc(x.nazwa)}</span>`).join("")}<span class="mut">liczby przy punktach: zmiana rok do roku</span></div>`;
+    }
+    function peHistoria() {
+        // P/E tydzień po tygodniu z 5 lat: kurs ÷ (zysk netto 12 mies. ÷ dzisiejsza liczba akcji); zysk znany ~45 dni po końcu kwartału
+        const c = K.ceny && K.ceny.c, d = K.ceny && K.ceny.d, q = (K.hist && K.hist.q) || [], akcje = M.shares;
+        if (!c || !d || !W.ok(akcje) || akcje <= 0) return null;
+        const ttm = W.ttmSeria(q, 2).filter((x) => W.ok(x[1])).map(([e, v]) => [new Date(new Date(e).getTime() + 45 * 864e5).toISOString().slice(0, 10), v]);
+        const pe = [], dd = [];
+        let k = -1;
+        for (let i = 0; i < c.length; i++) {
+            while (k + 1 < ttm.length && ttm[k + 1][0] <= d[i]) k++;
+            if (k < 0 || !W.ok(c[i])) continue;
+            const eps = ttm[k][1] / akcje;
+            if (eps <= 0) continue;
+            const v = c[i] / eps;
+            if (v > 0 && v < 400) { pe.push(v); dd.push(d[i]); }
+        }
+        if (pe.length < 52) return null;
+        const so = pe.slice().sort((a, b) => a - b), kw_ = (p) => so[Math.floor(p * (so.length - 1))];
+        const eps0 = ttm[ttm.length - 1][1] / akcje;
+        return { d: dd, pe, t1: kw_(1 / 3), t2: kw_(2 / 3), med: kw_(0.5), teraz: pe[pe.length - 1], eps: eps0 };
+    }
+    function wykresPe(h) {
+        const S_ = Math.max(280, SZER - 40), H = 220, L = 40, R = S_ - 74, gora = 12, dol = H - 24, n = h.pe.length;
+        const mx = Math.max(...h.pe) * 1.05, mn = Math.min(...h.pe) * 0.95;
+        // skala logarytmiczna: skoki P/E (np. 250× przy chwilowo niskim zysku) nie spłaszczają reszty wykresu
+        const lg = Math.log, X = (i) => L + (i / (n - 1)) * (R - L), Y = (v) => gora + (1 - (lg(v) - lg(mn)) / (lg(mx) - lg(mn))) * (dol - gora);
+        const zaj = [], odsun = (y) => { let v = y; while (zaj.some((z) => Math.abs(z - v) < 13)) v -= 13; zaj.push(v); return v; };
+        const pas = (a, b, kl) => `<rect x="${L}" y="${Y(Math.min(b, mx))}" width="${R - L}" height="${Math.max(0, Y(Math.max(a, mn)) - Y(Math.min(b, mx)))}" class="${kl}"/>`;
+        const cena = (pe) => W.fmtCena(pe * h.eps);
+        const lata = [...new Set(h.d.map((x) => x.slice(0, 4)))].map((r) => [r, h.d.findIndex((x) => x.startsWith(r))]).filter(([, i]) => i > 8);
+        return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="P/E z 5 lat">
+          ${pas(mn, h.t1, "kr-pas-t")}${pas(h.t1, h.t2, "kr-pas-n")}${pas(h.t2, mx, "kr-pas-d")}
+          ${[h.t1, h.med, h.t2].map((v) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="kr-zero"/><text x="${L - 4}" y="${ty}" class="kr-tx" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
+            <text x="${R + 6}" y="${ty}" class="kr-tx">${esc(cena(v))}</text>`; }).join("")}
+          <polyline points="${h.pe.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}" fill="none" stroke-width="2" style="stroke:var(--tekst)"/>
+          <circle cx="${X(n - 1)}" cy="${Y(h.teraz)}" r="5" style="fill:var(--zolty)"><title>dziś: P/E ${esc(W.fmtNum(h.teraz, 1))}</title></circle>
+          ${lata.map(([r, i]) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`).join("")}</svg>
+          <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span>
+            <span class="mut">po prawej: cena przy tym P/E i dzisiejszym zysku</span></div>`;
+    }
+    const naTle = (n, v, med, fmt) => {
+        if (!W.ok(v)) return "";
+        const mx = Math.max(Math.abs(v), Math.abs(med || 0)) || 1, sz = (x) => Math.max(2, 100 * Math.max(0, x) / mx);
+        return `<div class="kr-tlo"><div class="kr-tlo-n">${esc(n)}</div>
+          <div class="kr-tlo-p"><i style="width:${sz(v)}%" class="${W.ok(med) && v >= med ? "lep" : "gor"}"></i></div><b>${esc(fmt(v))}</b>
+          <div class="mut kr-tlo-n">mediana</div><div class="kr-tlo-p"><i style="width:${sz(med)}%" class="med"></i></div><span class="mut">${W.ok(med) ? esc(fmt(med)) : "–"}</span></div>`;
+    };
+    const kropki5 = (x) => { const n = W.ok(x) ? Math.round(x / 2) : 0; return `<span class="kr-kropki kr-k5">${[1, 2, 3, 4, 5].map((j) => `<i class="${j <= n ? (n >= 4 ? "on" : n >= 3 ? "sr" : "sl") : ""}"></i>`).join("")}</span>`; };
     function etapy(nr) {
         return `<div class="kr-etapy">${W.FAZY.map((n, i) => `<div class="${i + 1 === nr ? "akt" : i + 1 < nr ? "za" : ""}"><span>${i + 1}</span><small>${esc(n)}</small></div>`).join("")}</div>`;
     }
@@ -529,13 +598,19 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         if (i === 1) {
             const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
             return `<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
-              <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div><div id="kr-wykres" style="margin-top:10px"></div>`;
+              <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div>
+              <div class="mut male" style="margin-top:12px">Przychody i zysk netto rok po roku (z raportów)</div>
+              ${(() => { const sf = seriaFazy(), y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), zL = sf.et[sf.et.length - 1] === "12 m";
+                const ni = y.map((r) => r[2]).concat(zL ? [W.ok(M.ni_ttm) ? M.ni_ttm : null] : []);
+                return liniaRr(sf.et, [{ nazwa: "przychody", kolor: "var(--niebieski)", w: sf.rev }, { nazwa: "zysk netto", kolor: "var(--zielony)", w: ni }]); })()}`;
         }
         if (i === 2) {
             const j = listaJak(), dod = j ? j.filter(([co]) => /ROA|ROCE|3 lata temu/.test(co)) : [];
             return `${kryteriaHtml(KR_IDX["Rentowność"])}
               ${dod.length ? `<div class="mut male" style="margin:10px 0 4px">Dodatkowo z listy „Jakość (7 kryteriów)” (nie liczone do 7/7):</div><div class="jz">${dod.map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart">${esc(fmtKryt(co, v))}</span></div>`).join("")}</div>` : ""}
-              <div class="kr-cagr" style="margin-top:10px">${[["Marża brutto", M.gm], ["Marża operacyjna", M.om], ["Marża netto", M.nm]].map(([n, v]) => `<div><small>${n}</small><b>${W.fmtPct(v, 1)}</b></div>`).join("")}</div>`;
+              <div class="mut male" style="margin:14px 0 6px">Przewaga w liczbach — na tle mediany ${ZB}: wysoka marża brutto = klienci płacą więcej niż u konkurencji (marka, technologia), wysoki ROIC = każdy zainwestowany dolar dużo zarabia</div>
+              ${naTle("Marża brutto", M.gm, (K.med500 || {}).gm, (v) => W.fmtPct(v, 1))}${naTle("Marża operacyjna", M.om, (K.med500 || {}).om, (v) => W.fmtPct(v, 1))}
+              ${naTle("Marża netto", M.nm, (K.med500 || {}).nm, (v) => W.fmtPct(v, 1))}${naTle("ROIC", M.roic, (K.med500 || {}).roic, (v) => W.fmtPct(v, 1))}`;
         }
         if (i === 3) {
             const s = K.oceny && K.oceny.sila;
@@ -551,7 +626,14 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
                 const g = [0, ...B, 4], k = Math.min(4, g.filter((b) => b <= peg).length - 1);
                 poz = Math.max(2, Math.min(98, 20 * k + 20 * Math.min(1, (peg - g[k]) / (g[k + 1] - g[k]))));
             }
+            const h = peHistoria(), poPe = h ? (h.teraz <= h.t1 ? ["tanio", "kr-tak"] : h.teraz >= h.t2 ? ["drogo", "kr-nie"] : ["normalnie", ""]) : null;
+            const wsk = [["P/S (cena / sprzedaż)", M.ps, null], ["P/E (cena / zysk)", M.pe, M.fpe], ["P/FCF (cena / wolne przepływy)", M.pfcf, null]];
             return `${kryteriaHtml(KR_IDX.Wycena)}
+              <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
+              <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
+                ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
+              ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×)</div>${wykresPe(h)}` : ""}
+              <div class="mut male" style="margin:14px 0 0">PEG — cena względem tempa wzrostu zysku</div>
               ${poz !== null ? `<div class="kr-wyc"><div class="kr-wyc-teraz" style="left:${poz}%;transform:translateX(${poz < 15 ? "-8%" : poz > 85 ? "-92%" : "-50%"})">Dziś ${W.fmtCena(pr)}<br>▼</div>
                 <div class="kr-pasek">${N.map((n, j) => `<span class="z${j}">${n}</span>`).join("")}</div>
                 <div class="kr-ceny mut">${B.map((b, j) => `<span style="left:${20 * (j + 1)}%">${W.fmtCena(pr * b / peg)}</span>`).join("")}</div></div>
@@ -561,16 +643,27 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const wiersze = ["Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena"].map((n) => { const [a, b] = zalicz(KR_IDX[n]); return [n, a, b]; });
         const suma = wiersze.reduce((s, x) => s + x[1], 0), wsz = wiersze.reduce((s, x) => s + x[2], 0);
         const ow = (K.ostrzezenia || []).length, brak = wiersze.flatMap(([n]) => { const l = lista77(); return l ? KR_IDX[n].map((j) => l[j]).filter((k) => k && !k[2]).map((k) => k[0]) : []; });
-        return `<div class="kr-sum">
-          <div class="kr-sum-w"><span>Faza rozwoju</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
-          ${wiersze.map(([n, a, b]) => `<div class="kr-sum-w"><span>${n}${n === "Wycena" && K.etykieta ? ` <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span>${b ? kropki(a, b) : ""}<b>${b ? `${a} z ${b}` : "–"}</b></div>`).join("")}
-          <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : ""}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
+        const o = K.oceny || {}, h = peHistoria(), poPe = h ? (h.teraz <= h.t1 ? "tanio" : h.teraz >= h.t2 ? "drogo" : "normalnie") : null;
+        const ow5 = (n, x, opis) => `<div class="kr-sum-w"><span>${n}</span>${kropki5(x)}<b>${W.ok(x) ? W.fmtNum(x, 1) : "–"}</b>${opis ? `<span class="mut male kr-sum-o">${esc(opis)}</span>` : ""}</div>`;
+        return `<div class="siatka2">
+          <div class="pole kr-werd"><div class="mut male kr-werd-t">SPÓŁKA</div>
+            <div class="kr-sum-w"><span>Faza rozwoju</span><span></span><b>${f ? `${f.nr} z 5` : "–"}</b><span class="mut male kr-sum-o">${f ? esc(f.nazwa) : ""}</span></div>
+            ${ow5("Wzrost", o.wzrost, "ocena 0–10 na tle " + ZB)}${ow5("Siła finansowa", o.sila, "")}${ow5("Wycena", o.wycena, "wysoko = tanio")}${ow5("Ocena ogólna", o.ogolna, "")}
+            <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : "<span></span>"}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
+          <div class="pole kr-werd"><div class="mut male kr-werd-t">WYCENA</div>
+            <div class="kr-sum-w"><span>PEG</span><span>${K.etykieta ? `<span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span><b>${W.ok(M.peg) && M.peg > 0 ? W.fmtNum(M.peg) : "–"}</b></div>
+            <div class="kr-sum-w"><span>P/E na tle 5 lat</span><span class="mut male">${h ? `mediana ${W.fmtNum(h.med, 1)}×` : ""}</span><b>${h ? `${W.fmtNum(h.teraz, 1)}× · ${poPe}` : "–"}</b></div>
+            ${h ? `<div class="kr-zakres"><div class="kr-zakres-p"><span class="t">tanio</span><span class="n">normalnie</span><span class="d">drogo</span>
+              <i style="left:${Math.max(2, Math.min(98, h.teraz <= h.t1 ? 33.3 * (h.teraz - Math.min(...h.pe)) / (h.t1 - Math.min(...h.pe) || 1) : h.teraz >= h.t2 ? 66.7 + 33.3 * Math.min(1, (h.teraz - h.t2) / ((Math.max(...h.pe) - h.t2) || 1)) : 33.3 + 33.3 * (h.teraz - h.t1) / (h.t2 - h.t1)))}%"></i></div>
+              <div class="kr-zakres-c mut"><span style="left:33.3%">${W.fmtCena(h.t1 * h.eps)}</span><span style="left:66.7%">${W.fmtCena(h.t2 * h.eps)}</span></div>
+              <div class="male">Dziś ${W.fmtCena(M.price)}</div></div>` : ""}
+          </div></div>
           ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
-          <p class="mut male">To zestawienie faktów, nie rekomendacja — decyzję podejmujesz sam. W testach 2015–2026 portfel spółek 7/7 (PEG 0–1) dawał 18–21 % rocznie wobec 14 % dla S&amp;P 500 (etapy 67–68).</p>`;
+          <p class="mut male">Zestawienie faktów z danych — decyzję podejmujesz sam.</p>`;
     }
     let krokRozmiar = null;
-    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K && !(S.krok || 0)) krok(); }, 200); });
+    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K) krok(); }, 200); });
     function krok(i) {
         if (i !== undefined) S.krok = i;
         const k = S.krok || 0, el = $("krok");
@@ -580,7 +673,6 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
         el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => krok(+b.dataset.kr)));
-        if (k === 1 && $("kr-wykres")) { const y = (K.hist && K.hist.y) || []; if (y.length) WY.slupki($("kr-wykres"), y.map((r) => r[0].slice(0, 4)), [{ nazwa: "Przychody", kolor: "#2a78d6", w: y.map((r) => r[1]) }, { nazwa: "Zysk netto", kolor: "#16a34a", w: y.map((r) => r[2]) }], usdOs, 220); }
     }
 
     function sprawozdania(tryb) {

@@ -107,6 +107,12 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   redrawn on resize; phone shows 5 years). Missing 12 m payouts are never drawn — for classification only the last FY payout ratio is used. Data: `hist.y` [5] operating
   income, [6] buybacks, [7] dividends paid, [8] shares at FY end (split-adjusted; integer jumps = splits older than the 5-year price history) and `hist.ltm`
   [end, rev, op, buybacks, dividends, shares]. Phase texts `CYKL`.
+  Other steps borrow data-computable parts of the user's screenshots (user: „wsiąść części z tych zdjęć”): Wzrost — revenue / net income lines with y/y % at each point
+  (`liniaRr`); Rentowność — „Przewaga w liczbach”: gross / operating / net margin and ROIC vs median of 500 (`naTle`); Wycena — trailing vs forward multiples
+  (P/S, P/E, P/FCF; forward only P/E from Finviz) and P/E history 5 years (`peHistoria`: weekly price ÷ (TTM net income known 45 days after quarter end ÷ current
+  shares), log scale, bands = own terciles tanio / normalnie / drogo, prices at those P/E with today's EPS) plus the PEG bar; Podsumowanie — „verdict” layout:
+  SPÓŁKA (phase, scores as 5 dots, 7/7) and WYCENA (PEG label, P/E vs own 5 years with price range). Moat / management / segments / geography are opinions or data
+  we do not have — not built.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
