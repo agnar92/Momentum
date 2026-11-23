@@ -1483,3 +1483,19 @@ fazę kursu pokazujemy na karcie jako opis (z wynikiem testu), a do kryteriów /
 (+3,8 pp / 36 m), 1 Baza lekko gorsza (−4,0 / 36 m, przedział do 0). Jakość: za mało spółek w fazie 4 (n = 34), wynik niepewny. D (faza spółki 4 × kurs 2) — brak różnicy.
 Według reguły (12 mies., przedział bez zera) **niepotwierdzone**; kierunek zgodny z Weinsteinem dla fazy 4 i istotny na 36 mies. → na karcie faza kursu jako opis z wynikiem
 testu (faza 4: więcej spółek ze stratą), bez zmian w kryteriach i zasadach dokupu.
+
+## Etap 103: cykl życia spółki wg Lyncha (zapisane 2026-11-23 PRZED uruchomieniem)
+
+Użytkownik: „nie o to mi chodziło, to jest analiza techniczna … chcę analizę Petera Lyncha cykli spółki” (faza kursu z etapu 102 zdjęta z karty). Lynch („One Up on
+Wall Street”, rozdz. o szybko rosnących): spółka przechodzi fazę startu (dopracowanie modelu, największe ryzyko), szybkiej ekspansji (wchodzi na nowe rynki — tu się
+najwięcej zarabia), dojrzewania / nasycenia (nie ma już łatwej drogi wzrostu — tu kończy się szybki wzrost akcji), potem staje się stabilnie lub wolno rosnącą, a na końcu
+może tracić. Reguła (progi z typów Lyncha i naszego `ocena.faza`: 15 %): **5 Schyłek** — przychody 3 lata CAGR < 0; bez zysku operacyjnego: **2 Szybka ekspansja**, gdy
+strata maleje i przychody 3 lata ≥ 15 % rocznie, inaczej **1 Start**; z zyskiem: **2 Szybka ekspansja** — przychody 3 lata ≥ 15 % i 1 rok ≥ 15 %; **3 Dojrzewanie** —
+przychody 3 lub 5 lat ≥ 15 % rocznie, ale ostatni rok < 15 % (hamowanie); **4 Dojrzałość** — pozostałe (przychody 0–15 % rocznie). Zbiór, starty, miary jak w etapie 101.
+Hipotezy Lyncha: 2 lepsza od pozostałych; 3 gorsza od 2; 5 i 1 najgorsze. Reguła dla strony: fazę pokazujemy jako opis (trzy pytania + schemat); twierdzenie
+o fazie oznaczamy jako potwierdzone, gdy różnica 36 mies. ma przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 103** (`r128_etap103.py`, `wyniki/r128_etap103.md`): **3 Dojrzewanie gorsze od pozostałych: 36 mies. −11,0 pp [−19,1; −0,8], obie połowy ujemne (−20,0 / −1,6)
+→ potwierdzone** (12 mies. −2,8 [−10,6; +1,3]). 2 Szybka ekspansja wbrew Lynchowi nie lepsza: −2,7 pp [−14,5; +4,1] (2012–17 −20, 2018–23 +2). 1 Start −22,8 [−45,5; +15,5],
+strata 43 vs 23 %. 4 Dojrzałość +2,8 (szum), 5 Schyłek +2,3 (szum). 3 vs 2: −7,8 [−17,2; +8,0]. Na karcie: faza wg Lyncha jako opis, ⚠ dla Dojrzewania (potwierdzone);
+faza kursu Weinsteina (etap 102) zdjęta z karty na prośbę użytkownika.

@@ -104,21 +104,14 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
 });
 
 
-test("faza spółki (etap 101): trzy pytania", () => {
+test("cykl życia wg Lyncha (etap 103)", () => {
     const q = (a, b) => [["2025-03", 0, a], ["2025-06", 0, a], ["2025-09", 0, a], ["2025-12", 0, a], ["2026-03", 0, b], ["2026-06", 0, b], ["2026-09", 0, b], ["2026-12", 0, b]];
-    assert.strictEqual(W.faza({ rev_cagr3: -0.02, om: 0.2 }).nr, 5);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.3, om: -0.1 }, q(-10, -5)).nr, 2);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.3, om: -0.1 }, q(-5, -10)).nr, 1);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.1, om: 0.2, div: 0 }).nr, 3);
-    assert.strictEqual(W.faza({ rev_cagr3: 0.1, om: 0.2, div: 0, skup_netto_mc: 0.01 }).nr, 4);
+    assert.strictEqual(W.faza({ rev_cagr3: -0.02, rev_1y: 0.05, om: 0.2 }).nr, 5);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.3, rev_1y: 0.3, om: -0.1 }, q(-10, -5)).nr, 2);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.3, rev_1y: 0.3, om: -0.1 }, q(-5, -10)).nr, 1);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.25, rev_1y: 0.2, om: 0.2 }).nr, 2);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.25, rev_1y: 0.08, om: 0.2 }).nr, 3);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.10, rev_1y: 0.05, rev_cagr5: 0.2, om: 0.2 }).nr, 3);
+    assert.strictEqual(W.faza({ rev_cagr3: 0.08, rev_1y: 0.06, rev_cagr5: 0.07, om: 0.2 }).nr, 4);
     assert.strictEqual(W.faza({ om: 0.2 }), null);
-});
-
-test("faza kursu Weinsteina (etap 102)", () => {
-    const ciag = (n, f) => Array.from({ length: n }, (_, i) => f(i));
-    assert.strictEqual(W.fazaKursu(ciag(80, (i) => 100 * Math.pow(1.01, i))).nr, 2);
-    assert.strictEqual(W.fazaKursu(ciag(80, (i) => 100 * Math.pow(0.99, i))).nr, 4);
-    assert.strictEqual(W.fazaKursu(ciag(80, (i) => (i < 70 ? 100 * Math.pow(1.01, i) : 100 * Math.pow(1.01, 69) * 0.8))).nr, 3);
-    assert.strictEqual(W.fazaKursu(ciag(40, () => 100)), null);
-    const ma = W.fazaKursu(ciag(80, () => 50)).ma; assert.strictEqual(ma[29], 50); assert.strictEqual(ma[28], null);
 });

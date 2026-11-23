@@ -187,54 +187,29 @@
         return out;
     }
 
-    // faza spółki (cykl życia; etap 101): trzy pytania — przychody rosną? zarabia (marża operacyjna > 0)? oddaje kapitał (dywidenda lub skup netto)?
-    // 5 Schyłek: przychody 3 lata CAGR < 0; marża op. ≤ 0: 1 Start / 2 Hiperwzrost (strata netto TTM mniejsza niż rok wcześniej);
-    // marża op. > 0: 4 Zwrot kapitału (dywidenda lub skup netto > 0) / 3 Dźwignia operacyjna. W teście faza NIE przewidywała zwrotu — tylko opis.
-    const FAZY = ["Start", "Hiperwzrost", "Dźwignia operacyjna", "Zwrot kapitału", "Schyłek"];
-    // etap 101 (36 mies., top 500 USA 2012–2023): [mediana nadwyżki nad medianą zbioru (pp), % spółek ze stratą]; wszystkie: strata 23 %
-    const FAZA_TEST = { 1: [-22.0, 46], 2: [-3.4, 36], 3: [2.8, 24], 4: [0.0, 23], 5: [2.6, 19] };
+    // cykl życia spółki wg Lyncha (etap 103): 5 Schyłek — przychody 3 lata CAGR < 0; bez zysku operacyjnego: 2 Szybka ekspansja (strata maleje i przychody 3 lata ≥ 15 %)
+    // albo 1 Start; z zyskiem: 2 Szybka ekspansja (przychody 3 lata i 1 rok ≥ 15 %), 3 Dojrzewanie (3 lub 5 lat ≥ 15 %, ostatni rok < 15 % — hamowanie), 4 Dojrzałość (reszta)
+    const FAZY = ["Start", "Szybka ekspansja", "Dojrzewanie", "Dojrzałość", "Schyłek"];
+    // etap 103 (36 mies., top 500 USA 2012–2023): [mediana nadwyżki nad medianą zbioru (pp), % spółek ze stratą, potwierdzone]; wszystkie: strata 23 %
+    const FAZA_TEST = { 1: [-22.0, 43, false], 2: [-2.0, 30, false], 3: [-9.8, 27, true], 4: [1.4, 21, false], 5: [2.4, 19, false] };
     function faza(m, q) {
         if (!m) return null;
-        const rev = m.rev_cagr3, om = ok(m.om) ? m.om : (ok(m.op_ttm) && ok(m.rev_ttm) && m.rev_ttm > 0 ? m.op_ttm / m.rev_ttm : null);
+        const g3 = m.rev_cagr3, g1 = m.rev_1y, g5 = m.rev_cagr5, om = ok(m.om) ? m.om : (ok(m.op_ttm) && ok(m.rev_ttm) && m.rev_ttm > 0 ? m.op_ttm / m.rev_ttm : null);
         const zwrot = (ok(m.div) && m.div > 0) || (ok(m.skup_netto_mc) && m.skup_netto_mc > 0);
-        const pyt = { przychody: ok(rev) ? rev >= 0 : null, zysk: ok(om) ? om > 0 : null, zwrot };
-        if (!ok(rev)) return null;
-        let nr = null;
-        if (rev < 0) nr = 5;
+        const pyt = { przychody: ok(g3) ? g3 >= 0 : null, szybko: ok(g3) ? g3 >= 0.15 : null, hamuje: ok(g1) && ok(g3) ? g1 < g3 : null, zysk: ok(om) ? om > 0 : null, zwrot };
+        if (!ok(g3) || !ok(g1)) return null;
+        let nr;
+        if (g3 < 0) nr = 5;
         else if (!ok(om)) return null;
         else if (om <= 0) {
             const t = ttmSeria(q || [], 2).filter((x) => ok(x[1]));
             const n = t.length, popr = n >= 5 && t[n - 1][1] > t[n - 5][1];
-            nr = popr ? 2 : 1; pyt.poprawa = n >= 5 ? popr : null;
-        } else nr = zwrot ? 4 : 3;
+            pyt.poprawa = n >= 5 ? popr : null;
+            nr = popr && g3 >= 0.15 ? 2 : 1;
+        } else if (g3 >= 0.15 && g1 >= 0.15) nr = 2;
+        else if ((g3 >= 0.15 || (ok(g5) && g5 >= 0.15)) && g1 < 0.15) nr = 3;
+        else nr = 4;
         return { nr, nazwa: FAZY[nr - 1], pyt, om, test: FAZA_TEST[nr] };
-    }
-
-    // faza kursu wg Weinsteina (etap 102): średnia 30-tygodniowa, nachylenie = średnia ÷ średnia 5 tyg. wcześniej − 1 (płaska, gdy |·| < 1 %);
-    // rosnąca: kurs ≥ średniej → 2 Wzrost, poniżej → 3 Szczyt; malejąca: kurs < średniej → 4 Spadek, powyżej → 1 Baza; płaska: średnia wyżej niż 26 tyg. wcześniej → 3, inaczej → 1
-    const FAZY_KURSU = ["Baza", "Wzrost", "Szczyt", "Spadek"];
-    // etap 102 (top 500 USA 2012–2023): [nadwyżka 12 mies. (pp), strata 12 mies. %, nadwyżka 36 mies. (pp), strata 36 mies. %]; wszystkie: strata 31 % / 22 %
-    const FAZA_KURSU_TEST = { 1: [-1.2, 28, -3.4, 20], 2: [0.6, 30, 1.3, 23], 3: [0.8, 28, 3.3, 18], 4: [-3.9, 39, -7.3, 28] };
-    function sredniaKr(c, n) {
-        const out = new Array(c.length).fill(null); let s = 0, k = 0;
-        for (let i = 0; i < c.length; i++) {
-            if (!ok(c[i])) { s = 0; k = 0; continue; }
-            s += c[i]; k++;
-            if (k > n) { s -= c[i - n]; k = n; }
-            if (k === n) out[i] = s / n;
-        }
-        return out;
-    }
-    function fazaKursu(c) {
-        if (!c || c.length < 30 + 26) return null;
-        const ma = sredniaKr(c, 30), i = c.length - 1, a = ma[i], a1 = ma[i - 5], a6 = ma[i - 26], cena = c[i];
-        if (![a, a1, a6, cena].every(ok) || a1 <= 0) return null;
-        const sl = a / a1 - 1;
-        let nr;
-        if (sl >= 0.01) nr = cena >= a ? 2 : 3;
-        else if (sl <= -0.01) nr = cena < a ? 4 : 1;
-        else nr = a >= a6 ? 3 : 1;
-        return { nr, nazwa: FAZY_KURSU[nr - 1], nachylenie: sl, odSredniej: cena / a - 1, ma, test: FAZA_KURSU_TEST[nr] };
     }
 
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
@@ -311,7 +286,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, fazaKursu, FAZY_KURSU, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, faza, FAZY, FAZA_TEST, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

@@ -384,6 +384,12 @@
 
     // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
     // Tylko fakty z danych i kryteria z testów; bez werdyktu „kup / sprzedaj” (spółki wybiera użytkownik).
+    // cykl życia wg Lyncha („One Up on Wall Street”, rozdz. o szybko rosnących; opisy własne, skrócone)
+    const CYKL = { 1: "Start: spółka dopracowuje model i jeszcze nie zarabia — wg Lyncha najbardziej ryzykowny etap.",
+        2: "Szybka ekspansja: przychody rosną co najmniej 15 % rocznie, spółka wchodzi na nowe rynki — wg Lyncha tu zarabia się najwięcej; pytanie brzmi, jak długo to potrwa.",
+        3: "Dojrzewanie: szybki wzrost hamuje, rynek się nasyca i nie ma już łatwej drogi do dalszej ekspansji — wg Lyncha tu kończy się szybki wzrost kursu.",
+        4: "Dojrzałość: przychody rosną umiarkowanie (do 15 % rocznie) — spółka stabilnie lub wolno rosnąca; zarabia się na wzroście zysku, dywidendzie i rozsądnej cenie.",
+        5: "Schyłek: przychody spadają od 3 lat — wg Lyncha trzeba sprawdzić, czy to przejściowe (cykl, restrukturyzacja), czy trwałe." };
     const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
     const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
     const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
@@ -425,33 +431,6 @@
         return `<div class="jz">${idx.map((i) => l[i]).filter(Boolean).map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart"><b>${esc(fmtKryt(co, v))}</b></span></div>`).join("")}</div>`;
     }
     const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
-    function wykresKursu(d, c, ma, nr) {
-        // ostatnie 2 lata: kurs (tygodniowo) i średnia 30-tygodniowa
-        const n = Math.min(104, c.length), o = c.length - n, cc = c.slice(o), mm = ma.slice(o), dd = d.slice(o);
-        const w = [...cc, ...mm].filter(W.ok), mn = Math.min(...w), mx = Math.max(...w), zak = mx - mn || 1;
-        const X = (i) => 4 + (i / (n - 1)) * 592, Y = (v) => 8 + (1 - (v - mn) / zak) * 124;
-        const pl = (a) => a.map((v, i) => (W.ok(v) ? `${X(i).toFixed(1)},${Y(v).toFixed(1)}` : "")).filter(Boolean).join(" ");
-        const kol = { 1: "var(--tekst2)", 2: "var(--zielony)", 3: "var(--zolty)", 4: "var(--czerwony)" }[nr];
-        return `<svg viewBox="0 0 600 140" class="kr-fazy" preserveAspectRatio="none" role="img" aria-label="Kurs i średnia 30-tygodniowa">
-          <polyline points="${pl(cc)}" fill="none" stroke-width="2" vector-effect="non-scaling-stroke" style="stroke:${kol}"/>
-          <polyline points="${pl(mm)}" fill="none" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" style="stroke:var(--niebieski)"/></svg>
-          <div class="kr-osx mut"><span>${esc(dd[0])}</span><span>${esc(dd[n - 1])}</span></div>
-          <div class="kr-leg male"><span style="color:${kol}">━ kurs (tygodniowo)</span> <span style="color:var(--niebieski)">╌ średnia 30 tygodni</span></div>`;
-    }
-    function fazaKursuHtml() {
-        const c = K.ceny && K.ceny.c, fk = W.fazaKursu(c);
-        if (!fk) return '<div class="kr-faza kr-faza-k"><p class="mut male" style="margin:0">Za mało notowań, żeby określić fazę kursu (potrzeba ok. 56 tygodni).</p></div>';
-        const t = fk.test, opisy = { 1: "Kurs krąży wokół płaskiej lub opadającej średniej — rynek „buduje bazę”",
-            2: "Kurs nad rosnącą średnią — trend wzrostowy (Weinstein: tu się kupuje)",
-            3: "Średnia się wypłaszcza po wzroście albo kurs spadł pod rosnącą średnią — możliwy szczyt",
-            4: "Kurs pod opadającą średnią — trend spadkowy (Weinstein: tu się nie kupuje)" };
-        return `<div class="kr-faza kr-faza-k"><div class="kr-faza-t">Faza kursu (wg Weinsteina): <b>${fk.nr}: ${esc(fk.nazwa)}</b></div>
-          <div class="kr-fazy-et kr-4">${W.FAZY_KURSU.map((n, i) => `<div class="${i + 1 === fk.nr ? "akt" : ""}"><span>${i + 1}</span>${esc(n)}</div>`).join("")}</div>
-          <p class="male" style="margin:8px 0">${esc(opisy[fk.nr])}. Kurs ${W.fmtPct(fk.odSredniej, 1, true)} względem średniej 30-tygodniowej, średnia ${W.fmtPct(fk.nachylenie, 1, true)} w 5 tygodni.</p>
-          ${wykresKursu(K.ceny.d, c, fk.ma, fk.nr)}
-          <p class="mut male" style="margin:8px 0 0">Test 2012–2026 (etap 102${GPW ? ", spółki USA" : ""}): spółki w fazie ${fk.nr} po roku — mediana ${t[0] >= 0 ? "+" : ""}${W.fmtNum(t[0], 1)} pp względem mediany wszystkich, strata u ${t[1]} % (wszystkie: 31 %); po 3 latach ${t[2] >= 0 ? "+" : ""}${W.fmtNum(t[2], 1)} pp, strata ${t[3]} % (wszystkie: 22 %).
-            ${fk.nr === 4 ? " Faza spadku wypadała gorzej w obu połowach okresu (na 3 lata istotnie, na rok — w granicach przypadku)." : " Pozostałe fazy nie różniły się wyraźnie."} Faza kursu nie wchodzi do kryteriów ani zasad dokupu.</p></div>`;
-    }
     function krokTresc(i) {
         const f = W.faza(M, K.hist && K.hist.q), y = (K.hist && K.hist.y) || [];
         const ety = y.map((r) => r[0].slice(0, 4)), cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
@@ -462,15 +441,16 @@
             if (W.ok(M.skup_netto_mc)) zw.push(`skup netto ${W.fmtPct(M.skup_netto_mc, 1, true)} kapitalizacji (12 mies.)`);
             if (W.ok(M.akcje_3l)) zw.push(`liczba akcji ${W.fmtPct(M.akcje_3l, 1, true)} w 3 lata`);
             const t = f && f.test;
+            const tempo = `${W.fmtPct(M.rev_cagr3, 1, true)} rocznie przez 3 lata, ${W.fmtPct(M.rev_1y, 1, true)} w ostatnim roku${p.przychody === false ? "" : p.szybko ? (p.hamuje ? " — szybko, ale wzrost hamuje" : " — szybko (≥ 15 % rocznie)") : " — wolniej niż 15 % rocznie"}`;
             return `<div class="kr-pyt">
-              <div class="pole"><div class="kr-nr">1</div><b>Czy przychody rosną?</b><div>${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? `${W.fmtPct(M.rev_cagr3, 1, true)} rocznie przez 3 lata` : ""}</div>${iskra(y.map((r) => r[1]), ety, "var(--niebieski)")}</div>
+              <div class="pole"><div class="kr-nr">1</div><b>Czy przychody rosną i jak szybko?</b><div>${tn(p.przychody)} ${W.ok(M.rev_cagr3) ? tempo : ""}</div>${iskra(y.map((r) => r[1]), ety, "var(--niebieski)")}</div>
               <div class="pole"><div class="kr-nr">2</div><b>Czy zarabia?</b><div>${tn(p.zysk)} ${f && W.ok(f.om) ? `marża operacyjna ${W.fmtPct(f.om, 1)}` : ""}${W.ok(M.op_ttm) ? `, zysk operacyjny ${W.fmtUsd(M.op_ttm)} ${WAL} (12 mies.)` : ""}${p.poprawa === true ? " — strata się zmniejsza" : p.poprawa === false ? " — strata się nie zmniejsza" : ""}</div>${iskra(y.map((r) => r[2]), ety, "var(--zielony)")}</div>
-              <div class="pole"><div class="kr-nr">3</div><b>Czy oddaje kapitał akcjonariuszom?</b><div>${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div></div></div>
-              ${f ? `<div class="kr-faza"><div class="kr-faza-t">Faza spółki (cykl życia firmy): <b>${f.nr}: ${esc(f.nazwa)}</b></div>${diagramFaz(f.nr)}
-                <p class="mut male" style="margin:8px 0 0">Test 2012–2026 (etap 101, 500 największych spółek USA): sama faza <b>nie mówiła</b>, czy spółka zarobi więcej od innych — różnice w granicach przypadku.
-                Faza ${f.nr} po 3 latach: mediana ${t[0] >= 0 ? "+" : ""}${W.fmtNum(t[0], 1)} pp względem mediany wszystkich, strata u ${t[1]} % spółek (wszystkie: 23 %).${f.nr === 1 ? " Spółki na starcie częściej kończyły ze stratą." : ""}${f.nr === 5 ? " Spadające przychody nie oznaczały gorszego wyniku akcji." : ""}</p></div>`
-                : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}
-              ${fazaKursuHtml()}`;
+              <div class="pole"><div class="kr-nr">3</div><b>Czy oddaje gotówkę akcjonariuszom?</b><div>${tn(f ? p.zwrot : null)} ${esc(zw.join(", "))}</div>
+                <p class="mut male" style="margin:6px 0 0">Wg Lyncha dojrzałe spółki, które nie mają już gdzie szybko rosnąć, oddają gotówkę (dywidenda, skup akcji).</p></div></div>
+              ${f ? `<div class="kr-faza${t[2] ? " kr-faza-ost" : ""}"><div class="kr-faza-t">Faza w cyklu życia spółki (wg Lyncha): <b>${f.nr}: ${esc(f.nazwa)}</b></div>${diagramFaz(f.nr)}
+                <p class="male" style="margin:8px 0 0">${esc(CYKL[f.nr])}</p>
+                <p class="${t[2] ? "" : "mut "}male" style="margin:6px 0 0">${t[2] ? '<b style="color:var(--czerwony-t)">⚠ Potwierdzone w teście:</b> ' : "Test 2012–2026: "}spółki w fazie ${f.nr} po 3 latach — mediana ${t[0] >= 0 ? "+" : ""}${W.fmtNum(t[0], 1)} pp względem mediany wszystkich, strata u ${t[1]} % (wszystkie: 23 %)${t[2] ? " — gorzej w obu połowach okresu (etap 103" + (GPW ? ", spółki USA" : "") + ")." : ". Różnica w granicach przypadku (etap 103" + (GPW ? ", spółki USA" : "") + ")."}${f.nr === 2 ? " Wbrew Lynchowi faza szybkiej ekspansji nie dawała przewagi wśród dużych spółek." : ""}</p></div>`
+                : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}`;
         }
         if (i === 1) {
             const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
@@ -508,8 +488,7 @@
         const suma = wiersze.reduce((s, x) => s + x[1], 0), wsz = wiersze.reduce((s, x) => s + x[2], 0);
         const ow = (K.ostrzezenia || []).length, brak = wiersze.flatMap(([n]) => { const l = lista77(); return l ? KR_IDX[n].map((j) => l[j]).filter((k) => k && !k[2]).map((k) => k[0]) : []; });
         return `<div class="kr-sum">
-          <div class="kr-sum-w"><span>Faza spółki</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
-          ${(() => { const fk = W.fazaKursu(K.ceny && K.ceny.c); return `<div class="kr-sum-w"><span>Faza kursu (Weinstein)</span><b class="${fk && fk.nr === 4 ? "minus" : ""}">${fk ? `${fk.nr} z 4 · ${esc(fk.nazwa)}` : "–"}</b></div>`; })()}
+          <div class="kr-sum-w"><span>Faza (cykl Lyncha)</span><b>${f ? `${f.nr} z 5 · ${esc(f.nazwa)}` : "–"}</b></div>
           ${wiersze.map(([n, a, b]) => `<div class="kr-sum-w"><span>${n}${n === "Wycena" && K.etykieta ? ` <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>` : ""}</span>${b ? kropki(a, b) : ""}<b>${b ? `${a} z ${b}` : "–"}</b></div>`).join("")}
           <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : ""}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
           ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
