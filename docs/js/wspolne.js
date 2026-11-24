@@ -66,7 +66,7 @@
             if (ok(r[i][1]) && ok(r[i - 1][1]) && r[i][1] > r[i - 1][1]) rv++;
             if (epsOk && eps[i] > eps[i - 1]) ep++;
         }
-        return { przychody: rv, eps: epsOk ? ep : null, stabilny: rv === 5 && epsOk && ep >= 4, lata: r.map((x) => x[0].slice(0, 4)) };
+        return { przychody: rv, eps: epsOk ? ep : null, stabilny: rv === 5, lata: r.map((x) => x[0].slice(0, 4)) };
     }
     // PEG Lyncha: wzrost do PEG najwyżej 25 % rocznie (Lynch nie ufał trwałości szybszego wzrostu) — tylko informacja (etap 108: limit nie poprawiał wyboru)
     const LIMIT_LYNCH = 0.25;

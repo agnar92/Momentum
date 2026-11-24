@@ -128,7 +128,7 @@ test("PEG Lyncha: wzrost najwyżej 25 %", () => {
     assert.strictEqual(W.peg25(20, -0.1), null);
 });
 
-test("stabilny wzrost 5 lat: przychody 5/5, EPS ≥ 4/5", () => {
+test("stabilny wzrost 5 lat: przychody 5/5 (EPS obok)", () => {
     const y = [2019, 2020, 2021, 2022, 2023, 2024].map((r, i) => [`${r}-12-31`, 100 + 10 * i, 10 + (i === 3 ? -1 : i), 0, 0, 0, 0, 0, 100]);
     const s = W.stabilnyWzrost(y);
     assert.strictEqual(s.przychody, 5); assert.strictEqual(s.eps, 4); assert.strictEqual(s.stabilny, true);

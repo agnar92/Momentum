@@ -1605,3 +1605,21 @@ i dodatnią w obu połowach; w przeciwnym razie tylko informacja na karcie (bez 
 S55 vs reszta 36 mies. +8,2 [−8,4; +22,8] (połowy −13,5 / +17,0). B) portfel top 10: tylko Siła 13,1 %/rok, najpierw S 12,9 %, najpierw S55 13,2 % (SPY 14,7 %) — pula
 „wszystko spełnione” już w 60 % składa się ze spółek S. **Reguła niespełniona** (przedział obejmuje 0) — kierunek dodatni jak w etapie 58, ale bez pewności;
 na stronie tylko informacja na karcie (krok „Wzrost”: lata wzrostu przychodów i EPS z 5), bez wpływu na kolejność.
+
+## Etap 110 — przychody rosnące 5 lat z rzędu, horyzont 5–10 lat (protokół przed uruchomieniem, 2026-11-24)
+
+Użytkownik: „revenue ma rosnąć stabilnie 5 lat z rzędu — to najważniejsze, EPS pójdzie za nią … zwrot jest najlepszy po 5–10 latach, rok to spekulacja,
+wszystko poniżej 5 lat ma małe znaczenie”. Etap 109 mierzył 12 / 36 mies. i wymagał też EPS — tu sama sprzedaż i dłuższe horyzonty.
+- Cecha P5: przychody roczne rosły w każdym z 5 ostatnich lat (5/5; dane jak w etapie 109, styczeń każdego roku, top 500 PIT bez wykluczonych sektorów).
+  Porównania: P5 vs reszta z danymi; P5 vs ≤ 3/5 lat wzrostu.
+- Miary: nadwyżka nad medianą zbioru (różnica median, bootstrap po latach startu) po 36, 60 i 120 mies.; odsetek spółek ze stratą; „EPS idzie za
+  sprzedażą”: odsetek spółek, których zysk netto za 5 lat jest wyższy niż dziś (P5 vs reszta).
+- Starty: 60 mies. — 2012–2021 (połowy 2012–16 / 2017–21); 120 mies. — 2012–2016 (tylko 5 startów: opisowo, bez reguły).
+- Reguła: jeśli P5 vs reszta po 60 mies. ma przedział bez 0 i obie połowy dodatnie → znacznik „📈 5/5” na liście + filtr „Przychody rosną 5 lat”
+  i pierwszeństwo w rankingu top 10 (najpierw P5, potem Siła). W przeciwnym razie zostaje tylko informacja na karcie (etap 109).
+
+**Wynik etapu 110** (`r135_etap110.py`, `wyniki/r135_etap110.md`): P5 vs reszta po 5 latach +11,0 pp [−6,5; +26,8] (połowy +14,8 / +8,8; mediana zwrotu
++74 % vs +65 %, ze stratą 17 vs 18 %), po 3 latach +3,5 [−5,3; +9,0]; P5 vs ≤ 3/5 po 5 latach +13,5 [−5,6; +26,5]. 10 lat: tylko 75 spółek P5 (dane SEC od ~2009),
+wynik nieczytelny (−22 pp [−68; +88]). Zysk idzie za sprzedażą: zysk netto za 5 lat wyższy niż dziś u 79 % spółek P5 vs 69 % reszty. Kierunek dodatni i rośnie
+z horyzontem (3 l. +3,5 → 5 l. +11), ale przedział obejmuje 0 → **reguła niespełniona**: bez znacznika i pierwszeństwa; ramka na karcie liczy „stabilny” jako
+przychody 5/5 (EPS pokazany obok).
