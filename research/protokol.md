@@ -1542,3 +1542,20 @@ CAGR mediana 8,1 % / średnia 8,9 %, SPY 14,8 %, pobiło SPY 29 %; faza 4 tanio 
 7,7 / 9,7 %, 28 %; faza 2 lub 3 dowolna cena — 6,5 / 7,2 %, 25 %. Wniosek: metoda poprawna; przeciętna duża spółka przegrywała z SPY (indeks ważony kapitalizacją
 ciągnęło kilka gigantów technologicznych), a faza rozwoju nie wyróżnia zwycięzców — spółki w fazie 3–4 zarabiały stabilnie (~8–10 %/rok, mniej strat), ale nie więcej
 niż przeciętna duża spółka.
+
+## Etap 106: top 10 / 25 / 50 największych spółek USA (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „to co, kupowanie top 25 po market cap jest lepsze?”. Co roku w styczniu (2012–2026) N największych spółek USA wg kapitalizacji z poprzedniego
+miesiąca (dane PIT, ze spółkami później zdjętymi z giełdy; wszystkie sektory oraz wariant bez sektorów wykluczonych na stronie), trzymanie 12 mies., ceny
+z dywidendami, koszt 0,1 % na stronę przy zmianie składu. Wagi: równe albo wg kapitalizacji. N = 10, 25, 50. Porównanie: SPY (S&P 500) i RSP (równoważony S&P 500).
+Miary: roczna stopa zwrotu, największe obsunięcie (miesięcznie), lata lepsze od SPY, połowy 2012–18 / 2019–26. Hipoteza: top 25 ważone kapitalizacją ≈ SPY
+plus trochę (kilka gigantów ciągnęło indeks); równe wagi — wynik zależy od okresu. Bez reguły dla strony — odpowiedź na pytanie.
+Dodatek (zapisany przed uruchomieniem): sprawdzenie dłuższego okresu — kapitalizacje w bazie są dopiero od 2009-04, więc najdłużej od 2010 r. (połowy 2010–2017 / 2018–2026); lat 2000–2009 tymi danymi nie da się sprawdzić.
+
+**Wynik etapu 106** (`r131_etap106.py`, `wyniki/r131_etap106.md`; dodatek od 2010: `r131b_etap106_od2010.py`): 2012–2026 — SPY 15,0 %/rok (obsunięcie −24 %), RSP 12,6 %;
+top 10 wg kapitalizacji 19,3 % (−38 %), top 25 wg kapitalizacji 18,0 % (−32 %, lepsze od SPY 12 z 15 lat), top 25 równe wagi 16,3 % (−28 %), top 50 wg kap. 17,0 %.
+Połowy: 2012–18 top 25 13,3 % vs SPY 12,6 % (prawie równo), 2019–26 22,4 % vs 17,2 % — przewaga z ery gigantów technologicznych. Od 2010: top 25 wg kap. 16,6 % vs SPY
+14,2 %; 2010–17 13,5 % vs 13,8 % (bez przewagi), 2018–26 19,6 % vs 14,5 %. Kapitalizacje w bazie od 2009-04 — lat wcześniejszych nie da się sprawdzić; literatura
+(Arnott i in., Research Affiliates 2010–2018) na dłuższej historii: największe spółki zwykle przegrywały z rynkiem w kolejnej dekadzie — prognoza z 2018 r. dla gigantów
+technologicznych się nie sprawdziła. Wariant bez sektorów wykluczonych nie policzony (brak mapy sektorów w danych badawczych). Wniosek: top 25 biło SPY tylko
+w jednym okresie i z większymi obsunięciami; nie jest to trwała przewaga.
