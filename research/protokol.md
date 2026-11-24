@@ -1534,3 +1534,11 @@ Reguła: kombinację uznajemy za działającą, gdy mediana nadwyżki > 0, przed
 +4,3 [−0,7; +8,5], zwrot kapitału +0,2 [−2,0; +2,0]. T2 (PEG 0–2 / DCF ≥ +15 %): dźwignia −4,1 [−9,0; −1,3] (obie połowy ujemne, strata 44 %), zwrot kapitału
 −0,7 [−2,5; +0,8]. Start i Hiperwzrost: 1–4 przypadki (prawie nigdy nie są tanie wg PEG / DCF). **Reguła niespełniona.** Ograniczenia: PEG historyczny z przeszłego
 wzrostu zysku (strona używa prognoz analityków), dostępny tylko u 19 % ocen; DCF historyczny bez korekty o SBC i odsetki.
+
+**Sprawdzenie metody etapów 104–105** (po fakcie, NIE przed-rejestrowane; użytkownik: „coś robisz źle … KO oddaje kapitał przez dekady”): ceny w `cache.npz` zawierają
+dywidendy (KO ×4,0 vs ×3,9 z adjusted_close). Lata 2012-01–2026-09 (z dywidendami): KO 9,6 %/rok, PEP 7,7 %, PG 8,5 %, MCD 8,8 %, JNJ 13,0 %, COST 20,1 %, MSFT 24,3 %,
+AAPL 25,1 %, NVDA 56,1 %; S&P 500 (SPY) 14,9 %, równoważone S&P 500 (RSP) 12,5 %. Pozycje z etapu 105 względem SPY w tym samym okresie: wszystkie spółki zbioru —
+CAGR mediana 8,1 % / średnia 8,9 %, SPY 14,8 %, pobiło SPY 29 %; faza 4 tanio (T1) — 7,9 / 9,4 %, 28 % pobiło; faza 3 tanio — 6,0 / 12,7 %, 32 %; faza 3 lub 4 tanio —
+7,7 / 9,7 %, 28 %; faza 2 lub 3 dowolna cena — 6,5 / 7,2 %, 25 %. Wniosek: metoda poprawna; przeciętna duża spółka przegrywała z SPY (indeks ważony kapitalizacją
+ciągnęło kilka gigantów technologicznych), a faza rozwoju nie wyróżnia zwycięzców — spółki w fazie 3–4 zarabiały stabilnie (~8–10 %/rok, mniej strat), ale nie więcej
+niż przeciętna duża spółka.
