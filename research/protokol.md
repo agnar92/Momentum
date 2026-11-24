@@ -1559,3 +1559,20 @@ Połowy: 2012–18 top 25 13,3 % vs SPY 12,6 % (prawie równo), 2019–26 22,4 %
 (Arnott i in., Research Affiliates 2010–2018) na dłuższej historii: największe spółki zwykle przegrywały z rynkiem w kolejnej dekadzie — prognoza z 2018 r. dla gigantów
 technologicznych się nie sprawdziła. Wariant bez sektorów wykluczonych nie policzony (brak mapy sektorów w danych badawczych). Wniosek: top 25 biło SPY tylko
 w jednym okresie i z większymi obsunięciami; nie jest to trwała przewaga.
+
+## Etap 107: „top po fundamentach” — wszystkie kryteria spełnione, najwyżej 10 spółek, przegląd raz w roku (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „to kupuj top po fundamentach. Wszystko spełnione, max 10 spółek, rewizja raz do roku”. Co roku w styczniu 2012–2026 (zbiór: top 500 USA PIT bez
+wykluczonych sektorów), wybór spółek spełniających kryteria, kolejność wg oceny Siła finansowa (jedyny czynnik z potwierdzoną przewagą, etap 95), najwyżej 10, równe wagi,
+trzymanie 12 mies. (ceny z dywidendami, koszt 0,1 % na stronę dla zmienionej części); gdy żadna spółka nie spełnia — SPY na ten rok. Warianty kryteriów:
+A — „wszystko”: Jakość 7/7 (przychody 5 lat > 8 %/rok, D/E 0–1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE wyżej niż 3 lata temu, ROCE > 15 %) + 7/7 bez PEG
+(przychody 5 lat > +50 %, przychody i zysk 1 rok > 5 %, ROE > 15 %, D/E 0–1, FCF > 0) + PEG historyczny 0–2 + brak ⬇;
+B — jak A bez PEG (PEG historyczny dostępny rzadko: przeszły wzrost zysku 5 lat zamiast prognoz); C — B + Siła ≥ 7.
+Porównanie: SPY, top 25 wg kapitalizacji (etap 106). Miary: stopa roczna, największe obsunięcie, lata lepsze od SPY, połowy 2012–18 / 2019–26, średnia liczba spółek.
+Hipoteza: wariant B / C ≥ SPY (etapy 67–68: 7/7 18–21 %/rok przy 15–30 spółkach). Reguła: strategia „działa”, gdy biła SPY w obu połowach.
+
+**Wynik etapu 107** (`r132_etap107.py`, `wyniki/r132_etap107.md`): 2012-01–2026-09 — SPY 14,7 %/rok (obsunięcie −24 %); A (wszystko z PEG) 9,9 % (−52 %), B (bez PEG)
+13,1 % (−38 %), C (B + Siła ≥ 7) 14,9 % (−52 %). Połowy: 2012–18 A −1,1 %, B 5,0 %, C 4,0 % vs SPY 12,0 %; 2019–26 A 20,8 %, B 20,9 %, C 25,5 % vs SPY 17,2 %.
+**Reguła niespełniona** (pierwsza połowa przegrana). Ważne ograniczenie: w 2012–2014 żadna spółka nie spełniała wszystkich kryteriów (w danych badawczych 5-letni
+wzrost dostępny dopiero od ~2015 — SEC XBRL od 2009), a w 2015–2018 portfel miał 1–4 spółki (QCOM, GILD, BIIB, NVDA 2018 −50 %) — wynik pierwszej połowy to głównie
+brak danych i koncentracja. Od 2019 (7–10 spółek): B 20,9 % vs SPY 17,2 % (6/8 lat lepiej). GOOGL i GOOG liczone osobno (dwie klasy akcji) — do poprawy przy wdrożeniu.
