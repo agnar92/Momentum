@@ -1499,3 +1499,21 @@ o fazie oznaczamy jako potwierdzone, gdy różnica 36 mies. ma przedział bez ze
 → potwierdzone** (12 mies. −2,8 [−10,6; +1,3]). 2 Szybka ekspansja wbrew Lynchowi nie lepsza: −2,7 pp [−14,5; +4,1] (2012–17 −20, 2018–23 +2). 1 Start −22,8 [−45,5; +15,5],
 strata 43 vs 23 %. 4 Dojrzałość +2,8 (szum), 5 Schyłek +2,3 (szum). 3 vs 2: −7,8 [−17,2; +8,0]. Na karcie: faza wg Lyncha jako opis, ⚠ dla Dojrzewania (potwierdzone);
 faza kursu Weinsteina (etap 102) zdjęta z karty na prośbę użytkownika.
+
+## Etap 104: strategia „kup przy wejściu w fazę, sprzedaj przy schyłku” (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „sprawdzasz, w której fazie zacząłeś kupować spółkę, i wychodzisz, kiedy jest schyłek”. Fazy dokładnie jak na stronie (`W.fazyLat`, wersja długoterminowa:
+okno 3 lat, fazy 1 → 4 tylko do przodu, schyłek przy trwałym spadku 2 lata z rzędu, wyjście ze schyłku po przebiciu szczytu przychodów i typowego zysku, zmiana
+struktury −30 % przy marży ≥ 80 % = nowa historia), liczone co roku w styczniu z danych znanych w tym dniu: lata obrotowe do 10 wstecz (przychody i zysk operacyjny
+z sum 4 kwartałów na koniec roku obrotowego, zapas: zysk netto; dywidendy + skup akcji z rocznych przepływów). Wejście: styczeń, w którym faza bieżąca = X, a
+poprzedni punkt serii ≠ X (wejście w fazę); wariant B: każdy styczeń w fazie X (bez warunku wejścia). Wyjście: pierwszy styczeń z fazą 5 albo koniec danych
+(2026-09) albo koniec notowań. Zbiór: top 500 USA PIT bez wykluczonych sektorów; wejścia 2012–2023. Miary: roczna stopa zwrotu (CAGR) pozycji, nadwyżka nad
+medianą CAGR wszystkich spółek zbioru w tym samym okresie (od wejścia do wyjścia), odsetek pozycji ze stratą, średni czas trzymania; połowy wg roku wejścia
+(2012–17 / 2018–23); bootstrap po latach wejścia. Hipoteza (z logiki cyklu): wejście w 2 Hiperwzrost lub 3 Dźwignię operacyjną daje najwyższą nadwyżkę.
+Reguła: fazę uznajemy za „najlepszy moment wejścia”, gdy mediana nadwyżki > 0, przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 104** (`r129_etap104.py`, `wyniki/r129_etap104.md`): żadna faza wejścia nie daje nadwyżki. A (wejście w fazę; mało przejść w danych od 2012):
+2 Hiperwzrost +1,9 pp/rok [−6,8; +9,4] (n = 24, połowy +4,3 / −2,4), 3 Dźwignia −1,1 [−13,7; +14,8] (n = 22), 4 Zwrot kapitału −0,9 [−3,5; +0,7] (n = 100).
+B (każdy styczeń w fazie): 3 Dźwignia operacyjna **−3,2 pp/rok [−4,3; −1,4], obie połowy ujemne** (n = 289), 4 Zwrot kapitału −0,8 [−1,5; −0,1] (obie połowy
+ujemne, ale ~1 pp), 1 i 2 — szum. Wyjście przez schyłek rzadkie (4–23 % pozycji; zwykle trzymanie do 2026). **Reguła niespełniona dla każdej fazy** — brak
+„najlepszego momentu wejścia” według fazy; trzymanie spółek w fazie dźwigni operacyjnej wypadało gorzej od mediany. Strona bez zmian (faza tylko jako opis).
