@@ -1650,3 +1650,14 @@ Tylko sprawdzenie, nic na stronę. Zbiór jak w etapie 111 (top 500 USA PIT bez 
 3. BCG („po 10 latach 60 % wzrostu kursu ze sprzedaży”): rozkład log-zwrotu 5 lat na przychody na akcję, zmianę marży netto, zmianę P/E i resztę
    (dywidendy, różnice dat); dla górnych 25 % spółek i dla wszystkich (zysk dodatni na obu końcach). 10 lat — za mało danych, tylko starty 2012–2016 opisowo.
 Teza potwierdzona, gdy kierunek jak w filmie, przedział bez 0 i obie połowy w tę samą stronę (1, 2); dla 3 — udział przychodów ≥ 50 % w górnym kwartylu.
+
+**Wynik etapu 111** (`r136_etap111.py`, `wyniki/r136_etap111.md`; dane `r136a_sec_buffett.py`): potwierdzone 9 z 12 porównań (5 lat, przedział bez 0, obie
+połowy dodatnie): marża brutto > 40 % +27 pp, EPS 4 z 5 lat +18, marża netto > 20 % +29, skorygowany D/E < 0,8 +9, dług ≤ 4 × zysk +17, capex < 25 % zysku vs > 50 %
++32, SG&A < 30 % zysku brutto +59 (mediana zwrotu 5 lat +124 % vs +61 %), łącznie 3 + 6 + 8 +66 (+122 % vs +40 %). Niepotwierdzone: odsetki < 15 % (pierwsza połowa
+ujemna), EPS 9 z 10 lat (tylko 13 spółek — dane za krótkie). Kierunek wszystkich reguł jak w filmie; u nas różnice większe. Tylko sprawdzenie — nic na stronę.
+
+**Wynik etapu 112** (`r137_etap112.py`, `wyniki/r137_etap112.md`): 1) kwintyle długu: średnio 15,0 / 16,3 / 12,5 / 13,8 / 12,5 %/rok (ujemny kapitał 17,1 %) —
+różnica Q1 vs Q5 po 5 latach −1,3 pp [−8,7; +9,4] → teza Jag Capital (17,1 vs 7,5 %) **niepotwierdzona** w top 500; 2) P/E < 50 i PEG < 3 vs drożsi −1,0 pp / 5 lat
+[−20,9; +18,8] → **niepotwierdzona** (PEG z przeszłego wzrostu); vs spółki ze stratą +15,4 [−36,5; +35,2] — kierunek zgodny, bez pewności; 3) rozkład zwrotu: 5 lat —
+przychody 53 % (górne 25 %: 39 %), skup akcji 14 % (6 %), marża 12 % (28 %), P/E i dywidendy 22 % (26 %); 10 lat (starty 2012–16) przychody 44 %; 1 rok górne 25 %:
+P/E 52 %. Kierunek BCG potwierdzony (rok = wycena, dłużej = sprzedaż), ale 60 % nie — u nas 40–53 %, dla najlepszych spółek ważna też marża.
