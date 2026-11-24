@@ -1517,3 +1517,20 @@ Reguła: fazę uznajemy za „najlepszy moment wejścia”, gdy mediana nadwyżk
 B (każdy styczeń w fazie): 3 Dźwignia operacyjna **−3,2 pp/rok [−4,3; −1,4], obie połowy ujemne** (n = 289), 4 Zwrot kapitału −0,8 [−1,5; −0,1] (obie połowy
 ujemne, ale ~1 pp), 1 i 2 — szum. Wyjście przez schyłek rzadkie (4–23 % pozycji; zwykle trzymanie do 2026). **Reguła niespełniona dla każdej fazy** — brak
 „najlepszego momentu wejścia” według fazy; trzymanie spółek w fazie dźwigni operacyjnej wypadało gorzej od mediany. Strona bez zmian (faza tylko jako opis).
+
+## Etap 105: faza rozwoju + korzystna cena (PEG / DCF) — kup, trzymaj do schyłku (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „nie mówiłem, żebyś wchodził w każdym momencie, ale w momencie, kiedy PEG lub DCF mówi, że to dobry moment … faza to jedno, a cena spółki to drugie”.
+Jak etap 104 (fazy ze strony, styczeń, wyjście przy pierwszym schyłku albo 2026-09, ta sama miara: CAGR pozycji − CAGR mediany zbioru w tym samym okresie), ale
+wejście tylko w styczniu, gdy spółka jest w fazie X I cena jest korzystna. PEG historyczny = P/E ÷ (100 × wzrost zysku 5 lat rocznie) (prognoz z przeszłości nie ma);
+DCF historyczny jak na stronie (wzrost przychodów 3 lata w [0; 25 %], 5 lat + 5 lat wygaszania do 3 %, stopa 10 %, marża FCF z 12 mies. w [0; 60 %], gotówka netto),
+liczony względem kapitalizacji (przychody = kapitalizacja ÷ P/S): potencjał = wartość ÷ kapitalizacja − 1. Dwa progi „dobrego momentu”:
+T1 (etykieta strony „Niedowartościowana / Bardzo tania”): PEG 0–1, a gdy PEG nie ma — DCF ≥ +15 %; T2 (reguła dokupu użytkownika): PEG 0–2 lub DCF ≥ +15 %.
+Porównania w każdej fazie: tanio vs ta sama faza bez korzystnej ceny; oraz nadwyżka nad medianą zbioru. Hipoteza użytkownika: faza + korzystna cena > rynek.
+Reguła: kombinację uznajemy za działającą, gdy mediana nadwyżki > 0, przedział bez zera i ten sam znak w obu połowach (2012–17 / 2018–23).
+
+**Wynik etapu 105** (`r130_etap105.py`, `wyniki/r130_etap105.md`): żadna kombinacja faza + korzystna cena nie bije rynku. T1 (PEG 0–1 / DCF ≥ +15 %):
+3 Dźwignia +0,8 pp/rok [−4,4; +4,4] (n = 38; połowy −6,5 / +3,2), 4 Zwrot kapitału −0,6 [−2,7; +0,9] (n = 358); tanio vs drożej w tej samej fazie: dźwignia
++4,3 [−0,7; +8,5], zwrot kapitału +0,2 [−2,0; +2,0]. T2 (PEG 0–2 / DCF ≥ +15 %): dźwignia −4,1 [−9,0; −1,3] (obie połowy ujemne, strata 44 %), zwrot kapitału
+−0,7 [−2,5; +0,8]. Start i Hiperwzrost: 1–4 przypadki (prawie nigdy nie są tanie wg PEG / DCF). **Reguła niespełniona.** Ograniczenia: PEG historyczny z przeszłego
+wzrostu zysku (strona używa prognoz analityków), dostępny tylko u 19 % ocen; DCF historyczny bez korekty o SBC i odsetki.
