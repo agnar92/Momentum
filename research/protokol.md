@@ -1639,3 +1639,14 @@ długu = 0); 6. dług długoterminowy ≤ 4 × zysk netto (brak długu = spełni
 8. SG&A ÷ zysk brutto: < 30 / 30–80 / > 80 %. Łącznie: reguły 3 + 6 + 8 wszystkie vs żadna.
 Miary: mediana zwrotu 5 lat spełnia / nie (jak w filmie) i różnica median nadwyżki nad medianą zbioru z bootstrapem po latach startu, połowy 2012–16 / 2017–21; 3 lata.
 Teza z filmu potwierdzona, gdy różnica 5 lat > 0, przedział bez 0 i obie połowy dodatnie.
+
+## Etap 112 — trzy tezy z filmu „simple choices” (protokół przed uruchomieniem, 2026-11-24)
+
+Tylko sprawdzenie, nic na stronę. Zbiór jak w etapie 111 (top 500 USA PIT bez wykluczonych sektorów), starty w styczniu.
+1. Dług (Jag Capital: najniższy kwintyl 17,1 %/rok, najwyższy 7,5 %): kwintyle D/E w każdym starcie (ujemny kapitał osobno); średni zwrot 12 mies. równych
+   wag, uśredniony po startach 2012–2025 (jak „roczny zwrot” w badaniu) + różnica nadwyżki Q1 vs Q5 po 5 latach (bootstrap, połowy).
+2. „Ignoruj skrajne wyceny”: P/E 0–50 i PEG 0–3 (PEG z przeszłego wzrostu zysku 5 lat — prognoz historycznych nie mamy) vs P/E ≥ 50 lub PEG ≥ 3; straty osobno.
+   Różnica nadwyżki po 3 i 5 latach.
+3. BCG („po 10 latach 60 % wzrostu kursu ze sprzedaży”): rozkład log-zwrotu 5 lat na przychody na akcję, zmianę marży netto, zmianę P/E i resztę
+   (dywidendy, różnice dat); dla górnych 25 % spółek i dla wszystkich (zysk dodatni na obu końcach). 10 lat — za mało danych, tylko starty 2012–2016 opisowo.
+Teza potwierdzona, gdy kierunek jak w filmie, przedział bez 0 i obie połowy w tę samą stronę (1, 2); dla 3 — udział przychodów ≥ 50 % w górnym kwartylu.
