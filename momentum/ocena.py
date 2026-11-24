@@ -760,20 +760,35 @@ def dcf(przychody, marza, g, akcje, gotowka=0.0, dlug=0.0, r=DCF["r"], tg=DCF["t
     return (pv + (gotowka or 0) - (dlug or 0)) / akcje
 
 
+def odsetki_przych(m):
+    """Odsetki po podatku jako udział w przychodach (12 mies.): odsetki × (1 − stopa podatku 10–30 %, brak → 21 %) ÷ przychody; zapisuje m["odsetki_przych"]."""
+    o, rv = m.get("odsetki_ttm"), m.get("rev_ttm")
+    if not o or not rv or rv <= 0:
+        m["odsetki_przych"] = 0.0
+        return 0.0
+    t = m.get("stopa_pod")
+    t = 0.21 if t is None else max(0.10, min(0.30, t))
+    m["odsetki_przych"] = abs(o) * (1 - t) / rv
+    return m["odsetki_przych"]
+
+
 def dcf_domyslne(m, hist=None):
     """Założenia domyślne (ostrożne): wzrost przychodów = mniejszy z (CAGR przychodów 3 lat, prognoza EPS 5 lat), w [0, 25 %];
-    marża FCF = mediana z marży (FCF − SBC) z ostatnich 12 mies. i rocznych z ostatnich 5 lat, w [0, 60 %]."""
+    marża FCFF = mediana z marży (FCF − SBC + odsetki po podatku) z ostatnich 12 mies. i rocznych z ostatnich 5 lat, w [0, 60 %]."""
     gs = [x for x in (m.get("rev_cagr3") if m.get("rev_cagr3") is not None else m.get("rev_cagr5"), m.get("eps_next5")) if x is not None]
     g = max(0.0, min(0.25, min(gs))) if gs else None
     # marże FCF po odjęciu wynagrodzeń w akcjach (SBC): FCF − SBC (ostrożniej; SBC to realny koszt dla akcjonariuszy)
     sbc_m = m.get("sbc_przych") or 0.0
-    mz = [m["fcf_margin"] - sbc_m] if m.get("fcf_margin") is not None else []
+    # FCFF (przepływy dla wszystkich finansujących, jak w podręczniku): przepływy operacyjne są już po zapłaconych odsetkach, a dług odejmujemy
+    # od wartości — więc dodajemy odsetki po podatku (inaczej koszt długu liczony dwa razy); udział w przychodach z ostatnich 12 mies.
+    ods_m = odsetki_przych(m)
+    mz = [m["fcf_margin"] - sbc_m + ods_m] if m.get("fcf_margin") is not None else []
     rt = m.get("rev_ttm")
     for row in (hist or {}).get("y", [])[-5:]:
         rev, fcf = row[1], row[3]
         sbc = row[4] if len(row) > 4 and row[4] is not None else (sbc_m * rev if rev else 0)
         if rev and fcf is not None and rev > 0 and (not rt or 0.3 < rev / rt < 2):   # pomijamy lata z nieporównywalnymi przychodami
-            mz.append((fcf - sbc) / rev)
+            mz.append((fcf - sbc) / rev + ods_m)
     mz = sorted(mz)
     mz = max(0.0, min(0.60, mz[len(mz) // 2])) if mz else None
     return g, mz
@@ -793,7 +808,7 @@ def dcf_wejscie(m, hist=None):
     fcf_fv = m["mcap"] / m["pfcf"] if m.get("mcap") and m.get("pfcf") and m["pfcf"] > 0 else None
     f_sec = m.get("fcf_ttm")
     if fcf_fv and rev and (f_sec is None or f_sec <= 0 or not 0.5 <= f_sec / fcf_fv <= 2):
-        nowa = max(0.0, min(0.60, fcf_fv / rev - (m.get("sbc_przych") or 0.0)))
+        nowa = max(0.0, min(0.60, fcf_fv / rev - (m.get("sbc_przych") or 0.0) + (m.get("odsetki_przych") or 0.0)))
         if f_sec is not None and f_sec > 0:
             uw.append(f"marża FCF z Finviz {100 * nowa:.1f} % (SEC: FCF {f_sec / 1e9:.1f} mld vs Finviz {fcf_fv / 1e9:.1f} mld)")
             mz = nowa

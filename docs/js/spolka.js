@@ -216,8 +216,9 @@
     }
     const parDcf = () => ({ rev: W.ok(M.dcf_rev) ? M.dcf_rev : M.rev_ttm, marza: S.marza, g: S.g, akcje: M.shares, gotowka: M.cash || 0, dlug: W.ok(M.dcf_dlug) ? M.dcf_dlug : (M.debt || 0), r: S.r, tg: S.tg, lata: S.lata, wyg: S.wyg });
     function margines5() {
-        const sm = W.ok(M.sbc_przych) ? M.sbc_przych : 0;      // marża FCF po odjęciu wynagrodzeń w akcjach (SBC)
-        const y = (K.hist.y || []).slice(-5).filter((x) => x[1] > 0 && W.ok(x[3])).map((x) => (x[3] - (W.ok(x[4]) ? x[4] : sm * x[1])) / x[1]).sort((a, b) => a - b);
+        // marża FCFF: FCF po odjęciu wynagrodzeń w akcjach (SBC) + odsetki po podatku (dług odejmujemy od wartości, więc odsetek nie liczymy dwa razy)
+        const sm = W.ok(M.sbc_przych) ? M.sbc_przych : 0, om_ = W.ok(M.odsetki_przych) ? M.odsetki_przych : 0;
+        const y = (K.hist.y || []).slice(-5).filter((x) => x[1] > 0 && W.ok(x[3])).map((x) => (x[3] - (W.ok(x[4]) ? x[4] : sm * x[1])) / x[1] + om_).sort((a, b) => a - b);
         return y.length ? y[Math.floor(y.length / 2)] : null;
     }
     function wycena() {
@@ -285,8 +286,8 @@
               <div class="chipy">${chip("g", K.dcf && K.dcf.base ? K.dcf.base.g : null, "domyślnie")}${chip("g", M.rev_1y, "1 rok")}${chip("g", M.rev_cagr3, "3 lata")}${chip("g", M.rev_cagr5, "5 lat")}${chip("g", M.eps_next5, "prognoza EPS")}</div></label>
             <label>Lata takiego wzrostu<div class="chipy">${[5, 7, 10].map((n) => `<button data-lata="${n}" class="${S.lata === n ? "akt" : ""}">${n} lat</button>`).join("")}</div></label>
             <label>Marża FCF (% przychodów)<input id="d-m" type="number" step="0.5" value="${(100 * S.marza).toFixed(1)}">
-              <div class="chipy">${chip("m", W.ok(M.fcf_margin) ? M.fcf_margin - (W.ok(M.sbc_przych) ? M.sbc_przych : 0) : null, "12 mies.")}${chip("m", m5, "mediana 5 lat")}</div>
-                <span class="mut male">FCF po odjęciu wynagrodzeń w akcjach (SBC${W.ok(M.sbc_przych) ? " " + W.fmtPct(M.sbc_przych, 1) + " przychodów" : ""}); dług z leasingiem${W.ok(M.leasing) ? " (" + W.fmtUsd(M.leasing) + " USD)" : ""}.</span></label>
+              <div class="chipy">${chip("m", W.ok(M.fcf_margin) ? M.fcf_margin - (W.ok(M.sbc_przych) ? M.sbc_przych : 0) + (W.ok(M.odsetki_przych) ? M.odsetki_przych : 0) : null, "12 mies.")}${chip("m", m5, "mediana 5 lat")}</div>
+                <span class="mut male">Wolne przepływy dla firmy (FCFF): FCF po odjęciu wynagrodzeń w akcjach (SBC${W.ok(M.sbc_przych) ? " " + W.fmtPct(M.sbc_przych, 1) + " przychodów" : ""}) plus odsetki po podatku${W.ok(M.odsetki_przych) && M.odsetki_przych > 0 ? " (" + W.fmtPct(M.odsetki_przych, 1) + " przychodów)" : ""}, bo dług odejmujemy od wartości; dług z leasingiem${W.ok(M.leasing) ? " (" + W.fmtUsd(M.leasing) + " USD)" : ""}.</span></label>
             <label>Stopa dyskonta (%)<input id="d-r" type="number" step="0.25" value="${(100 * S.r).toFixed(2)}"></label>
             <label>Wzrost po okresie prognozy (%)<input id="d-tg" type="number" step="0.25" value="${(100 * S.tg).toFixed(2)}"></label>
             <button id="d-reset">Przywróć domyślne</button>
