@@ -102,7 +102,13 @@ CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „S
   spółki, a nie sentyment w rok” — MU jumped 4/1/4/3): each FY + „12 m” judged on a 3-year window (sum of operating profit, sum of dividends + buybacks),
   computed over the WHOLE history (up to 12 FY) and only then sliced for display; phases 1 → 2 → 3 → 4 only move forward (running max): 3-year profit ≤ 0 → 1 Start
   (2 if loss shrinking), payouts ≥ 20 % of 3-year profit → 4, revenue ≥ 25 %/yr (3 y) at margin < 10 % → 2, else 3; 5 Schyłek only for a PERSISTENT decline (two
-  years in a row: revenue below 5 years earlier AND 3-year average below the previous 3 years), afterwards back to the reached phase; current phase = last point. Charts are DATA ONLY
+  years in a row: revenue below 5 years earlier AND 3-year average below the previous 3 years). Leaving Schyłek (user: „przychody i profit powinny przebijać
+  szczyt”; literature: Dickinson 2011 — stage follows current cash-flow pattern, firms can move non-sequentially after restructuring; Damodaran 2024 — a revived
+  firm behaves like a younger one) only when revenue AND the typical 3-year profit (median of the window; peaks only from full 3-year windows, so a one-off gain
+  like MDLZ 2015 does not inflate the peak) beat their pre-decline peaks; the phase is then re-derived from current data and moves forward again. Structural
+  break (revenue −30 % in one year with margin ≥ 80 % of the prior one — spin-off or accounting change, e.g. PM 2023, GE 2024) is not decline: history restarts
+  there. `seriaFazy` drops duplicate fiscal years (< 300 days apart, keeps the later) and uses operating profit only if present in ≥ 80 % of years and in the last
+  point, else net income for the whole series (ETN). Current phase = last point. Charts are DATA ONLY
   (user: „bazuj na danych, nie rysujesz sobie linie … każda linia coś znaczy”, „czemu słupkowy?”; no schematic curves, no test texts — „nie interesują mnie twoje
   testy”): 3 questions with revenue / operating profit (fallback net income) lines, buybacks / share count (min–max scale) / dividends paid, then ONE lifecycle chart
   (`wykresFaz`): revenue, profit, dividends + buybacks per year with background bands = phase of that year (`KOL_FAZ`), 5-step stepper; drawn full width (`SZER`, CSS width 100 %, taller on phones;

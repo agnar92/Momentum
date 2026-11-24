@@ -390,7 +390,7 @@
         2: "Hiperwzrost: sprzedaż szybko rośnie, strata maleje albo spółka dopiero przekroczyła próg rentowności.",
         3: "Dźwignia operacyjna: spółka zarabia, zyski rosną szybciej niż sprzedaż, a gotówka zostaje w firmie na dalszy rozwój.",
         4: "Zwrot kapitału: spółka zarabia więcej, niż potrzebuje na rozwój, i oddaje gotówkę akcjonariuszom — dywidendy i skup akcji.",
-        5: "Schyłek: sprzedaż jest niższa niż 3 lata wcześniej — trzeba sprawdzić, czy to przejściowe (cykl, restrukturyzacja), czy trwałe." };
+        5: "Schyłek: sprzedaż od dwóch lat niższa niż 5 lat wcześniej. Spółka wychodzi ze schyłku dopiero, gdy przychody i zysk przebiją poprzedni szczyt — wtedy faza liczona jest od nowa z bieżących danych." };
     const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
     const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
     const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
@@ -407,11 +407,13 @@
     // --- wykresy fazy: tylko dane z raportów (lata obrotowe + ostatnie 12 mies.), każdy punkt to liczba z raportu ---
     function seriaFazy() {
         // fazę liczymy z całej historii (do 12 lat), na wykresie pokazujemy ostatnie lata (telefon 5, komputer 8)
-        const y = (K.hist && K.hist.y) || [], l = K.hist && K.hist.ltm;
+        // zdublowane lata obrotowe (okres przejściowy, korekta) — zostaje późniejszy wpis
+        const y = ((K.hist && K.hist.y) || []).filter((r, i, a) => i === a.length - 1 || Date.parse(a[i + 1][0]) - Date.parse(r[0]) > 300 * 864e5), l = K.hist && K.hist.ltm;
         const zLtm = !!(l && l[0] && (!y.length || l[0] > y[y.length - 1][0]));
         const et = y.map((r) => "FY" + r[0].slice(2, 4)).concat(zLtm ? ["12 m"] : []);
         const kol = (iy, il) => y.map((r) => (r.length > iy ? r[iy] : null)).concat(zLtm ? [il === null ? null : l[il]] : []);
-        const op = kol(5, 2), maOp = op.some(W.ok);
+        // zysk operacyjny tylko, gdy jest prawie w każdym roku i w ostatnim punkcie; inaczej cała seria z zysku netto (porównania szczytów muszą być spójne)
+        const op = kol(5, 2), maOp = op.filter(W.ok).length >= 0.8 * op.length && W.ok(op[op.length - 1]);
         const zysk = maOp ? op : kol(2, null);
         if (!maOp && zLtm && W.ok(M.ni_ttm)) zysk[zysk.length - 1] = M.ni_ttm;
         const rev = kol(1, 1);
