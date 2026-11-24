@@ -1591,3 +1591,17 @@ stronie dostaje limit 25 % (etykiety, 7/7, dokup); w przeciwnym razie PEG z limi
 −1,0 / +0,0 pp. **Reguła niespełniona** — limit 25 % nie poprawia wyboru (z przeszłym wzrostem; prognoz historycznych brak). Główny PEG bez zmian; „PEG Lyncha
 (wzrost max 25 %)” na karcie tylko jako informacja. Uboczne: PEG25 < 1 (z przeszłego wzrostu) vs reszta z PEG −6,4 pp / 12 m [−11,1; −0,8] — niski PEG z historii
 nie wskazuje zwycięzców (jak etap 96).
+
+## Etap 109: faworyzowanie stabilnego wzrostu przychodów i EPS z 5 lat (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „faworyzuj spółki rosnące stabilnie przeszłe 5 lat revenue i EPS”. Definicja (w styczniu, dane znane w tym dniu; przychody i zysk netto z sum 4 kwartałów
+w odstępach roku, EPS = zysk netto ÷ liczba akcji skorygowana o splity): S — przychody rosły w każdym z 5 lat (5/5) i EPS w ≥ 4 z 5; S55 — oba 5/5.
+A) cecha: S vs reszta i S55 vs reszta (top 500 USA PIT bez wykluczonych sektorów, starty 2012–2023, nadwyżka nad medianą 12 / 36 mies., bootstrap, połowy).
+B) portfel z etapu 107 (B: Jakość 7/7 + 7/7 bez PEG + bez ⬇, najwyżej 10, przegląd w styczniu): kolejność „najpierw S, potem Siła” vs „tylko Siła”; vs SPY.
+Reguła dla strony: znacznik / filtr „stabilny wzrost 5 lat” i pierwszeństwo w kolejności, jeśli A (S vs reszta) ma różnicę 36 mies. > 0 z przedziałem bez zera
+i dodatnią w obu połowach; w przeciwnym razie tylko informacja na karcie (bez wpływu na kolejność).
+
+**Wynik etapu 109** (`r134_etap109.py`, `wyniki/r134_etap109.md`): A) S vs reszta 36 mies. +3,9 pp [−4,4; +11,2] (połowy +7,5 / +1,2), 12 mies. +0,6 [−5,2; +6,2];
+S55 vs reszta 36 mies. +8,2 [−8,4; +22,8] (połowy −13,5 / +17,0). B) portfel top 10: tylko Siła 13,1 %/rok, najpierw S 12,9 %, najpierw S55 13,2 % (SPY 14,7 %) — pula
+„wszystko spełnione” już w 60 % składa się ze spółek S. **Reguła niespełniona** (przedział obejmuje 0) — kierunek dodatni jak w etapie 58, ale bez pewności;
+na stronie tylko informacja na karcie (krok „Wzrost”: lata wzrostu przychodów i EPS z 5), bez wpływu na kolejność.

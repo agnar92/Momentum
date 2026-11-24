@@ -600,6 +600,13 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         if (i === 1) {
             const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
             return `<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
+              ${(() => { const sw = W.stabilnyWzrost(K.hist && K.hist.y); if (!sw) return "";
+                const kl = (n) => (n === 5 ? "kr-tak" : n >= 4 ? "" : "kr-nie");
+                return `<div class="pole kr-stab"><b>Stabilność wzrostu (5 ostatnich lat obrotowych ${esc(sw.lata[1])}–${esc(sw.lata[5])})</b>
+                  <div class="kr-cagr"><div><small>przychody rosły</small><b class="${kl(sw.przychody)}">${sw.przychody} z 5 lat</b></div>
+                  <div><small>EPS rósł</small><b class="${sw.eps === null ? "" : kl(sw.eps)}">${sw.eps === null ? "–" : sw.eps + " z 5 lat"}</b></div>
+                  <div><small>stabilny wzrost</small><b class="${sw.stabilny ? "kr-tak" : ""}">${sw.stabilny ? "✓ tak" : "nie"}</b></div></div>
+                  <div class="mut male">Stabilny = przychody rosły co roku, a zysk na akcję w co najmniej 4 z 5 lat.</div></div>`; })()}
               <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div>
               <div class="mut male" style="margin-top:12px">Przychody i zysk netto rok po roku (z raportów)</div>
               ${(() => { const sf = seriaFazy(), y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), zL = sf.et[sf.et.length - 1] === "12 m";
