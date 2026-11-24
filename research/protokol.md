@@ -1499,3 +1499,130 @@ o fazie oznaczamy jako potwierdzone, gdy różnica 36 mies. ma przedział bez ze
 → potwierdzone** (12 mies. −2,8 [−10,6; +1,3]). 2 Szybka ekspansja wbrew Lynchowi nie lepsza: −2,7 pp [−14,5; +4,1] (2012–17 −20, 2018–23 +2). 1 Start −22,8 [−45,5; +15,5],
 strata 43 vs 23 %. 4 Dojrzałość +2,8 (szum), 5 Schyłek +2,3 (szum). 3 vs 2: −7,8 [−17,2; +8,0]. Na karcie: faza wg Lyncha jako opis, ⚠ dla Dojrzewania (potwierdzone);
 faza kursu Weinsteina (etap 102) zdjęta z karty na prośbę użytkownika.
+
+## Etap 104: strategia „kup przy wejściu w fazę, sprzedaj przy schyłku” (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „sprawdzasz, w której fazie zacząłeś kupować spółkę, i wychodzisz, kiedy jest schyłek”. Fazy dokładnie jak na stronie (`W.fazyLat`, wersja długoterminowa:
+okno 3 lat, fazy 1 → 4 tylko do przodu, schyłek przy trwałym spadku 2 lata z rzędu, wyjście ze schyłku po przebiciu szczytu przychodów i typowego zysku, zmiana
+struktury −30 % przy marży ≥ 80 % = nowa historia), liczone co roku w styczniu z danych znanych w tym dniu: lata obrotowe do 10 wstecz (przychody i zysk operacyjny
+z sum 4 kwartałów na koniec roku obrotowego, zapas: zysk netto; dywidendy + skup akcji z rocznych przepływów). Wejście: styczeń, w którym faza bieżąca = X, a
+poprzedni punkt serii ≠ X (wejście w fazę); wariant B: każdy styczeń w fazie X (bez warunku wejścia). Wyjście: pierwszy styczeń z fazą 5 albo koniec danych
+(2026-09) albo koniec notowań. Zbiór: top 500 USA PIT bez wykluczonych sektorów; wejścia 2012–2023. Miary: roczna stopa zwrotu (CAGR) pozycji, nadwyżka nad
+medianą CAGR wszystkich spółek zbioru w tym samym okresie (od wejścia do wyjścia), odsetek pozycji ze stratą, średni czas trzymania; połowy wg roku wejścia
+(2012–17 / 2018–23); bootstrap po latach wejścia. Hipoteza (z logiki cyklu): wejście w 2 Hiperwzrost lub 3 Dźwignię operacyjną daje najwyższą nadwyżkę.
+Reguła: fazę uznajemy za „najlepszy moment wejścia”, gdy mediana nadwyżki > 0, przedział bez zera i ten sam znak w obu połowach.
+
+**Wynik etapu 104** (`r129_etap104.py`, `wyniki/r129_etap104.md`): żadna faza wejścia nie daje nadwyżki. A (wejście w fazę; mało przejść w danych od 2012):
+2 Hiperwzrost +1,9 pp/rok [−6,8; +9,4] (n = 24, połowy +4,3 / −2,4), 3 Dźwignia −1,1 [−13,7; +14,8] (n = 22), 4 Zwrot kapitału −0,9 [−3,5; +0,7] (n = 100).
+B (każdy styczeń w fazie): 3 Dźwignia operacyjna **−3,2 pp/rok [−4,3; −1,4], obie połowy ujemne** (n = 289), 4 Zwrot kapitału −0,8 [−1,5; −0,1] (obie połowy
+ujemne, ale ~1 pp), 1 i 2 — szum. Wyjście przez schyłek rzadkie (4–23 % pozycji; zwykle trzymanie do 2026). **Reguła niespełniona dla każdej fazy** — brak
+„najlepszego momentu wejścia” według fazy; trzymanie spółek w fazie dźwigni operacyjnej wypadało gorzej od mediany. Strona bez zmian (faza tylko jako opis).
+
+## Etap 105: faza rozwoju + korzystna cena (PEG / DCF) — kup, trzymaj do schyłku (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „nie mówiłem, żebyś wchodził w każdym momencie, ale w momencie, kiedy PEG lub DCF mówi, że to dobry moment … faza to jedno, a cena spółki to drugie”.
+Jak etap 104 (fazy ze strony, styczeń, wyjście przy pierwszym schyłku albo 2026-09, ta sama miara: CAGR pozycji − CAGR mediany zbioru w tym samym okresie), ale
+wejście tylko w styczniu, gdy spółka jest w fazie X I cena jest korzystna. PEG historyczny = P/E ÷ (100 × wzrost zysku 5 lat rocznie) (prognoz z przeszłości nie ma);
+DCF historyczny jak na stronie (wzrost przychodów 3 lata w [0; 25 %], 5 lat + 5 lat wygaszania do 3 %, stopa 10 %, marża FCF z 12 mies. w [0; 60 %], gotówka netto),
+liczony względem kapitalizacji (przychody = kapitalizacja ÷ P/S): potencjał = wartość ÷ kapitalizacja − 1. Dwa progi „dobrego momentu”:
+T1 (etykieta strony „Niedowartościowana / Bardzo tania”): PEG 0–1, a gdy PEG nie ma — DCF ≥ +15 %; T2 (reguła dokupu użytkownika): PEG 0–2 lub DCF ≥ +15 %.
+Porównania w każdej fazie: tanio vs ta sama faza bez korzystnej ceny; oraz nadwyżka nad medianą zbioru. Hipoteza użytkownika: faza + korzystna cena > rynek.
+Reguła: kombinację uznajemy za działającą, gdy mediana nadwyżki > 0, przedział bez zera i ten sam znak w obu połowach (2012–17 / 2018–23).
+
+**Wynik etapu 105** (`r130_etap105.py`, `wyniki/r130_etap105.md`): żadna kombinacja faza + korzystna cena nie bije rynku. T1 (PEG 0–1 / DCF ≥ +15 %):
+3 Dźwignia +0,8 pp/rok [−4,4; +4,4] (n = 38; połowy −6,5 / +3,2), 4 Zwrot kapitału −0,6 [−2,7; +0,9] (n = 358); tanio vs drożej w tej samej fazie: dźwignia
++4,3 [−0,7; +8,5], zwrot kapitału +0,2 [−2,0; +2,0]. T2 (PEG 0–2 / DCF ≥ +15 %): dźwignia −4,1 [−9,0; −1,3] (obie połowy ujemne, strata 44 %), zwrot kapitału
+−0,7 [−2,5; +0,8]. Start i Hiperwzrost: 1–4 przypadki (prawie nigdy nie są tanie wg PEG / DCF). **Reguła niespełniona.** Ograniczenia: PEG historyczny z przeszłego
+wzrostu zysku (strona używa prognoz analityków), dostępny tylko u 19 % ocen; DCF historyczny bez korekty o SBC i odsetki.
+
+**Sprawdzenie metody etapów 104–105** (po fakcie, NIE przed-rejestrowane; użytkownik: „coś robisz źle … KO oddaje kapitał przez dekady”): ceny w `cache.npz` zawierają
+dywidendy (KO ×4,0 vs ×3,9 z adjusted_close). Lata 2012-01–2026-09 (z dywidendami): KO 9,6 %/rok, PEP 7,7 %, PG 8,5 %, MCD 8,8 %, JNJ 13,0 %, COST 20,1 %, MSFT 24,3 %,
+AAPL 25,1 %, NVDA 56,1 %; S&P 500 (SPY) 14,9 %, równoważone S&P 500 (RSP) 12,5 %. Pozycje z etapu 105 względem SPY w tym samym okresie: wszystkie spółki zbioru —
+CAGR mediana 8,1 % / średnia 8,9 %, SPY 14,8 %, pobiło SPY 29 %; faza 4 tanio (T1) — 7,9 / 9,4 %, 28 % pobiło; faza 3 tanio — 6,0 / 12,7 %, 32 %; faza 3 lub 4 tanio —
+7,7 / 9,7 %, 28 %; faza 2 lub 3 dowolna cena — 6,5 / 7,2 %, 25 %. Wniosek: metoda poprawna; przeciętna duża spółka przegrywała z SPY (indeks ważony kapitalizacją
+ciągnęło kilka gigantów technologicznych), a faza rozwoju nie wyróżnia zwycięzców — spółki w fazie 3–4 zarabiały stabilnie (~8–10 %/rok, mniej strat), ale nie więcej
+niż przeciętna duża spółka.
+
+## Etap 106: top 10 / 25 / 50 największych spółek USA (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „to co, kupowanie top 25 po market cap jest lepsze?”. Co roku w styczniu (2012–2026) N największych spółek USA wg kapitalizacji z poprzedniego
+miesiąca (dane PIT, ze spółkami później zdjętymi z giełdy; wszystkie sektory oraz wariant bez sektorów wykluczonych na stronie), trzymanie 12 mies., ceny
+z dywidendami, koszt 0,1 % na stronę przy zmianie składu. Wagi: równe albo wg kapitalizacji. N = 10, 25, 50. Porównanie: SPY (S&P 500) i RSP (równoważony S&P 500).
+Miary: roczna stopa zwrotu, największe obsunięcie (miesięcznie), lata lepsze od SPY, połowy 2012–18 / 2019–26. Hipoteza: top 25 ważone kapitalizacją ≈ SPY
+plus trochę (kilka gigantów ciągnęło indeks); równe wagi — wynik zależy od okresu. Bez reguły dla strony — odpowiedź na pytanie.
+Dodatek (zapisany przed uruchomieniem): sprawdzenie dłuższego okresu — kapitalizacje w bazie są dopiero od 2009-04, więc najdłużej od 2010 r. (połowy 2010–2017 / 2018–2026); lat 2000–2009 tymi danymi nie da się sprawdzić.
+
+**Wynik etapu 106** (`r131_etap106.py`, `wyniki/r131_etap106.md`; dodatek od 2010: `r131b_etap106_od2010.py`): 2012–2026 — SPY 15,0 %/rok (obsunięcie −24 %), RSP 12,6 %;
+top 10 wg kapitalizacji 19,3 % (−38 %), top 25 wg kapitalizacji 18,0 % (−32 %, lepsze od SPY 12 z 15 lat), top 25 równe wagi 16,3 % (−28 %), top 50 wg kap. 17,0 %.
+Połowy: 2012–18 top 25 13,3 % vs SPY 12,6 % (prawie równo), 2019–26 22,4 % vs 17,2 % — przewaga z ery gigantów technologicznych. Od 2010: top 25 wg kap. 16,6 % vs SPY
+14,2 %; 2010–17 13,5 % vs 13,8 % (bez przewagi), 2018–26 19,6 % vs 14,5 %. Kapitalizacje w bazie od 2009-04 — lat wcześniejszych nie da się sprawdzić; literatura
+(Arnott i in., Research Affiliates 2010–2018) na dłuższej historii: największe spółki zwykle przegrywały z rynkiem w kolejnej dekadzie — prognoza z 2018 r. dla gigantów
+technologicznych się nie sprawdziła. Wariant bez sektorów wykluczonych nie policzony (brak mapy sektorów w danych badawczych). Wniosek: top 25 biło SPY tylko
+w jednym okresie i z większymi obsunięciami; nie jest to trwała przewaga.
+
+## Etap 107: „top po fundamentach” — wszystkie kryteria spełnione, najwyżej 10 spółek, przegląd raz w roku (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „to kupuj top po fundamentach. Wszystko spełnione, max 10 spółek, rewizja raz do roku”. Co roku w styczniu 2012–2026 (zbiór: top 500 USA PIT bez
+wykluczonych sektorów), wybór spółek spełniających kryteria, kolejność wg oceny Siła finansowa (jedyny czynnik z potwierdzoną przewagą, etap 95), najwyżej 10, równe wagi,
+trzymanie 12 mies. (ceny z dywidendami, koszt 0,1 % na stronę dla zmienionej części); gdy żadna spółka nie spełnia — SPY na ten rok. Warianty kryteriów:
+A — „wszystko”: Jakość 7/7 (przychody 5 lat > 8 %/rok, D/E 0–1, FCF > 0, ROE > 15 %, ROA > 10 %, ROE wyżej niż 3 lata temu, ROCE > 15 %) + 7/7 bez PEG
+(przychody 5 lat > +50 %, przychody i zysk 1 rok > 5 %, ROE > 15 %, D/E 0–1, FCF > 0) + PEG historyczny 0–2 + brak ⬇;
+B — jak A bez PEG (PEG historyczny dostępny rzadko: przeszły wzrost zysku 5 lat zamiast prognoz); C — B + Siła ≥ 7.
+Porównanie: SPY, top 25 wg kapitalizacji (etap 106). Miary: stopa roczna, największe obsunięcie, lata lepsze od SPY, połowy 2012–18 / 2019–26, średnia liczba spółek.
+Hipoteza: wariant B / C ≥ SPY (etapy 67–68: 7/7 18–21 %/rok przy 15–30 spółkach). Reguła: strategia „działa”, gdy biła SPY w obu połowach.
+
+**Wynik etapu 107** (`r132_etap107.py`, `wyniki/r132_etap107.md`): 2012-01–2026-09 — SPY 14,7 %/rok (obsunięcie −24 %); A (wszystko z PEG) 9,9 % (−52 %), B (bez PEG)
+13,1 % (−38 %), C (B + Siła ≥ 7) 14,9 % (−52 %). Połowy: 2012–18 A −1,1 %, B 5,0 %, C 4,0 % vs SPY 12,0 %; 2019–26 A 20,8 %, B 20,9 %, C 25,5 % vs SPY 17,2 %.
+**Reguła niespełniona** (pierwsza połowa przegrana). Ważne ograniczenie: w 2012–2014 żadna spółka nie spełniała wszystkich kryteriów (w danych badawczych 5-letni
+wzrost dostępny dopiero od ~2015 — SEC XBRL od 2009), a w 2015–2018 portfel miał 1–4 spółki (QCOM, GILD, BIIB, NVDA 2018 −50 %) — wynik pierwszej połowy to głównie
+brak danych i koncentracja. Od 2019 (7–10 spółek): B 20,9 % vs SPY 17,2 % (6/8 lat lepiej). GOOGL i GOOG liczone osobno (dwie klasy akcji) — do poprawy przy wdrożeniu.
+
+## Etap 108: PEG Lyncha z limitem wzrostu 25 % (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „dodaj limit 25 %” (Lynch: wzrost > 20–25 % rocznie rzadko się utrzymuje; PEG z długoterminowego wzrostu). Historycznie mamy tylko PEG z przeszłego wzrostu
+zysku 5 lat (prognoz z przeszłości brak): PEG = P/E ÷ (100 × wzrost), PEG25 = P/E ÷ (100 × min(wzrost, 25 %)). Zbiór top 500 USA PIT bez wykluczonych sektorów, starty
+styczniowe 2012–2023, nadwyżka nad medianą 12 / 36 mies., bootstrap po latach, połowy. Porównania: (1) „tanie tylko dzięki wzrostowi > 25 %” (PEG < 1, ale PEG25 ≥ 1)
+vs „tanie także z limitem” (PEG25 < 1); (2) to samo dla progu 2 (PEG < 2, PEG25 ≥ 2 vs PEG25 < 2); (3) PEG25 < 1 vs PEG < 1 (cała grupa). Hipoteza Lyncha: tanie tylko
+dzięki > 25 % wypadają gorzej. Reguła dla strony: jeśli (1) lub (2) ma różnicę 36 mies. < 0 z przedziałem bez zera i tym samym znakiem w obu połowach — główny PEG na
+stronie dostaje limit 25 % (etykiety, 7/7, dokup); w przeciwnym razie PEG z limitem pokazujemy tylko jako dodatkową informację („PEG Lyncha”).
+
+**Wynik etapu 108** (`r133_etap108.py`, `wyniki/r133_etap108.md`): wzrost > 25 % miało ~20 % spółek z PEG. (1) PEG < 1 tylko dzięki wzrostowi > 25 % vs PEG25 < 1:
+12 mies. +6,2 pp [−11,9; +22,2], 36 mies. −0,3 [−18,4; +32,6] (połowy +7,1 / −6,9); (2) próg 2: +5,3 / −4,0 pp, przedziały szerokie (n = 30); (3) PEG25 < 1 vs PEG < 1:
+−1,0 / +0,0 pp. **Reguła niespełniona** — limit 25 % nie poprawia wyboru (z przeszłym wzrostem; prognoz historycznych brak). Główny PEG bez zmian; „PEG Lyncha
+(wzrost max 25 %)” na karcie tylko jako informacja. Uboczne: PEG25 < 1 (z przeszłego wzrostu) vs reszta z PEG −6,4 pp / 12 m [−11,1; −0,8] — niski PEG z historii
+nie wskazuje zwycięzców (jak etap 96).
+
+## Etap 109: faworyzowanie stabilnego wzrostu przychodów i EPS z 5 lat (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „faworyzuj spółki rosnące stabilnie przeszłe 5 lat revenue i EPS”. Definicja (w styczniu, dane znane w tym dniu; przychody i zysk netto z sum 4 kwartałów
+w odstępach roku, EPS = zysk netto ÷ liczba akcji skorygowana o splity): S — przychody rosły w każdym z 5 lat (5/5) i EPS w ≥ 4 z 5; S55 — oba 5/5.
+A) cecha: S vs reszta i S55 vs reszta (top 500 USA PIT bez wykluczonych sektorów, starty 2012–2023, nadwyżka nad medianą 12 / 36 mies., bootstrap, połowy).
+B) portfel z etapu 107 (B: Jakość 7/7 + 7/7 bez PEG + bez ⬇, najwyżej 10, przegląd w styczniu): kolejność „najpierw S, potem Siła” vs „tylko Siła”; vs SPY.
+Reguła dla strony: znacznik / filtr „stabilny wzrost 5 lat” i pierwszeństwo w kolejności, jeśli A (S vs reszta) ma różnicę 36 mies. > 0 z przedziałem bez zera
+i dodatnią w obu połowach; w przeciwnym razie tylko informacja na karcie (bez wpływu na kolejność).
+
+**Wynik etapu 109** (`r134_etap109.py`, `wyniki/r134_etap109.md`): A) S vs reszta 36 mies. +3,9 pp [−4,4; +11,2] (połowy +7,5 / +1,2), 12 mies. +0,6 [−5,2; +6,2];
+S55 vs reszta 36 mies. +8,2 [−8,4; +22,8] (połowy −13,5 / +17,0). B) portfel top 10: tylko Siła 13,1 %/rok, najpierw S 12,9 %, najpierw S55 13,2 % (SPY 14,7 %) — pula
+„wszystko spełnione” już w 60 % składa się ze spółek S. **Reguła niespełniona** (przedział obejmuje 0) — kierunek dodatni jak w etapie 58, ale bez pewności;
+na stronie tylko informacja na karcie (krok „Wzrost”: lata wzrostu przychodów i EPS z 5), bez wpływu na kolejność.
+
+## Etap 110 — przychody rosnące 5 lat z rzędu, horyzont 5–10 lat (protokół przed uruchomieniem, 2026-11-24)
+
+Użytkownik: „revenue ma rosnąć stabilnie 5 lat z rzędu — to najważniejsze, EPS pójdzie za nią … zwrot jest najlepszy po 5–10 latach, rok to spekulacja,
+wszystko poniżej 5 lat ma małe znaczenie”. Etap 109 mierzył 12 / 36 mies. i wymagał też EPS — tu sama sprzedaż i dłuższe horyzonty.
+- Cecha P5: przychody roczne rosły w każdym z 5 ostatnich lat (5/5; dane jak w etapie 109, styczeń każdego roku, top 500 PIT bez wykluczonych sektorów).
+  Porównania: P5 vs reszta z danymi; P5 vs ≤ 3/5 lat wzrostu.
+- Miary: nadwyżka nad medianą zbioru (różnica median, bootstrap po latach startu) po 36, 60 i 120 mies.; odsetek spółek ze stratą; „EPS idzie za
+  sprzedażą”: odsetek spółek, których zysk netto za 5 lat jest wyższy niż dziś (P5 vs reszta).
+- Starty: 60 mies. — 2012–2021 (połowy 2012–16 / 2017–21); 120 mies. — 2012–2016 (tylko 5 startów: opisowo, bez reguły).
+- Reguła: jeśli P5 vs reszta po 60 mies. ma przedział bez 0 i obie połowy dodatnie → znacznik „📈 5/5” na liście + filtr „Przychody rosną 5 lat”
+  i pierwszeństwo w rankingu top 10 (najpierw P5, potem Siła). W przeciwnym razie zostaje tylko informacja na karcie (etap 109).
+
+**Wynik etapu 110** (`r135_etap110.py`, `wyniki/r135_etap110.md`): P5 vs reszta po 5 latach +11,0 pp [−6,5; +26,8] (połowy +14,8 / +8,8; mediana zwrotu
++74 % vs +65 %, ze stratą 17 vs 18 %), po 3 latach +3,5 [−5,3; +9,0]; P5 vs ≤ 3/5 po 5 latach +13,5 [−5,6; +26,5]. 10 lat: tylko 75 spółek P5 (dane SEC od ~2009),
+wynik nieczytelny (−22 pp [−68; +88]). Zysk idzie za sprzedażą: zysk netto za 5 lat wyższy niż dziś u 79 % spółek P5 vs 69 % reszty. Kierunek dodatni i rośnie
+z horyzontem (3 l. +3,5 → 5 l. +11), ale przedział obejmuje 0 → **reguła niespełniona**: bez znacznika i pierwszeństwa; ramka na karcie liczy „stabilny” jako
+przychody 5/5 (EPS pokazany obok).
+
+**Uwaga do etapów 109–110** (użytkownik: „nie prosiłem, żebyś dodawał te rzeczy, chciałem, żebyś sprawdził tylko”): ramka „Stabilność wzrostu” usunięta z karty —
+oba etapy to wyłącznie sprawdzenie, na stronie nic nie zostaje.

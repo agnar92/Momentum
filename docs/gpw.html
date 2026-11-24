@@ -16,7 +16,7 @@
 <main class="main">
   <section class="karta">
     <h2>GPW: WIG20 + mWIG40 + sWIG80 — jakość a wycena</h2>
-    <div class="pod">Oceny 0–10 na tle tych spółek GPW (wzrost, siła finansowa, wycena), listy kontrolne z <b>obniżonymi progami wzrostu</b> (wolniejszy rynek). Bez sektorów trudnych do przewidzenia (finanse, surowce, energia, użyteczność publiczna, nieruchomości) — jak w USA. Dane z yfinance (ok. 4–5 lat rocznie, kwotowania w zł), z <span id="asof">–</span>. Kliknij spółkę, żeby otworzyć jej kartę (▸ — szybki podgląd w wierszu). Informacyjnie, nie rekomendacja.</div>
+    <div class="pod">Oceny 0–10 na tle tych spółek GPW (wzrost, siła finansowa, wycena), listy kontrolne z <b>obniżonymi progami wzrostu</b> (wolniejszy rynek). Bez sektorów trudnych do przewidzenia (finanse, surowce, energia, użyteczność publiczna, nieruchomości) — jak w USA. Sprawozdania roczne z biznesradar.pl (od 2007 r., z dywidendami i skupem akcji), kursy i dywidenda na akcję z Yahoo Finance (kwoty w zł), z <span id="asof">–</span>. Kliknij spółkę, żeby otworzyć jej kartę (▸ — szybki podgląd w wierszu). Informacyjnie, nie rekomendacja.</div>
     <details class="objasnienie">
       <summary><b>Czym GPW różni się od listy USA</b></summary>
       <ul class="male" style="margin:8px 0 0 18px;padding:0;line-height:1.5">
@@ -31,6 +31,7 @@
       <label class="mut"><input id="jak" type="checkbox"> tylko <span class="jakosc">✔ Jakość 7/7</span></label>
       <label class="mut"><input id="sila" type="checkbox"> tylko Siła finansowa ≥ 7</label>
       <label class="mut"><input id="bez" type="checkbox"> bez ⬇</label>
+      <label class="mut"><input id="dyw" type="checkbox"> tylko 💰 stabilna dywidenda</label>
       <span id="ile" class="mut male"></span>
     </div>
     <div class="tabela-wrap"><table id="lista-gpw">
@@ -41,7 +42,7 @@
       </tr></thead><tbody></tbody>
     </table></div>
   </section>
-  <div class="stopka">Źródła: biznesradar.pl (skład indeksów), Yahoo Finance (sprawozdania, ceny). Progi GPW nieprzetestowane.</div>
+  <div class="stopka">Źródła: biznesradar.pl (skład indeksów, sprawozdania roczne), Yahoo Finance (ceny, kapitalizacja, dywidenda na akcję, liczba akcji, kwartały). Progi GPW nieprzetestowane.</div>
 </main>
 <script src="js/wspolne.js"></script>
 <script src="js/gpw.js"></script>

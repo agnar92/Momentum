@@ -251,6 +251,8 @@
                 const ok = c[0] !== null && W.ok(base) && base > 0 ? (base <= c[0] ? ' <b style="color:#5eead4">— spełnia</b>' : ' <b style="color:#fca5a5">— nie spełnia</b>') : "";
                 return `<div class="male" style="margin-top:6px">Typ: <b>${esc(typ)}</b> — ${esc(c[1])}${ok}</div>`; })()}
             ${W.ok(base) && base > 0 ? `<div class="male" style="margin-top:6px">Cena dziś ${W.fmtCena(M.price)} · przy PEG 1: <b>${W.fmtCena(M.price / base)}</b> · przy PEG 2: <b>${W.fmtCena(2 * M.price / base)}</b></div>` : ""}
+            ${W.ok(base) && base > 0 && S.geps > W.LIMIT_LYNCH ? (() => { const p25 = W.peg25(pe, S.geps);
+                return `<div class="male" style="margin-top:6px">PEG Lyncha (wzrost liczony najwyżej 25 % rocznie): <b>${W.fmtNum(p25)}</b> — ${esc(W.etykietaPeg(p25) || "")}. Lynch nie ufał, że wzrost szybszy niż 20–25 % rocznie utrzyma się kilka lat (informacyjnie).</div>`; })() : ""}
             ${sc ? `<div class="scen">${["bear", "base", "bull"].map((k) => `<div class="${k}"><div class="t">${{ bear: "Pesymistycznie", base: "Bazowo", bull: "Optymistycznie" }[k]}</div><b style="font-size:20px">${W.fmtPct(sc[k].g, 1)}</b><div class="mut male">wzrost EPS</div><div>PEG ${W.fmtNum(sc[k].peg)}</div></div>`).join("")}</div>` : ""}
             ${poz !== null ? `<div class="peg-skala"><span class="znak" style="left:${poz}%"></span></div><div class="skala mut"><span>0</span><span>1 · nisko</span><span>2 · uczciwie</span><span>3 · drogo</span><span>4+</span></div>` : ""}
             <p class="mut male">PEG = P/E ÷ (oczekiwany wzrost EPS w %). Poniżej 1 — tanio względem wzrostu, 1–2 — uczciwie, powyżej 3 — drogo.</p>
@@ -634,6 +636,9 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
               ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×)</div>${wykresPe(h)}` : ""}
               <div class="mut male" style="margin:14px 0 0">PEG — cena względem tempa wzrostu zysku</div>
+              ${(() => { const g = GPW ? M.ni_cagr3 : M.eps_next5; if (!(W.ok(peg) && peg > 0 && W.ok(g) && g > W.LIMIT_LYNCH)) return "";
+                const p25 = W.peg25(peg * 100 * g, g);
+                return `<p class="male" style="margin:4px 0 0">Prognoza wzrostu ${W.fmtPct(g, 0)} rocznie — według Lyncha liczymy najwyżej 25 %: <b>PEG Lyncha ${W.fmtNum(p25)}</b> (${esc(W.etykietaPeg(p25) || "")}).</p>`; })()}
               ${poz !== null ? `<div class="kr-wyc"><div class="kr-wyc-teraz" style="left:${poz}%;transform:translateX(${poz < 15 ? "-8%" : poz > 85 ? "-92%" : "-50%"})">Dziś ${W.fmtCena(pr)}<br>▼</div>
                 <div class="kr-pasek">${N.map((n, j) => `<span class="z${j}">${n}</span>`).join("")}</div>
                 <div class="kr-ceny mut">${B.map((b, j) => `<span style="left:${20 * (j + 1)}%">${W.fmtCena(pr * b / peg)}</span>`).join("")}</div></div>
@@ -713,7 +718,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
 
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
-        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Z Yahoo Finance (ok. 4–5 lat rocznie, ostatnie kwartały)." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
+        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Rocznie z biznesradar.pl (od 2007 r.), kwartały z Yahoo Finance." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
           <div class="zakladki">${[["q", "Kwartalnie"], ["ttm", "12 mies. (TTM)"], ["y", "Rocznie"]].map(([k, n]) => `<button data-tr="${k}" class="${tryb === k ? "akt" : ""}">${n}</button>`).join("")}</div></div>
           <div class="mut male">Rachunek wyników</div><div id="sp-rw"></div>
           <div class="siatka2" style="margin-top:12px"><div><div class="mut male">Wolne przepływy (FCF = przepływy operacyjne − nakłady)</div><div id="sp-cf"></div></div>

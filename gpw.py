@@ -1,4 +1,4 @@
-"""GPW (Fundamenta): WIG20 + mWIG40 + sWIG80 bez sektorów trudnych do przewidzenia — wskaźniki z yfinance (roczne ok. 4–5 lat + kwartały), oceny
+"""GPW (Fundamenta): WIG20 + mWIG40 + sWIG80 bez sektorów trudnych do przewidzenia — sprawozdania roczne z biznesradar.pl (od 2007 r.), ceny, kapitalizacja, dywidenda na akcję i liczba akcji z yfinance, oceny
 na tle tych spółek i listy kontrolne z OBNIŻONYMI progami wzrostu (użytkownik: „dla GPW trzeba zmniejszyć procenty wzrostowe, to wolniejszy rynek”).
 Progi GPW nie są przetestowane (brak historii danych) — strona to zaznacza. Wynik: docs/data/gpw.json.
 
@@ -26,21 +26,23 @@ GPW_PROGI = dict(rev_cagr3=0.05, rev_3y=0.16, rok=0.03, lata_wzrostu=0.06)
 
 def sklad(log=print):
     """Skład indeksów z biznesradar.pl; przy błędzie — ostatni zapisany (docs/data/gpw_sklad.json)."""
-    out = {}
+    out, slug = {}, {}
     for ind in INDEKSY:
         try:
             h = requests.get(f"https://www.biznesradar.pl/gielda/indeks:{ind}", headers=UA, timeout=30).text
-            t = sorted({x for x in re.findall(r'href="/notowania/[A-Z0-9\-]+"[^>]*>\s*([A-Z0-9]{2,6})', h) if x != ind.upper() and x != ind})
+            pary = re.findall(r'href="/notowania/([A-Z0-9\-]+)"[^>]*>\s*([A-Z0-9]{2,6})', h)
+            t = sorted({x for _, x in pary if x != ind.upper() and x != ind})
             if len(t) >= {"WIG20": 15, "mWIG40": 30, "sWIG80": 60}[ind]:
                 out[ind] = t
+                slug.update({x: sl for sl, x in pary if x in t})
         except requests.RequestException as e:
             log(f"skład {ind}: błąd ({e})")
     if len(out) == len(INDEKSY):
-        json.dump(dict(data=dt.date.today().isoformat(), **out), open(SKLAD, "w"), ensure_ascii=False)
-        return out
+        json.dump(dict(data=dt.date.today().isoformat(), slug=slug, **out), open(SKLAD, "w"), ensure_ascii=False)
+        return dict(out, slug=slug)
     log("skład: używam ostatniego zapisanego")
     d = json.load(open(SKLAD)) if os.path.exists(SKLAD) else {}
-    return {k: d[k] for k in INDEKSY if k in d}
+    return dict({k: d[k] for k in INDEKSY if k in d}, slug=d.get("slug") or {})
 
 
 def _wiersz(df, nazwy):
@@ -52,11 +54,77 @@ def _wiersz(df, nazwy):
     return {}
 
 
+MIES = {"sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6, "lip": 7, "sie": 8, "wrz": 9, "paź": 10, "lis": 11, "gru": 12}
+BR_STRONY = {"rachunek-zyskow-i-strat": ("IncomeRevenues", "IncomeEBIT", "IncomeNetProfit", "IncomeShareholderNetProfit", "IncomeGrossProfit"),
+             "przeplywy-pieniezne": ("CashflowOperatingCashflow", "CashflowCapex", "CashflowFCM", "CashflowDividend", "CashflowStockBuyback",
+                                     "CashflowShareCapitalCash"),
+             "bilans": ("BalanceCapital", "BalanceTotalAssets", "BalanceCurrentLiabilities", "BalanceCash", "BalanceNoncurrentBorrowings",
+                        "BalanceNoncurrentObligations", "BalanceCurrentBorrowings", "BalanceCurrentObligations", "BalanceNoncurrentLeasing",
+                        "BalanceCurrentLeasing", "BalanceInventory")}
+
+
+def _koniec(rok, mies):
+    m = MIES.get(mies)
+    if not m:
+        return None
+    nast = dt.date(rok + (m == 12), m % 12 + 1, 1)
+    return (nast - dt.timedelta(days=1)).isoformat()
+
+
+def br_tabela(h, pola):
+    """Tabela raportu biznesradar.pl → {pole: {koniec okresu: wartość w zł}}; kolumna „O4K” (ostatnie 4 kwartały) pod kluczem "ttm:<koniec>"."""
+    i = h.find('<table class="report-table"')
+    if i < 0:
+        return {}
+    tab = h[i:h.find("</table>", i)]
+    kol = []
+    for th in re.findall(r'<th class="thq h[^"]*"[^>]*>(.*?)</th>', tab, re.S):
+        tx = re.sub(r"<[^>]+>|\s+", " ", th).strip()
+        mm = re.search(r"\((\w{3}) (\d{2})\)", tx)
+        e = _koniec(2000 + int(mm.group(2)), mm.group(1)) if mm else None
+        kol.append(("ttm:" + e if tx.startswith("O4K") else e) if e else None)
+    out = {}
+    for pole in pola:
+        w = re.search(r'<tr[^>]*data-field="' + pole + r'".*?</tr>', tab, re.S)
+        if not w:
+            continue
+        tds = re.findall(r'<td class="h[^"]*"[^>]*>(.*?)</td>', w.group(0), re.S)
+        for k, td in zip(kol, tds):
+            v = re.search(r'<span class="pv"><span>([^<]*)</span>', td)
+            if k and v:
+                x = v.group(1).replace("\xa0", "").replace(" ", "").replace(",", ".")
+                try:
+                    out.setdefault(pole, {})[k] = float(x) * 1000      # tys. zł → zł
+                except ValueError:
+                    pass
+    return out
+
+
+def pobierz_br(t, slug, cache=None):
+    """Roczne sprawozdania z biznesradar.pl (rachunek zysków, przepływy, bilans) — dłuższa historia niż yfinance (od 2007)."""
+    p = os.path.join(cache, f"{t}.br.json") if cache else None
+    if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
+        return json.load(open(p))
+    out = {}
+    for strona, pola in BR_STRONY.items():
+        try:
+            h = requests.get(f"https://www.biznesradar.pl/raporty-finansowe-{strona}/{slug}", headers=UA, timeout=30).text
+            out.update(br_tabela(h, pola))
+        except requests.RequestException:
+            pass
+        time.sleep(1.0)
+    if p and out:
+        json.dump(out, open(p, "w"))
+    return out
+
+
 def pobierz(t, cache=None):
     """Surowe dane yfinance dla tickera GPW (z pamięci podręcznej do 6 dni)."""
     p = os.path.join(cache, f"{t}.json") if cache else None
     if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
-        return json.load(open(p))
+        d = json.load(open(p))
+        if d.get("v", 1) >= 2:
+            return d
     import yfinance as yf
     tk = yf.Ticker(f"{t}.WA")
     inf = tk.info or {}
@@ -72,9 +140,51 @@ def pobierz(t, cache=None):
         ocf=_wiersz(c, ["Operating Cash Flow"]), capex=_wiersz(c, ["Capital Expenditure"]), fcf=_wiersz(c, ["Free Cash Flow"]),
         div=_wiersz(c, ["Cash Dividends Paid", "Common Stock Dividend Paid"]),
         q_rev=_wiersz(q, ["Total Revenue", "Operating Revenue"]), q_ni=_wiersz(q, ["Net Income Common Stockholders", "Net Income"]),
-        ceny=[[x.strftime("%Y-%m-%d"), round(float(v), 2)] for x, v in h["Close"].dropna().items()] if h is not None and len(h) else [])
+        akcje=_wiersz(b, ["Ordinary Shares Number", "Share Issued"]),
+        dps=[[x.strftime("%Y-%m-%d"), float(v)] for x, v in tk.dividends.items()] if len(tk.dividends) else [],
+        ceny=[[x.strftime("%Y-%m-%d"), round(float(v), 2)] for x, v in h["Close"].dropna().items()] if h is not None and len(h) else [], v=2)
     if p:
         json.dump(d, open(p, "w"))
+    return d
+
+
+def scal_br(d, br):
+    """Zastępuje roczne serie yfinance (4–5 lat) seriami z biznesradar.pl (od 2007), gdy są dłuższe; dokłada skup, emisję, dywidendy, leasing i 12 mies."""
+    if not br:
+        return d
+    def rok(pole):
+        return {k: v for k, v in (br.get(pole) or {}).items() if not k.startswith("ttm:")}
+
+    def ttm(pole):
+        return next(((k[4:], v) for k, v in (br.get(pole) or {}).items() if k.startswith("ttm:")), (None, None))
+    d = dict(d)
+    ni = rok("IncomeShareholderNetProfit") or rok("IncomeNetProfit")
+    zam = {"rev": rok("IncomeRevenues"), "ni": ni, "op": rok("IncomeEBIT"), "ocf": rok("CashflowOperatingCashflow"), "capex": rok("CashflowCapex"),
+           "fcf": rok("CashflowFCM"), "eq": rok("BalanceCapital"), "assets": rok("BalanceTotalAssets"), "lc": rok("BalanceCurrentLiabilities"),
+           "cash": rok("BalanceCash")}
+    if len(zam["rev"]) >= max(3, len(d.get("rev") or {})):
+        for k, v in zam.items():
+            if v:
+                d[k] = v
+        dl = {}
+        for pole in ("BalanceNoncurrentBorrowings", "BalanceNoncurrentObligations", "BalanceCurrentBorrowings", "BalanceCurrentObligations"):
+            for e, v in rok(pole).items():
+                dl[e] = dl.get(e, 0.0) + v
+        if dl:
+            d["debt"] = dl
+        ls = {}
+        for pole in ("BalanceNoncurrentLeasing", "BalanceCurrentLeasing"):
+            for e, v in rok(pole).items():
+                ls[e] = ls.get(e, 0.0) + v
+        d["leasing"] = ls
+        d["br"] = True
+    d["dyw_r"] = {e: abs(v) for e, v in rok("CashflowDividend").items()}
+    d["skup_r"] = {e: abs(v) for e, v in rok("CashflowStockBuyback").items()}
+    d["emisja_r"] = {e: max(0.0, v) for e, v in rok("CashflowShareCapitalCash").items()}
+    d["ttm"] = {k: ttm(p_) for k, p_ in (("rev", "IncomeRevenues"), ("ni", "IncomeShareholderNetProfit"), ("op", "IncomeEBIT"), ("fcf", "CashflowFCM"),
+                                          ("dyw", "CashflowDividend"), ("skup", "CashflowStockBuyback"), ("emisja", "CashflowShareCapitalCash"))}
+    if d["ttm"]["ni"][1] is None:
+        d["ttm"]["ni"] = ttm("IncomeNetProfit")
     return d
 
 
@@ -91,6 +201,15 @@ def metryki(d):
     qr, qn = _lata(d.get("q_rev") or {}), _lata(d.get("q_ni") or {})
     m["rev_ttm"] = sum(qr[-4:]) if len(qr) >= 4 else (rev[-1] if rev else None)
     m["ni_ttm"] = sum(qn[-4:]) if len(qn) >= 4 else (ni[-1] if ni else None)
+    tt = d.get("ttm") or {}
+    if (tt.get("rev") or (None, None))[1]:                     # ostatnie 4 kwartały z biznesradar.pl
+        m["rev_ttm"] = tt["rev"][1]
+    if (tt.get("ni") or (None, None))[1] is not None:
+        m["ni_ttm"] = tt["ni"][1]
+    if (tt.get("op") or (None, None))[1] is not None:
+        m["op_ttm"] = tt["op"][1]
+    if not (m["pe"] and m["pe"] > 0) and m["mcap"] and m["ni_ttm"] and m["ni_ttm"] > 0:
+        m["pe"] = m["mcap"] / m["ni_ttm"]                        # P/E z kapitalizacji i zysku, gdy yfinance nie podaje
     g = [rev[k + 1] / rev[k] - 1 for k in range(len(rev) - 1) if rev[k] and rev[k] > 0]
     m["rev_lata"] = g[-4:]
     m["rev_1y"] = g[-1] if g else None
@@ -100,6 +219,39 @@ def metryki(d):
     m["ni_1y"] = ni[-1] / ni[-2] - 1 if len(ni) >= 2 and ni[-2] and ni[-2] > 0 and ni[-1] > 0 else None
     if len(ni) >= 4 and ni[-4] and ni[-4] > 0 and ni[-1] > 0:
         m["ni_cagr3"] = (ni[-1] / ni[-4]) ** (1 / 3) - 1
+    if len(rev) >= 6 and rev[-6] and rev[-6] > 0 and rev[-1] > 0:
+        m["rev_5y"] = rev[-1] / rev[-6] - 1
+        m["rev_cagr5"] = (rev[-1] / rev[-6]) ** (1 / 5) - 1
+    if len(ni) >= 6 and ni[-6] and ni[-6] > 0 and ni[-1] > 0:
+        m["ni_5y"] = ni[-1] / ni[-6] - 1
+    # dywidendy (wypłaty z przepływów, biznesradar.pl): lata z wypłatą z 5 ostatnich, stabilna (bez cięcia > 20 %, jak w USA), rośnie 5 lat
+    dv = _lata(d.get("dyw_r") or {})
+    if len(dv) >= 5:
+        d5 = dv[-5:]
+        m["dywidenda_lata"] = sum(v > 0 for v in d5)
+        med_ = sorted(d5)[2]
+        reg = [v for v in d5 if med_ and v <= 1.5 * med_]
+        m["dywidenda_stabilna"] = bool(all(v > 0 for v in d5) and all(reg[k + 1] >= 0.8 * reg[k] for k in range(len(reg) - 1)))
+        d6 = dv[-6:]
+        m["dyw_rosnie_5"] = bool(len(d6) == 6 and d6[0] > 0 and all(d6[k + 1] > d6[k] for k in range(5)))
+    # stopa dywidendy: z yfinance, a gdy brak — suma dywidend na akcję z 12 mies. ÷ kurs
+    dps = d.get("dps") or []
+    if not m["div"] and dps and m["price"]:
+        rok_temu = (dt.date.today() - dt.timedelta(days=365)).isoformat()
+        m["div"] = sum(v for e, v in dps if e >= rok_temu) / m["price"]
+    # skup akcji netto z 12 mies. (lub ostatniego roku) ÷ kapitalizacja
+    sk, em = (tt.get("skup") or (None, None))[1], (tt.get("emisja") or (None, None))[1]
+    if sk is None and d.get("skup_r"):
+        sk, em = _lata(d["skup_r"])[-1], (_lata(d.get("emisja_r") or {}) or [0])[-1]
+    if sk is None and d.get("br"):                               # przepływy z biznesradar bez wiersza „Skup akcji” = brak skupu
+        sk, em = 0.0, (_lata(d.get("emisja_r") or {}) or [0])[-1]
+    if sk is not None and m["mcap"]:
+        m["skup_netto_mc"] = (abs(sk) - max(0.0, em or 0)) / m["mcap"]
+    # liczba akcji: zmiana w 3 lata (yfinance, bilans)
+    ak = _lata(d.get("akcje") or {})
+    if len(ak) >= 4 and ak[-4] and ak[-4] > 0:
+        z_ = ak[-1] / ak[-4] - 1
+        m["akcje_3l"] = z_ if -0.6 < z_ < 3 else None
     m["lata_wzrostu"] = sum(x > GPW_PROGI["lata_wzrostu"] for x in g[-3:]) if len(g) >= 3 else None
     def last(k):
         return _lata(d.get(k) or {})[-1] if d.get(k) else None
@@ -154,6 +306,8 @@ def metryki(d):
         m["fcf_yield"] = 1 / m["pfcf"]
     if len(g) >= 3:
         m["rev_lata_10"] = sum(x > 0.10 for x in g[-5:])
+    if d.get("leasing"):
+        m["leasing"] = _lata(d["leasing"])[-1]
     c = [x[1] for x in d.get("ceny") or []]
     if len(c) >= 53:
         m["zw_1r"] = c[-1] / c[-53] - 1
@@ -211,6 +365,17 @@ def oceny(rows):
                 lo, eq = sum(1 for y in s if y < x), sum(1 for y in s if y == x)
                 pc = (lo + eq / 2) / len(s)
                 r.setdefault("pct", {})[p] = pc if kier > 0 else 1 - pc
+    # strata / spadek zysku / ujemny FCF to nie „brak danych”: P/E, PEG, P/FCF nie istnieją, bo jest źle — najgorszy percentyl (0), nie neutralne 0,5
+    # (użytkownik: „brakuje dużo danych … ranking jest przekłamany”)
+    for r in rows:
+        m, pc = r["m"], r.setdefault("pct", {})
+        zl = m.get("ni_ttm") is not None and m["ni_ttm"] <= 0
+        if "pe" not in pc and zl:
+            pc["pe"] = 0.0
+        if "peg" not in pc and (zl or (m.get("ni_cagr3") is not None and m["ni_cagr3"] <= 0)):
+            pc["peg"] = 0.0
+        if "pfcf" not in pc and m.get("fcf_ttm") is not None and m["fcf_ttm"] <= 0:
+            pc["pfcf"] = 0.0
     for r in rows:
         pc, o = r.get("pct", {}), {}
         for gr, pola in GRUPY.items():
@@ -248,6 +413,13 @@ NAZWY = {"rev_1y": "Przychody 1 rok", "rev_cagr3": "Przychody 3 lata (rocznie)",
 DANE = {}
 
 
+def _akcje_na(d, e):
+    """liczba akcji na koniec roku obrotowego (yfinance, bilans; ± 120 dni)"""
+    ak = d.get("akcje") or {}
+    z = [(k, v) for k, v in ak.items() if abs((dt.date.fromisoformat(k) - dt.date.fromisoformat(e)).days) <= 120]
+    return min(z, key=lambda x: abs((dt.date.fromisoformat(x[0]) - dt.date.fromisoformat(e)).days))[1] if z else None
+
+
 def karty(rows, katalog, dane):
     """Karty spółek GPW w formacie karty USA (spolka.html?r=gpw): oceny, typ Lyncha (progi GPW), PEG z przeszłego wzrostu zysku, DCF, sprawozdania, ceny."""
     from momentum import ocena
@@ -273,7 +445,13 @@ def karty(rows, katalog, dane):
             return c
         typy = [(a_, b_, _opis(c_)) for a_, b_, c_ in typy]
         hist = dict(q=[[e, v, (d.get("q_ni") or {}).get(e), None, None, None] for e, v in sorted((d.get("q_rev") or {}).items())],
-                    y=[[e, v, (d.get("ni") or {}).get(e), (d.get("fcf") or {}).get(e), None] for e, v in sorted((d.get("rev") or {}).items())])
+                    y=[[e, v, (d.get("ni") or {}).get(e), (d.get("fcf") or {}).get(e), None, (d.get("op") or {}).get(e),
+                        (d.get("skup_r") or {}).get(e, 0.0 if d.get("br") else None), (d.get("dyw_r") or {}).get(e, 0.0 if d.get("br") else None),
+                        _akcje_na(d, e)] for e, v in sorted((d.get("rev") or {}).items())][-12:])
+        tt = d.get("ttm") or {}
+        if (tt.get("rev") or (None, None))[0] and hist["y"] and tt["rev"][0] > hist["y"][-1][0]:
+            hist["ltm"] = [tt["rev"][0], tt["rev"][1], (tt.get("op") or (None, None))[1], abs((tt.get("skup") or (None, 0))[1] or 0),
+                           abs((tt.get("dyw") or (None, 0))[1] or 0), m.get("shares")]
         try:
             dcf = ocena.dcf_scenariusze(m, hist, r["s"])
         except Exception:  # noqa: BLE001
@@ -303,6 +481,7 @@ def main(argv=None):
         print("Brak składu indeksów — nic nie zapisuję.")
         return 1
     ind = {t: i for i in INDEKSY for t in sk.get(i, [])}
+    print(f"biznesradar: adresy spółek dla {len(sk.get('slug') or {})} tickerów", flush=True)
     if a.cache:
         os.makedirs(a.cache, exist_ok=True)
     rows, bledy, wykl = [], [], []
@@ -314,6 +493,11 @@ def main(argv=None):
             print(f"{t}: błąd ({e})")
             continue
         inf = d.get("info") or {}
+        if inf.get("sector") not in SEKTORY_WYKL:
+            try:
+                d = scal_br(d, pobierz_br(t, (sk.get("slug") or {}).get(t, t), a.cache))
+            except Exception as e:  # noqa: BLE001
+                print(f"{t}: biznesradar — błąd ({e})")
         if not d.get("rev") or not inf.get("marketCap"):
             bledy.append(t)
             continue

@@ -238,3 +238,22 @@ def test_dcf_fcff_dodaje_odsetki_po_podatku():
     assert abs(mz - (0.20 - 0.02 + 0.04)) < 1e-12
     m2 = dict(rev_cagr3=0.05, fcf_margin=0.20, rev_ttm=1000.0)   # bez odsetek → bez zmian
     assert abs(O.dcf_domyslne(m2, None)[1] - 0.20) < 1e-12
+
+
+def test_gpw_biznesradar_tabela_i_dywidendy():
+    """Parser tabeli raportu biznesradar.pl (tys. zł, kolumna „O4K” = 12 mies.) i dywidendy w metrykach GPW."""
+    import gpw
+    lata = [2019, 2020, 2021, 2022, 2023, 2024]
+    th = "".join(f'<th class="thq h">{r} <span>(gru {r % 100:02d})</span></th>' for r in lata) + '<th class="thq h newest">O4K <span>(cze 25)</span>*</th>'
+    td = lambda vals: "".join(f'<td class="h"><span class="value"><span class="pv"><span>{v}</span></span></span></td>' for v in vals)  # noqa: E731
+    h = (f'<table class="report-table"><tr>{th}</tr>'
+         f'<tr data-field="IncomeRevenues"><td class="f">x</td>{td(["1 000", "1 100", "1 210", "1 331", "1 464", "1 611", "1 700"])}</tr>'
+         f'<tr data-field="IncomeShareholderNetProfit"><td class="f">x</td>{td(["100", "110", "121", "133", "146", "161", "170"])}</tr>'
+         f'<tr data-field="CashflowDividend"><td class="f">x</td>{td(["-40", "-44", "-48", "-50", "-55", "-60", "-62"])}</tr></table>')
+    br = gpw.br_tabela(h, ("IncomeRevenues", "IncomeShareholderNetProfit", "CashflowDividend"))
+    assert br["IncomeRevenues"]["2024-12-31"] == 1_611_000 and br["IncomeRevenues"]["ttm:2025-06-30"] == 1_700_000
+    d = gpw.scal_br(dict(info=dict(marketCap=10e6, currentPrice=10.0, trailingPE=None)), br)
+    m = gpw.metryki(d)
+    assert m["rev_ttm"] == 1_700_000 and abs(m["rev_cagr5"] - 0.10) < 1e-3
+    assert m["dywidenda_lata"] == 5 and m["dywidenda_stabilna"] is True and m["dyw_rosnie_5"] is True
+    assert abs(m["pe"] - 10e6 / 170_000) < 1e-6                 # P/E z kapitalizacji ÷ zysk 12 mies., gdy yfinance nie podaje

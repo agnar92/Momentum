@@ -121,3 +121,9 @@ test("fazy rozwoju spółki: okno 3 lat, tylko do przodu, schyłek przy trwałym
     const w = W.fazyLat({ rev: [80, 82, 84, 86, 88, 40, 42, 44], zysk: [16, 16.4, 16.8, 17.2, 17.6, 8, 8.4, 8.8], wyplaty: [8, 8, 8, 8, 8, 4, 4, 4] });
     assert.ok(!w.includes(5), JSON.stringify(w));
 });
+
+test("PEG Lyncha: wzrost najwyżej 25 %", () => {
+    assert.strictEqual(W.peg25(20, 0.66), 20 / 25);
+    assert.strictEqual(W.peg25(20, 0.20), 1);
+    assert.strictEqual(W.peg25(20, -0.1), null);
+});
