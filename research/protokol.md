@@ -1626,3 +1626,16 @@ przychody 5/5 (EPS pokazany obok).
 
 **Uwaga do etapów 109–110** (użytkownik: „nie prosiłem, żebyś dodawał te rzeczy, chciałem, żebyś sprawdził tylko”): ramka „Stabilność wzrostu” usunięta z karty —
 oba etapy to wyłącznie sprawdzenie, na stronie nic nie zostaje.
+
+## Etap 111 — 8 reguł Buffetta z książki „Warren Buffett and the Interpretation of Financial Statements” (protokół przed uruchomieniem, 2026-11-24)
+
+Użytkownik wkleił film (autor: „spółki spełniające regułę dały 93 % w 5 lat, niespełniające 65 % … wszystkie 8 reguł znalazło lepsze spółki”). Tylko
+sprawdzenie — nic na stronę (użytkownik: „chciałem, żebyś sprawdził tylko”). Zbiór: top 500 USA PIT bez Financials / Materials / Energy / Utilities / Real
+Estate (jak w filmie), starty styczeń 2012–2021 (5 lat) i 2012–2023 (3 lata), dane znane w dniu startu, ostatni rok obrotowy (FY).
+Reguły (dane SEC; brak = poza porównaniem):
+1. marża brutta > 40 % w 2 ostatnich FY; 2. EPS rósł w ≥ 9 z 10 lat i zawsze zysk (dane od ~2008 → starty 2019+; dodatkowo wariant 4 z 5 lat);
+3. marża netto > 20 % w 2 ostatnich FY; 4. zobowiązania ÷ (kapitał + akcje własne) < 0,8; 5. odsetki < 15 % zysku operacyjnego (brak odsetek przy braku
+długu = 0); 6. dług długoterminowy ≤ 4 × zysk netto (brak długu = spełnia, strata przy długu = nie); 7. capex ÷ zysk netto (suma 3 FY): < 25 / 25–50 / > 50 %;
+8. SG&A ÷ zysk brutto: < 30 / 30–80 / > 80 %. Łącznie: reguły 3 + 6 + 8 wszystkie vs żadna.
+Miary: mediana zwrotu 5 lat spełnia / nie (jak w filmie) i różnica median nadwyżki nad medianą zbioru z bootstrapem po latach startu, połowy 2012–16 / 2017–21; 3 lata.
+Teza z filmu potwierdzona, gdy różnica 5 lat > 0, przedział bez 0 i obie połowy dodatnie.
