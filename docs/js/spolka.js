@@ -713,7 +713,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
 
     function sprawozdania(tryb) {
         const el = $("sprawozdania");
-        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Z Yahoo Finance (ok. 4–5 lat rocznie, ostatnie kwartały)." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
+        el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><h2>Sprawozdania finansowe</h2><div class="pod">${GPW ? "Rocznie z biznesradar.pl (od 2007 r.), kwartały z Yahoo Finance." : "Z raportów SEC (pierwsza publikacja, bez późniejszych korekt)."}</div></div>
           <div class="zakladki">${[["q", "Kwartalnie"], ["ttm", "12 mies. (TTM)"], ["y", "Rocznie"]].map(([k, n]) => `<button data-tr="${k}" class="${tryb === k ? "akt" : ""}">${n}</button>`).join("")}</div></div>
           <div class="mut male">Rachunek wyników</div><div id="sp-rw"></div>
           <div class="siatka2" style="margin-top:12px"><div><div class="mut male">Wolne przepływy (FCF = przepływy operacyjne − nakłady)</div><div id="sp-cf"></div></div>

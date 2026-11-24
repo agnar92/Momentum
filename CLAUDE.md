@@ -70,7 +70,15 @@ stated on the page. Page: list with filters (sector, index, Jakość 7/7, Siła 
 card format (m with USA field names, pct, oceny, `grupy` = GPW score components for `W.skladOceny`, typy via `ocena.typy(duza=5e9 zł, g_off=0.03)` with GPW texts,
 PEG scenarios from 3-year earnings growth, DCF via `ocena.dcf_scenariusze`, Lynch checklist, annual / quarterly hist, weekly prices). spolka.js `GPW` mode:
 prices in zł (`W.WALUTA`), texts „spółek GPW”, USA-only rows without data hidden, no 8-K / normalized-earnings section, no portfolio button, search stays on GPW.
-CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „Siła finansowa ≥ 7” filter (stage 95: the only factor with a confirmed edge).
+Data sources since Nov 2026 (user: „brakuje dużo danych odnośnie dywidendy … ranking jest przekłamany”): annual statements from biznesradar.pl
+(`pobierz_br` → `br_tabela`: income statement, cash flow, balance sheet pages, values in thousand zł × 1000, columns 2007… plus „O4K” = last 4 quarters as
+`ttm:<end>`; company URL slug captured by `sklad` from the index pages into `gpw_sklad.json` `slug`; cache `<T>.br.json` 6 days, 1 s between requests) merged by
+`scal_br` (replaces yfinance's 4–5 years: rev, net income to shareholders, EBIT, OCF, capex, FCF, equity, assets, current liabilities, cash, debt = borrowings +
+bonds, leasing separate; adds dividends paid `dyw_r`, buybacks `skup_r`, share issues `emisja_r`, 12 m values). yfinance (cache v2) keeps price, market cap,
+dividends per share (`dps`, yield fallback), share count (`akcje` → `akcje_3l`) and quarters. New GPW metrics as in USA: `rev_cagr5`, `dywidenda_lata`,
+`dywidenda_stabilna` (💰 badge + list filter `#dyw`), `dyw_rosnie_5`, `skup_netto_mc` (no buyback row in biznesradar cash flow = 0), P/E fallback mcap ÷ net
+income 12 m; `hist.y` 12 years in the USA column layout (op, buybacks, dividends, shares) + `hist.ltm`, so the phase step works for GPW. Scoring: loss → P/E and PEG
+percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missing data stays neutral 0.5). CI `dane.yml` runs `python gpw.py` (continue-on-error). USA list also got a „Siła finansowa ≥ 7” filter (stage 95: the only factor with a confirmed edge).
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
