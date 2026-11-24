@@ -1576,3 +1576,18 @@ Hipoteza: wariant B / C ≥ SPY (etapy 67–68: 7/7 18–21 %/rok przy 15–30 s
 **Reguła niespełniona** (pierwsza połowa przegrana). Ważne ograniczenie: w 2012–2014 żadna spółka nie spełniała wszystkich kryteriów (w danych badawczych 5-letni
 wzrost dostępny dopiero od ~2015 — SEC XBRL od 2009), a w 2015–2018 portfel miał 1–4 spółki (QCOM, GILD, BIIB, NVDA 2018 −50 %) — wynik pierwszej połowy to głównie
 brak danych i koncentracja. Od 2019 (7–10 spółek): B 20,9 % vs SPY 17,2 % (6/8 lat lepiej). GOOGL i GOOG liczone osobno (dwie klasy akcji) — do poprawy przy wdrożeniu.
+
+## Etap 108: PEG Lyncha z limitem wzrostu 25 % (zapisane 2026-11-24 PRZED uruchomieniem)
+
+Użytkownik: „dodaj limit 25 %” (Lynch: wzrost > 20–25 % rocznie rzadko się utrzymuje; PEG z długoterminowego wzrostu). Historycznie mamy tylko PEG z przeszłego wzrostu
+zysku 5 lat (prognoz z przeszłości brak): PEG = P/E ÷ (100 × wzrost), PEG25 = P/E ÷ (100 × min(wzrost, 25 %)). Zbiór top 500 USA PIT bez wykluczonych sektorów, starty
+styczniowe 2012–2023, nadwyżka nad medianą 12 / 36 mies., bootstrap po latach, połowy. Porównania: (1) „tanie tylko dzięki wzrostowi > 25 %” (PEG < 1, ale PEG25 ≥ 1)
+vs „tanie także z limitem” (PEG25 < 1); (2) to samo dla progu 2 (PEG < 2, PEG25 ≥ 2 vs PEG25 < 2); (3) PEG25 < 1 vs PEG < 1 (cała grupa). Hipoteza Lyncha: tanie tylko
+dzięki > 25 % wypadają gorzej. Reguła dla strony: jeśli (1) lub (2) ma różnicę 36 mies. < 0 z przedziałem bez zera i tym samym znakiem w obu połowach — główny PEG na
+stronie dostaje limit 25 % (etykiety, 7/7, dokup); w przeciwnym razie PEG z limitem pokazujemy tylko jako dodatkową informację („PEG Lyncha”).
+
+**Wynik etapu 108** (`r133_etap108.py`, `wyniki/r133_etap108.md`): wzrost > 25 % miało ~20 % spółek z PEG. (1) PEG < 1 tylko dzięki wzrostowi > 25 % vs PEG25 < 1:
+12 mies. +6,2 pp [−11,9; +22,2], 36 mies. −0,3 [−18,4; +32,6] (połowy +7,1 / −6,9); (2) próg 2: +5,3 / −4,0 pp, przedziały szerokie (n = 30); (3) PEG25 < 1 vs PEG < 1:
+−1,0 / +0,0 pp. **Reguła niespełniona** — limit 25 % nie poprawia wyboru (z przeszłym wzrostem; prognoz historycznych brak). Główny PEG bez zmian; „PEG Lyncha
+(wzrost max 25 %)” na karcie tylko jako informacja. Uboczne: PEG25 < 1 (z przeszłego wzrostu) vs reszta z PEG −6,4 pp / 12 m [−11,1; −0,8] — niski PEG z historii
+nie wskazuje zwycięzców (jak etap 96).

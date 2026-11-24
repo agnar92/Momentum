@@ -56,6 +56,11 @@
         const s = (f) => ({ g: g * f, peg: pe / (100 * g * f) });
         return { bear: s(0.67), base: s(1), bull: s(1.26) };
     }
+    // PEG Lyncha: wzrost do PEG najwyżej 25 % rocznie (Lynch nie ufał trwałości szybszego wzrostu) — tylko informacja (etap 108: limit nie poprawiał wyboru)
+    const LIMIT_LYNCH = 0.25;
+    function peg25(pe, g) {
+        return ok(pe) && pe > 0 && ok(g) && g > 0 ? pe / (100 * Math.min(g, LIMIT_LYNCH)) : null;
+    }
     function pegEtykieta(peg) {
         if (!ok(peg) || peg <= 0) return "–";
         return peg < 1 ? "Nisko" : peg < 2 ? "Uczciwie" : peg < 3 ? "Drogo" : "Bardzo drogo";
@@ -318,7 +323,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);
