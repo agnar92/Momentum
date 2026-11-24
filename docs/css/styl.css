@@ -304,4 +304,3 @@ td.zawin { white-space: normal; min-width: 180px; }
 .wiecej-w { text-align: center; margin: 4px 0 18px; }
 .wiecej { border: 1px solid var(--linia); background: var(--karta); color: var(--tekst); border-radius: 999px; padding: 10px 22px; font: inherit; font-weight: 700; cursor: pointer; }
 .wiecej:hover { background: var(--hover); }
-.kr-stab { margin-top: 10px; border: 1px solid var(--linia); border-radius: 10px; padding: 10px 12px; background: var(--tlo2); }

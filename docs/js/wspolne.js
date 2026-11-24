@@ -56,18 +56,6 @@
         const s = (f) => ({ g: g * f, peg: pe / (100 * g * f) });
         return { bear: s(0.67), base: s(1), bull: s(1.26) };
     }
-    // stabilność wzrostu z lat obrotowych (etap 109 — tylko informacja): ile z 5 ostatnich lat przychody i EPS (zysk netto ÷ liczba akcji) rosły r/r
-    function stabilnyWzrost(y) {
-        const r = (y || []).filter((x, i, a) => i === a.length - 1 || Date.parse(a[i + 1][0]) - Date.parse(x[0]) > 300 * 864e5).slice(-6);
-        if (r.length < 6) return null;
-        const eps = r.map((x) => (ok(x[2]) && x.length > 8 && ok(x[8]) && x[8] > 0 ? x[2] / x[8] : null));
-        let rv = 0, ep = 0, epsOk = eps.every((v) => v !== null);
-        for (let i = 1; i < 6; i++) {
-            if (ok(r[i][1]) && ok(r[i - 1][1]) && r[i][1] > r[i - 1][1]) rv++;
-            if (epsOk && eps[i] > eps[i - 1]) ep++;
-        }
-        return { przychody: rv, eps: epsOk ? ep : null, stabilny: rv === 5, lata: r.map((x) => x[0].slice(0, 4)) };
-    }
     // PEG Lyncha: wzrost do PEG najwyżej 25 % rocznie (Lynch nie ufał trwałości szybszego wzrostu) — tylko informacja (etap 108: limit nie poprawiał wyboru)
     const LIMIT_LYNCH = 0.25;
     function peg25(pe, g) {
@@ -335,7 +323,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, stabilnyWzrost, ok };
+    const W = { WALUTA: "USD", dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

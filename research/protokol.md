@@ -1623,3 +1623,6 @@ wszystko poniżej 5 lat ma małe znaczenie”. Etap 109 mierzył 12 / 36 mies. i
 wynik nieczytelny (−22 pp [−68; +88]). Zysk idzie za sprzedażą: zysk netto za 5 lat wyższy niż dziś u 79 % spółek P5 vs 69 % reszty. Kierunek dodatni i rośnie
 z horyzontem (3 l. +3,5 → 5 l. +11), ale przedział obejmuje 0 → **reguła niespełniona**: bez znacznika i pierwszeństwa; ramka na karcie liczy „stabilny” jako
 przychody 5/5 (EPS pokazany obok).
+
+**Uwaga do etapów 109–110** (użytkownik: „nie prosiłem, żebyś dodawał te rzeczy, chciałem, żebyś sprawdził tylko”): ramka „Stabilność wzrostu” usunięta z karty —
+oba etapy to wyłącznie sprawdzenie, na stronie nic nie zostaje.
