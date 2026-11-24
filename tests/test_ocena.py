@@ -257,3 +257,19 @@ def test_gpw_biznesradar_tabela_i_dywidendy():
     assert m["rev_ttm"] == 1_700_000 and abs(m["rev_cagr5"] - 0.10) < 1e-3
     assert m["dywidenda_lata"] == 5 and m["dywidenda_stabilna"] is True and m["dyw_rosnie_5"] is True
     assert abs(m["pe"] - 10e6 / 170_000) < 1e-6                 # P/E z kapitalizacji ÷ zysk 12 mies., gdy yfinance nie podaje
+
+
+def test_buffett_reguly():
+    """Etap 111: reguły Buffetta z lat obrotowych; zysk brutto z przychodów − kosztu, gdy brak GrossProfit."""
+    lata = [f"{r}-12-31" for r in range(2019, 2026)]
+    yr = {"rev": {e: 100.0 + 10 * i for i, e in enumerate(lata)}, "ni": {e: 25.0 + 2 * i for i, e in enumerate(lata)},
+          "koszt": {e: 40.0 for e in lata}, "sga": {e: 15.0 for e in lata}, "capex": {e: 4.0 for e in lata}}
+    ch = {"eq": {lata[-1]: 100.0}, "zob": {lata[-1]: 70.0}, "skarb": {lata[-1]: -20.0}, "dlug_dl": {lata[-1]: 50.0}}
+    y = [[e, yr["rev"][e], yr["ni"][e], 0, 0, 0, 0, 0, 10.0] for e in lata]
+    m = O.buffett(yr, ch, y)
+    assert abs(m["bf_gm"] - (150 - 40) / 150) < 1e-3 and m["bf_eps_lata"] == 5 and m["bf_eps_zysk"]
+    assert abs(m["bf_de"] - 70 / 120) < 1e-3 and abs(m["bf_dlug_lat"] - 50 / 37) < 1e-3
+    lst = O.buffett_lista(m)
+    assert len(lst) == 7 and all(ok for _, _, ok in lst) and O.buffett3(m)
+    m2 = O.buffett(dict(yr, ni={e: -1.0 for e in lata}), ch, y)
+    assert m2["bf_dlug_lat"] == O.BRAK_BF and not O.buffett3(m2)

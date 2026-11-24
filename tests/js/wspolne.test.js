@@ -127,3 +127,10 @@ test("PEG Lyncha: wzrost najwyżej 25 %", () => {
     assert.strictEqual(W.peg25(20, 0.20), 1);
     assert.strictEqual(W.peg25(20, -0.1), null);
 });
+
+test("przewaga Buffetta: trzy reguły razem", () => {
+    assert.strictEqual(W.buffettM({ bf_nm: 0.25, bf_dlug_lat: 1, bf_sga_gp: 0.2 }), true);
+    assert.strictEqual(W.buffettM({ bf_nm: 0.25, bf_dlug_lat: 5, bf_sga_gp: 0.2 }), false);
+    assert.strictEqual(W.buffettM({ bf_nm: 0.25, bf_dlug_lat: 1 }), false);
+    assert.strictEqual(W.filtruj([{ t: "A", st: {}, bf: 1 }, { t: "B", st: {} }], { buffett: true }).length, 1);
+});
