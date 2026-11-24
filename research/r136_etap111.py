@@ -12,7 +12,7 @@ S111 = json.load(open(f'{SZ}/sec111.json'))
 
 def inst(d):
     """{tag: [[start, end, val, filed]]} -> Seria stanów (pierwszy tag z wartością dla daty)."""
-    rows = [[r[1], r[2], r[3]] for r in wiele({t: [[x[1], x[2], x[3]] for x in v] for t, v in (d or {}).items()})] if d else []
+    rows = wiele({t: [[x[1], x[2], x[3]] for x in v] for t, v in (d or {}).items()}) if d else []
     return Seria(stan(rows), 100) if rows else None
 
 

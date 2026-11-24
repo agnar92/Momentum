@@ -89,8 +89,8 @@ def rozklad(h):
             s0, s1 = sq['sh'].przy(t0, e0), sq['sh'].przy(t1, e1)
             c0, c1 = Cv[i, j], Cv[i + h, j]
             if None in (n0, n1, s0, s1) or n0 <= 0 or n1 <= 0 or s0 <= 0 or s1 <= 0 or not (fin(c0) and fin(c1) and c0 > 0 and c1 > 0): continue
-            s1a = s1 * podziel(k, e0, e1)
-            lr = np.log(c1 / c0); lrev = np.log(r1 / r0); lsh = -np.log(s1a / s0); lm = np.log((n1 / r1) / (n0 / r0))
+            s0a = s0 * podziel(k, e0, e1)  # liczba akcji na starcie w jednostkach po splitach
+            lr = np.log(c1 / c0); lrev = np.log(r1 / r0); lsh = -np.log(s1 / s0a); lm = np.log((n1 / r1) / (n0 / r0))
             rec.append((i, lr, lrev, lsh, lm, lr - lrev - lsh - lm))
     D = pd.DataFrame(rec, columns=['i', 'lr', 'przychody', 'akcje', 'marża', 'P/E i dywidendy'])
     out = []
