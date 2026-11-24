@@ -227,3 +227,14 @@ def test_gpw_metryki_i_progi():
     st = gpw.strategie(m)
     assert st["Jakość (7 kryteriów, GPW)"][0][2] is True          # przychody 10 %/rok > próg GPW 5 %
     assert gpw.etykieta(0.4) == "Bardzo tania" and gpw.etykieta(None) is None
+
+
+def test_dcf_fcff_dodaje_odsetki_po_podatku():
+    """FCFF: marża = FCF − SBC + odsetki × (1 − podatek); dług odejmowany od wartości, więc koszt długu nie jest liczony dwa razy."""
+    m = dict(rev_cagr3=0.05, eps_next5=0.08, fcf_margin=0.20, sbc_przych=0.02, odsetki_ttm=50.0, rev_ttm=1000.0, stopa_pod=0.20)
+    g, mz = O.dcf_domyslne(m, None)
+    assert abs(g - 0.05) < 1e-12
+    assert abs(m["odsetki_przych"] - 0.04) < 1e-12          # 50 × 0,8 ÷ 1000
+    assert abs(mz - (0.20 - 0.02 + 0.04)) < 1e-12
+    m2 = dict(rev_cagr3=0.05, fcf_margin=0.20, rev_ttm=1000.0)   # bez odsetek → bez zmian
+    assert abs(O.dcf_domyslne(m2, None)[1] - 0.20) < 1e-12

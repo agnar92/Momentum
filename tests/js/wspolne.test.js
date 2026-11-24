@@ -113,4 +113,11 @@ test("fazy rozwoju spółki: okno 3 lat, tylko do przodu, schyłek przy trwałym
     // trwały spadek przychodów → schyłek
     const s = W.fazyLat({ rev: [100, 100, 100, 95, 90, 85, 80, 75], zysk: [10, 10, 10, 9, 8, 7, 6, 5], wyplaty: [5, 5, 5, 5, 5, 5, 5, 5] });
     assert.deepStrictEqual(s.slice(-2), [5, 5]);
+    // schyłek trwa, dopóki przychody i zysk nie przebiją szczytów; potem faza od nowa z bieżących danych
+    const o = W.fazyLat({ rev: [100, 110, 120, 100, 90, 85, 80, 115, 130, 150], zysk: [10, 12, 14, 5, 3, 2, 1, 13, 20, 25], wyplaty: [5, 5, 5, 0, 0, 0, 0, 0, 0, 0] });
+    assert.deepStrictEqual(o, [4, 4, 4, 4, 4, 5, 5, 5, 3, 3]);
+
+    // wydzielenie spółki (przychody −50 % w rok, marża bez zmian) to nie schyłek
+    const w = W.fazyLat({ rev: [80, 82, 84, 86, 88, 40, 42, 44], zysk: [16, 16.4, 16.8, 17.2, 17.6, 8, 8.4, 8.8], wyplaty: [8, 8, 8, 8, 8, 4, 4, 4] });
+    assert.ok(!w.includes(5), JSON.stringify(w));
 });
