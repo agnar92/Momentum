@@ -125,7 +125,9 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   step tabs (colour = share of ✓ among answered checks: ≥ 70 % green, ≥ 40 % yellow, else red; one key number each); every check is ONE line ✓/✗ · short
   question · value (`pytania()`, lists `lWzrost` / `lPrzewaga` / `lBezp` / `lZarzad` incl. the 7/7 criteria via `kr77`); long texts only in `<details>`
   (`wiecejTxt`: Lynch texts, „Jak liczymy prognozę”); projection shown as 3 big scenario tiles + chart. Projection safety: a stock with „Cykliczna” fit ≥ 60 is
-  projected as cyclical (5-year average EPS; MU peak-cycle euphoria bug) and the base growth is capped at 80 % of the type's upper bound.
+  projected as cyclical and the base growth is capped at 80 % of the type's upper bound. Cyclicals whose current EPS > 5-year average get THREE CYCLE PATHS
+  (user: „estymaty się popsuły, MU pokazuje stratę” — average-only was one-sided): ostrożny = EPS back to the 5-year average, bazowy = halfway, lepszy = today's EPS
+  (`eps_teraz`, `pr.cykl`); each path's end P/E = min(price ÷ its EPS, 5-year median P/E).
   The old 6-step description below still applies to the reused parts.
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW

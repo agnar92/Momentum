@@ -694,7 +694,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
     }
     function prognozaKarty() {
         const typ = typPrognozy(); if (!typ) return { brak: "brak typu" };
-        return W.prognozaTypu({ typ, eps_baza: epsBaza(typ), pe: M.pe, cena: M.price, pe_med5: M.pe_med5, rev_cagr3: M.rev_cagr3, rev_cagr5: M.rev_cagr5, eps_next5: GPW ? M.ni_cagr3 : M.eps_next5 });
+        return W.prognozaTypu({ typ, eps_baza: epsBaza(typ), eps_teraz: typ === "Cykliczna" ? (M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps) : null, pe: M.pe, cena: M.price, pe_med5: M.pe_med5, rev_cagr3: M.rev_cagr3, rev_cagr5: M.rev_cagr5, eps_next5: GPW ? M.ni_cagr3 : M.eps_next5 });
     }
     function krokTyp() {
         const ty = K.typy || [], typ = duz6() ? W.DUZY : ty[0] && ty[0][0];
@@ -706,7 +706,8 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${pr.brak ? `<p class="mut">Brak prognozy na 5 lat: ${esc(pr.brak)}.</p>` : `
           <div class="kr-scen">${Object.entries(pr.war).map(([k, w]) => `<div class="kr-scen-k kr-scen-${k}"><small>${N[k]}</small><b class="${w.cagr >= 0 ? "plus" : "minus"}">${W.fmtPct(w.cagr, 1, true)}</b><span>rocznie · ${W.fmtCena(w.ceny[5])}</span></div>`).join("")}</div>
           ${wykresPrognozy(pr)}
-          ${wiecejTxt("Jak liczymy prognozę", `Zysk ${W.fmtCena(pr.eps0)} na akcję${tp === "Cykliczna" ? " (średnia z 5 lat — spółka cykliczna, nie liczymy od szczytu cyklu)" : M.peg_norm_uzyte ? " (znormalizowany)" : ""} rośnie przez 5 lat w tempie 80 % najniższego z: przychody 3 lata, przychody 5 lat${GPW ? "" : ", prognoza analityków"}, w zakresie realnym dla typu wg Lyncha (${W.fmtPct(pr.zakres[0], 0)}–${W.fmtPct(pr.zakres[1], 0)} rocznie); P/E za 5 lat nie wyższe niż dziś (${W.fmtNum(pr.peTeraz, 1)}×) ani niż mediana z 5 lat. Bez dywidendy${W.ok(M.div) && M.div > 0 ? ` (dochodzi ok. ${W.fmtPct(M.div, 1)} rocznie)` : ""}. To nie jest wycena ani rekomendacja.
+          ${pr.cykl ? `<p class="mut male" style="margin:2px 0 6px">Spółka cykliczna — trzy drogi cyklu: <b>ostrożny</b> = zysk wraca do średniej z 5 lat (${W.fmtCena(pr.war.ostrozny.eps)} na akcję), <b>bazowy</b> = połowa drogi (${W.fmtCena(pr.war.bazowy.eps)}), <b>lepszy</b> = zysk zostaje jak dziś (${W.fmtCena(pr.war.lepszy.eps)}).</p>` : ""}
+          ${wiecejTxt("Jak liczymy prognozę", `Zysk ${W.fmtCena(pr.eps0)} na akcję${pr.cykl ? " w wariancie ostrożnym (średnia z 5 lat), w bazowym połowa drogi do dzisiejszego, w lepszym dzisiejszy —" : tp === "Cykliczna" ? " (średnia z 5 lat — spółka cykliczna, nie liczymy od szczytu cyklu)" : M.peg_norm_uzyte ? " (znormalizowany)" : ""} rośnie przez 5 lat w tempie 80 % najniższego z: przychody 3 lata, przychody 5 lat${GPW ? "" : ", prognoza analityków"}, w zakresie realnym dla typu wg Lyncha (${W.fmtPct(pr.zakres[0], 0)}–${W.fmtPct(pr.zakres[1], 0)} rocznie); P/E za 5 lat nie wyższe niż dzisiejsze (liczone od zysku danego wariantu) ani niż mediana z 5 lat. Bez dywidendy${W.ok(M.div) && M.div > 0 ? ` (dochodzi ok. ${W.fmtPct(M.div, 1)} rocznie)` : ""}. To nie jest wycena ani rekomendacja.
             <div class="kr-wsk kr-prog"><div></div><div class="mut male">wzrost zysku</div><div class="mut male">P/E za 5 lat</div><div class="mut male">cena za 5 lat</div><div class="mut male">rocznie</div>
               ${Object.entries(pr.war).map(([k, w]) => `<div class="kr-wsk-n"><i class="kr-prog-${k}"></i>${N[k]}</div><b>${W.fmtPct(w.g, 1)}</b><b>${W.fmtNum(w.pe, 1)}×</b><b>${W.fmtCena(w.ceny[5])}</b><b>${W.fmtPct(w.cagr, 1, true)}</b>`).join("")}</div>`)}`}`;
     }

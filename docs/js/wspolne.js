@@ -277,14 +277,19 @@
         if (!kand.length) return { brak: "brak historii wzrostu" };
         const clip = (x) => Math.max(zak[0], Math.min(zak[1], x));
         const g = Math.min(clip(0.8 * Math.min(...kand)), 0.8 * zak[1]);   // bazowy najwyżej 80 % górnej granicy typu — sufit zostaje dla wariantu „lepszy”
-        const peTeraz = d.cena / eps0;                       // P/E względem zysku bazowego (u cyklicznych — średniego)
-        const peEnd = Math.min(peTeraz, ok(d.pe_med5) && d.pe_med5 > 0 ? d.pe_med5 : peTeraz);
-        const war = { ostrozny: [clip(g * 0.5), peEnd * 0.8], bazowy: [g, peEnd], lepszy: [Math.min(zak[1], g * 1.25), peEnd] };
-        const lata = d.lata || 5, out = { g, peTeraz, peEnd, eps0, zakres: zak, war: {} };
-        Object.entries(war).forEach(([k, [gk, pk]]) => {
-            const ceny = [d.cena];
-            for (let t = 1; t <= lata; t++) ceny.push(eps0 * Math.pow(1 + gk, t) * (peTeraz + (pk - peTeraz) * t / lata));
-            out.war[k] = { g: gk, pe: pk, ceny, cagr: Math.pow(ceny[lata] / d.cena, 1 / lata) - 1 };
+        const peEndZ = (e0) => Math.min(d.cena / e0, ok(d.pe_med5) && d.pe_med5 > 0 ? d.pe_med5 : d.cena / e0);   // P/E nie rośnie
+        // spółka cykliczna z dzisiejszym zyskiem (eps_teraz) wyższym niż średni z cyklu: trzy warianty = trzy drogi cyklu —
+        // ostrożny: zysk wraca do średniej z 5 lat, bazowy: połowa drogi, lepszy: zysk zostaje na dzisiejszym poziomie (wzrost w zakresie typu)
+        const cykl = d.typ === "Cykliczna" && ok(d.eps_teraz) && d.eps_teraz > eps0;
+        const e = cykl ? { ostrozny: eps0, bazowy: (eps0 + d.eps_teraz) / 2, lepszy: d.eps_teraz } : { ostrozny: eps0, bazowy: eps0, lepszy: eps0 };
+        const war = cykl ? { ostrozny: [clip(g * 0.5), 0.8], bazowy: [g, 1], lepszy: [Math.min(zak[1], g * 1.25), 1] }
+            : { ostrozny: [clip(g * 0.5), 0.8], bazowy: [g, 1], lepszy: [Math.min(zak[1], g * 1.25), 1] };
+        const peTeraz = d.cena / eps0, peEnd = peEndZ(eps0);
+        const lata = d.lata || 5, out = { g, peTeraz, peEnd, eps0, cykl, zakres: zak, war: {} };
+        Object.entries(war).forEach(([k, [gk, mn]]) => {
+            const e0 = e[k], pt = d.cena / e0, pk = peEndZ(e0) * mn, ceny = [d.cena];
+            for (let t = 1; t <= lata; t++) ceny.push(e0 * Math.pow(1 + gk, t) * (pt + (pk - pt) * t / lata));
+            out.war[k] = { g: gk, pe: pk, eps: e0, ceny, cagr: Math.pow(ceny[lata] / d.cena, 1 / lata) - 1 };
         });
         return out;
     }
