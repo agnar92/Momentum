@@ -1626,3 +1626,38 @@ przychody 5/5 (EPS pokazany obok).
 
 **Uwaga do etapów 109–110** (użytkownik: „nie prosiłem, żebyś dodawał te rzeczy, chciałem, żebyś sprawdził tylko”): ramka „Stabilność wzrostu” usunięta z karty —
 oba etapy to wyłącznie sprawdzenie, na stronie nic nie zostaje.
+
+## Etap 111 — 8 reguł Buffetta z książki „Warren Buffett and the Interpretation of Financial Statements” (protokół przed uruchomieniem, 2026-11-24)
+
+Użytkownik wkleił film (autor: „spółki spełniające regułę dały 93 % w 5 lat, niespełniające 65 % … wszystkie 8 reguł znalazło lepsze spółki”). Tylko
+sprawdzenie — nic na stronę (użytkownik: „chciałem, żebyś sprawdził tylko”). Zbiór: top 500 USA PIT bez Financials / Materials / Energy / Utilities / Real
+Estate (jak w filmie), starty styczeń 2012–2021 (5 lat) i 2012–2023 (3 lata), dane znane w dniu startu, ostatni rok obrotowy (FY).
+Reguły (dane SEC; brak = poza porównaniem):
+1. marża brutta > 40 % w 2 ostatnich FY; 2. EPS rósł w ≥ 9 z 10 lat i zawsze zysk (dane od ~2008 → starty 2019+; dodatkowo wariant 4 z 5 lat);
+3. marża netto > 20 % w 2 ostatnich FY; 4. zobowiązania ÷ (kapitał + akcje własne) < 0,8; 5. odsetki < 15 % zysku operacyjnego (brak odsetek przy braku
+długu = 0); 6. dług długoterminowy ≤ 4 × zysk netto (brak długu = spełnia, strata przy długu = nie); 7. capex ÷ zysk netto (suma 3 FY): < 25 / 25–50 / > 50 %;
+8. SG&A ÷ zysk brutto: < 30 / 30–80 / > 80 %. Łącznie: reguły 3 + 6 + 8 wszystkie vs żadna.
+Miary: mediana zwrotu 5 lat spełnia / nie (jak w filmie) i różnica median nadwyżki nad medianą zbioru z bootstrapem po latach startu, połowy 2012–16 / 2017–21; 3 lata.
+Teza z filmu potwierdzona, gdy różnica 5 lat > 0, przedział bez 0 i obie połowy dodatnie.
+
+## Etap 112 — trzy tezy z filmu „simple choices” (protokół przed uruchomieniem, 2026-11-24)
+
+Tylko sprawdzenie, nic na stronę. Zbiór jak w etapie 111 (top 500 USA PIT bez wykluczonych sektorów), starty w styczniu.
+1. Dług (Jag Capital: najniższy kwintyl 17,1 %/rok, najwyższy 7,5 %): kwintyle D/E w każdym starcie (ujemny kapitał osobno); średni zwrot 12 mies. równych
+   wag, uśredniony po startach 2012–2025 (jak „roczny zwrot” w badaniu) + różnica nadwyżki Q1 vs Q5 po 5 latach (bootstrap, połowy).
+2. „Ignoruj skrajne wyceny”: P/E 0–50 i PEG 0–3 (PEG z przeszłego wzrostu zysku 5 lat — prognoz historycznych nie mamy) vs P/E ≥ 50 lub PEG ≥ 3; straty osobno.
+   Różnica nadwyżki po 3 i 5 latach.
+3. BCG („po 10 latach 60 % wzrostu kursu ze sprzedaży”): rozkład log-zwrotu 5 lat na przychody na akcję, zmianę marży netto, zmianę P/E i resztę
+   (dywidendy, różnice dat); dla górnych 25 % spółek i dla wszystkich (zysk dodatni na obu końcach). 10 lat — za mało danych, tylko starty 2012–2016 opisowo.
+Teza potwierdzona, gdy kierunek jak w filmie, przedział bez 0 i obie połowy w tę samą stronę (1, 2); dla 3 — udział przychodów ≥ 50 % w górnym kwartylu.
+
+**Wynik etapu 111** (`r136_etap111.py`, `wyniki/r136_etap111.md`; dane `r136a_sec_buffett.py`): potwierdzone 9 z 12 porównań (5 lat, przedział bez 0, obie
+połowy dodatnie): marża brutto > 40 % +27 pp, EPS 4 z 5 lat +18, marża netto > 20 % +29, skorygowany D/E < 0,8 +9, dług ≤ 4 × zysk +17, capex < 25 % zysku vs > 50 %
++32, SG&A < 30 % zysku brutto +59 (mediana zwrotu 5 lat +124 % vs +61 %), łącznie 3 + 6 + 8 +66 (+122 % vs +40 %). Niepotwierdzone: odsetki < 15 % (pierwsza połowa
+ujemna), EPS 9 z 10 lat (tylko 13 spółek — dane za krótkie). Kierunek wszystkich reguł jak w filmie; u nas różnice większe. Tylko sprawdzenie — nic na stronę.
+
+**Wynik etapu 112** (`r137_etap112.py`, `wyniki/r137_etap112.md`): 1) kwintyle długu: średnio 15,0 / 16,3 / 12,5 / 13,8 / 12,5 %/rok (ujemny kapitał 17,1 %) —
+różnica Q1 vs Q5 po 5 latach −1,3 pp [−8,7; +9,4] → teza Jag Capital (17,1 vs 7,5 %) **niepotwierdzona** w top 500; 2) P/E < 50 i PEG < 3 vs drożsi −1,0 pp / 5 lat
+[−20,9; +18,8] → **niepotwierdzona** (PEG z przeszłego wzrostu); vs spółki ze stratą +15,4 [−36,5; +35,2] — kierunek zgodny, bez pewności; 3) rozkład zwrotu: 5 lat —
+przychody 53 % (górne 25 %: 39 %), skup akcji 14 % (6 %), marża 12 % (28 %), P/E i dywidendy 22 % (26 %); 10 lat (starty 2012–16) przychody 44 %; 1 rok górne 25 %:
+P/E 52 %. Kierunek BCG potwierdzony (rok = wycena, dłużej = sprzedaż), ale 60 % nie — u nas 40–53 %, dla najlepszych spółek ważna też marża.

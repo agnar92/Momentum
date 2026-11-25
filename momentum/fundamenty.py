@@ -28,6 +28,11 @@ TAGI = {
                           "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments"]),
     "podatek": ("USD", ["IncomeTaxExpenseBenefit"]),
     "eps": ("USD/shares", ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted", "EarningsPerShareBasic"]),
+    # Buffett (etap 111): koszty sprzedaży i ogólnego zarządu (SG&A) — razem albo w dwóch częściach
+    "sga": ("USD", ["SellingGeneralAndAdministrativeExpense"]),
+    "sm": ("USD", ["SellingAndMarketingExpense"]),
+    "ga": ("USD", ["GeneralAndAdministrativeExpense"]),
+    "koszt": ("USD", ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"]),   # zysk brutto = przychody − koszt, gdy brak GrossProfit (NFLX, GOOGL)
 }
 CHWILE = {
     "cash": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents", "Cash"],
@@ -39,6 +44,11 @@ CHWILE = {
     "lease_nc": ["OperatingLeaseLiabilityNoncurrent"],
     "lease_c": ["OperatingLeaseLiabilityCurrent"],
     "zapasy": ["InventoryNet"],                        # Lynch: zapasy rosnące szybciej niż sprzedaż = ostrzeżenie
+    # Buffett (etap 111): zobowiązania ogółem, akcje własne, dług długoterminowy
+    "zob": ["Liabilities"],
+    "pasywa": ["LiabilitiesAndStockholdersEquity"],
+    "skarb": ["TreasuryStockValue", "TreasuryStockCommonValue"],
+    "dlug_dl": ["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "LongTermDebt", "SeniorNotes"],   # VRSN: SeniorNotes
 }
 # emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
 TAGI_IFRS = {
@@ -56,6 +66,9 @@ TAGI_IFRS = {
     "przed_pod": ["ProfitLossBeforeTax"],
     "podatek": ["IncomeTaxExpenseContinuingOperations"],
     "eps": ["DilutedEarningsLossPerShare", "BasicAndDilutedEarningsLossPerShare", "BasicEarningsLossPerShare"],
+    "sm": ["DistributionCosts", "SellingExpense"],
+    "ga": ["AdministrativeExpense"],
+    "koszt": ["CostOfSales"],
 }
 CHWILE_IFRS = {
     "cash": ["CashAndCashEquivalents"],
@@ -64,6 +77,9 @@ CHWILE_IFRS = {
     "lc": ["CurrentLiabilities"],
     "lease": ["LeaseLiabilities"],
     "zapasy": ["Inventories"],
+    "zob": ["Liabilities"],
+    "skarb": ["TreasuryShares"],
+    "dlug_dl": ["NoncurrentPortionOfNoncurrentBorrowings", "LongtermBorrowings"],
 }
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
@@ -186,7 +202,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 7
+    out["v"] = 8
     return out
 
 

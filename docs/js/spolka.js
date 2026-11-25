@@ -25,7 +25,7 @@
         const typ = K.typy && K.typy[0];
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">PEG / DCF w podsumowaniu ↓</a></div>` : "";
         $("top").innerHTML = `
-          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}</h1>
+          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div>
             <div id="do-portfela" style="margin-top:10px"></div></div>
           <div class="siatka2">
@@ -187,6 +187,10 @@
         const fv = (n, v) => {
             if (!W.ok(v)) return "–";
             if (/≥ 30 % długu/.test(n) && v >= 9.9) return "brak długu";
+            if (/Buffett|akcje własne|4 × zysk|zysku netto \(3 lata\)|SG&A/.test(n) && v >= 99) return /kapitał/.test(n) ? "ujemny kapitał" : "strata";
+            if (/4 × zysk/.test(n)) return v <= 0 ? "brak długu" : W.fmtNum(v, 1) + " × zysk";
+            if (/Zobowiązania/.test(n)) return W.fmtNum(v);
+            if (/≥ 4 z 5 lat/.test(n)) return v + " z 5" + (M.bf_eps_zysk === false ? ", była strata" : "");
             if (/Dług|PEG/.test(n)) return W.fmtNum(v);
             if (/FCF > 0/.test(n)) return W.fmtUsd(v);
             if (/Lata|≥ 3 z 5|≥ 2 z 3|z 10 lat/.test(n)) return String(v);
@@ -195,7 +199,7 @@
             if (/ROE wyższe/.test(n)) return (n.match(/niż (.*)$/) || ["", ""])[1] + " " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
             return W.fmtPct(v, 1);
         };
-        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/) i z filmów autora (Zyskowność, Przepływy pieniężne — jeszcze nie sprawdzone u nas w całości): ile z nich spółka dziś spełnia.</div><div class="kol3">` +
+        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/) i z filmów autora (Zyskowność, Przepływy pieniężne — jeszcze nie sprawdzone u nas w całości); Buffett — reguły z książki Mary Buffett potwierdzone na danych 2012–2026: ile z nich spółka dziś spełnia.</div><div class="kol3">` +
             Object.entries(K.strategie).map(([n, kr]) => {
                 const ile = kr.filter((x) => x[2]).length;
                 return `<div class="kol" style="border:1px solid var(--linia);border-radius:10px;padding:10px"><div style="display:flex;justify-content:space-between"><b>${esc(n)}</b>
