@@ -33,6 +33,9 @@ jobs:
         with:
           path: docs/
 
+      # GitHub rejestruje wgraną paczkę z opóźnieniem — bez przerwy publikacja często kończyła się „No artifacts named github-pages were found”
+      - name: Odczekaj na rejestrację paczki
+        run: sleep 20
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
