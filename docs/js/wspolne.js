@@ -276,7 +276,7 @@
         const kand = [d.rev_cagr3, d.rev_cagr5, d.eps_next5].filter(ok);
         if (!kand.length) return { brak: "brak historii wzrostu" };
         const clip = (x) => Math.max(zak[0], Math.min(zak[1], x));
-        const g = clip(0.8 * Math.min(...kand));
+        const g = Math.min(clip(0.8 * Math.min(...kand)), 0.8 * zak[1]);   // bazowy najwyżej 80 % górnej granicy typu — sufit zostaje dla wariantu „lepszy”
         const peTeraz = d.cena / eps0;                       // P/E względem zysku bazowego (u cyklicznych — średniego)
         const peEnd = Math.min(peTeraz, ok(d.pe_med5) && d.pe_med5 > 0 ? d.pe_med5 : peTeraz);
         const war = { ostrozny: [clip(g * 0.5), peEnd * 0.8], bazowy: [g, peEnd], lepszy: [Math.min(zak[1], g * 1.25), peEnd] };

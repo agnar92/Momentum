@@ -121,6 +121,11 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   pretax vs industry + `marzeWykres`) / Bezpieczeństwo (`pytBezp`, 2020 crash bars) / **Zarząd** (`krokZarzad`: insiders, buybacks, dividend, funds / analysts, 8-K 5.02
   + payout charts) / Wycena / **Werdykt** (`zaPrzeciw`: every checked rule from 7/7, Buffett, Lynch zakup / sell list / unikaj, ⬇, ❗ warnings in „Za” / „Przeciw”
   columns; `ocenaWlasna`: Lynch qualitative tick boxes shared with the Lynch section, localStorage `fundamenta_lynch`; PEG / DCF panel). Questions via `pytania()`.
+  VISUAL FIRST (user, Nov 2026: „strasznie dużo tekstu … bardziej obrazowo, na pierwszy rzut oka, max 1 minuta”): `przeglad()` = 8 clickable tiles above the
+  step tabs (colour = share of ✓ among answered checks: ≥ 70 % green, ≥ 40 % yellow, else red; one key number each); every check is ONE line ✓/✗ · short
+  question · value (`pytania()`, lists `lWzrost` / `lPrzewaga` / `lBezp` / `lZarzad` incl. the 7/7 criteria via `kr77`); long texts only in `<details>`
+  (`wiecejTxt`: Lynch texts, „Jak liczymy prognozę”); projection shown as 3 big scenario tiles + chart. Projection safety: a stock with „Cykliczna” fit ≥ 60 is
+  projected as cyclical (5-year average EPS; MU peak-cycle euphoria bug) and the base growth is capped at 80 % of the type's upper bound.
   The old 6-step description below still applies to the reused parts.
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW

@@ -334,3 +334,16 @@ td.zawin { white-space: normal; min-width: 180px; }
 .kr-zp-w { display: grid; grid-template-columns: 18px 1fr; gap: 6px; font-size: 13px; padding: 3px 0; }
 .kr-zp.za .kr-zp-w > span:first-child { color: var(--zielony); font-weight: 700; } .kr-zp.przeciw .kr-zp-w > span:first-child { color: var(--czerwony); font-weight: 700; }
 @media (max-width: 700px) { .kr-prog { grid-template-columns: 1fr repeat(4, 62px); font-size: 12px; } }
+.kr-p { grid-template-columns: 22px 1fr auto; align-items: baseline; padding: 6px 0; }
+.kr-p-q { font-size: 14px; } .kr-p-a { font-weight: 700; text-align: right; font-size: 14px; white-space: nowrap; }
+.kr-wiecej-t { margin: 8px 0; } .kr-wiecej-t summary { cursor: pointer; color: var(--tekst2); font-size: 13px; } .kr-wiecej-t p { margin: 6px 0; }
+.kr-przeglad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 14px; }
+.kr-kafel { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--linia); border-left-width: 5px; background: var(--karta); }
+.kr-kafel small { color: var(--tekst2); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; } .kr-kafel b { font-size: 19px; line-height: 1.2; } .kr-kafel span { font-size: 12px; color: var(--tekst2); }
+.kr-kafel.dob { border-left-color: var(--zielony); } .kr-kafel.sr { border-left-color: var(--zolty); } .kr-kafel.zle { border-left-color: var(--czerwony); }
+.kr-typ { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0; } .kr-typ-p { font-size: 15px; font-weight: 700; padding: 4px 12px; }
+.kr-scen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 4px; }
+.kr-scen-k { border: 1px solid var(--linia); border-radius: 12px; padding: 8px 12px; border-top: 4px solid var(--siatka); }
+.kr-scen-k small { display: block; color: var(--tekst2); font-size: 12px; } .kr-scen-k b { font-size: 22px; } .kr-scen-k span { display: block; font-size: 12px; color: var(--tekst2); }
+.kr-scen-ostrozny { border-top-color: var(--czerwony); } .kr-scen-bazowy { border-top-color: var(--niebieski); } .kr-scen-lepszy { border-top-color: var(--zielony); }
+@media (max-width: 700px) { .kr-przeglad { grid-template-columns: repeat(2, 1fr); } .kr-kafel b { font-size: 17px; } .kr-scen-k b { font-size: 18px; } .kr-p-q, .kr-p-a { font-size: 13px; } .kr-p-a { white-space: normal; } }
