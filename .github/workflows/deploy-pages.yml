@@ -36,3 +36,11 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+      # GitHub Pages bywa chwilowo niedostępny („No artifacts named github-pages were found”, „Deployment failed, try again later”) — ponów po minucie
+      - name: Odczekaj przed ponowieniem
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - name: Deploy to GitHub Pages (ponowienie)
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
