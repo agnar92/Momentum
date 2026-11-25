@@ -52,6 +52,18 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
    spolka.js `LYNCH`, card section `#lynch`. Thresholds Lynch did not give (1.3× P/E, 10 pp, 60 %) are ours. Added first WITHOUT a backtest (user
    rightly objected: „czemu dodałeś to bez backtestu?” — always test before putting a rule on the site); stage 92 (r117) then tested 12 signals: only ⬇ for
    slow growers confirmed (−10.9 pp / 36 m), (`TEST_LYNCH` status still in the data) — but since Nov 2026 the card shows EVERY Lynch sell signal as ⚠ without test labels (user: „Lynch zarobił miliony … jeżeli on mówi, że działa, to działa”; same for Buffett: book authors' rules count as they wrote them, backtests stay in research only).
+   **Full Lynch review** (user, Nov 2026: „zrób wszystko co brakuje … tam gdzie jest ½ też” after a chapter-by-chapter review of One Up on Wall Street /
+   Beating the Street / Learn to Earn): `ocena.lynch` also returns `zakup` (ch. 15 final checklist: common items + per type), `liczby` (ch. 13 famous numbers),
+   `cechy` (ch. 8 13 attributes), `unikaj` (ch. 9); qualitative items have value „oceń sam” and are user tick boxes on the card (localStorage `fundamenta_lynch`).
+   New data: insider open-market purchases by officers / directors, 12 m (`spolki.insiderzy`: SEC Form 3/4/5 quarterly bulk data sets, last 4 quarters, code P / S,
+   cached zips; `ins_kupno_12m`, `ins_kupujacy`, `ins_sprzedaz_12m`; 👤 badge `ik` + list filter `#ins`), institutional ownership and analyst count (`yf_info`:
+   yfinance info, `inst_proc`, `analitycy`, cache `<T>.yi.json`), spin-off (`zdarzenia.wydzielenie`: first 10-12B in submissions → `wydzielona`), 2020 crash vs SPY
+   (`recesja_2020` → `rec_kurs_2020`, `rec_spy_2020`), `ocena.lynch_dane`: pension deficit `emerytury_mc` (DefinedBenefitPlanFundedStatusOfPlan or pension liability),
+   acquisitions 3 FY / revenue `przejecia_3l` + goodwill 3 y `goodwill_3l` → `dyworsyfikacja`, short-term debt share `dlug_krotki` (`F.dlug_krotki`), net cash per
+   share `gotowka_na_akcje`, worst recession year profit change `rec_zysk` (FY 2009 / 2020), `zysk_dolek_3l` / `zysk_poprawa` (better Wychodząca z kłopotów type);
+   pretax margin `marza_przed` vs industry median `marza_przed_med` (in `buduj`); hot stock `goraca` (1 y ≥ +100 % with P/E ≥ 50 or loss); fast-grower sell signal
+   institutions ≥ 80 % with P/E ≥ 50. Cache v9, card `cik` → SEC filings link. Portfel: per-position „dwuminutowa historia” note, review reminder after 182 days
+   („Przejrzałem dziś”), warning when the Lynch type changed since purchase (`typ0`), Lynch rules box (mirror test, 12 silliest things, Beating the Street rules).
    `spadek_2l` = revenue or net income TTM y/y < 0 now and a year ago (user's sell rule; stage 77: −4 pp over 5 years) → ⬇ on list and warning on card.
 Output: `docs/data/lista.json` (table rows: t, n, s, i, rank, c, mc, o{wzrost, sila, wycena, ogolna}, typ, peg, pe, dcf_pot, et, st{strategy: [passed,
 total]}, zw, …) and `docs/data/spolki/<T>.json` (card: m, pct, oceny, typy, strategie, peg, dcf, hist{q: [end, rev, ni, fcf, cash, debt] last 40
@@ -102,6 +114,14 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
 - `spolka.html` + `js/spolka.js`: dark top card (summary facts, DCF valuation bar, type of stock), scores + key numbers, price 1Y / 5Y, metrics vs sector
   (3 columns), strategy checklists, valuation tabs PEG (EPS and growth editable, chips) / DCF (growth chips 1Y / 3Y / 5Y / EPS forecast, 5 / 7 / 10 years,
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
+- Card section `#krok` since Nov 2026 has EIGHT steps (user: „overview krok po kroku z pytaniami i odpowiedziami i wykresami … co przemawia za spółką”):
+  Faza / **Typ** (`krokTyp`: Lynch type, LYNCH texts, conservative 5-year projection `W.prognozaTypu` drawn by `wykresPrognozy` — user: „estymowany widok do typów
+  spółek … rozsądnie, a nie euforia”: growth = 0.8 × MIN(rev 3 y, rev 5 y, EPS forecast) clipped to `W.ZAKRES_TYPU`, end P/E = min(today, 5-year median), cyclicals from
+  5-year average EPS, scenarios ostrożny ×0.5 / P/E ×0.8, bazowy, lepszy ×1.25 capped) / Wzrost (`pytWzrost`) / **Przewaga** (`pytPrzewaga` Buffett margins, SG&A, capex,
+  pretax vs industry + `marzeWykres`) / Bezpieczeństwo (`pytBezp`, 2020 crash bars) / **Zarząd** (`krokZarzad`: insiders, buybacks, dividend, funds / analysts, 8-K 5.02
+  + payout charts) / Wycena / **Werdykt** (`zaPrzeciw`: every checked rule from 7/7, Buffett, Lynch zakup / sell list / unikaj, ⬇, ❗ warnings in „Za” / „Przeciw”
+  columns; `ocenaWlasna`: Lynch qualitative tick boxes shared with the Lynch section, localStorage `fundamenta_lynch`; PEG / DCF panel). Questions via `pytania()`.
+  The old 6-step description below still applies to the reused parts.
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
   thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,
@@ -144,7 +164,7 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
 ## CI (`.github/workflows/`)
 
 - `dane.yml` („Dane spółek”): Saturday 05:23 UTC + manual; `python spolki.py`, commits `docs/data` (`[skip ci]`, reset onto origin/main, retry loop),
-  deploys Pages.
+  then DISPATCHES `deploy-pages.yml` on main (`gh workflow run`, GITHUB_TOKEN may trigger workflow_dispatch). It must not deploy itself: its build version = the commit it started from, usually already deployed after a PR merge → Pages 500 / „no artifacts” (Nov 2026). Concurrency group `dane`.
 - `deploy-pages.yml`: Pages deploy on push to `main`. Both deploy jobs retry `deploy-pages` once after 60 s (Nov 2026: GitHub Pages often failed with „No artifacts named github-pages were found” / „Deployment failed, try again later”; a re-run always worked).
 - `tests.yml`: ruff + pytest (`tests/test_ocena.py`), ESLint + `node --test` (`tests/js/wspolne.test.js`).
 

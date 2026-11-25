@@ -36,7 +36,50 @@
             const v = el.value === "" ? null : +el.value; S.pozycje[+el.dataset.k][el.dataset.p] = v; zapisz(); rysuj();
         }));
         document.querySelectorAll("[data-usun]").forEach((b) => b.addEventListener("click", () => { S.pozycje.splice(+b.dataset.usun, 1); zapisz(); rysuj(); }));
-        sugestie(); typyPf();
+        sugestie(); typyPf(); historie();
+    }
+
+    // dwuminutowa historia (rozdz. 11), przegląd co ~6 mies. (rozdz. 14, „Beating the Street”), zmiana typu od zakupu (rozdz. 7 / 17)
+    const dzis = () => new Date().toISOString().slice(0, 10);
+    const dni = (d) => (d ? Math.round((Date.parse(dzis()) - Date.parse(d)) / 864e5) : null);
+    function historie() {
+        const el = $("historie");
+        if (!S.pozycje.length) { el.innerHTML = '<p class="mut male">Brak pozycji.</p>'; return; }
+        let zm = false;
+        S.pozycje.forEach((p) => { const r = WIERSZE[p.t]; if (!p.typ0 && r && r.typ) { p.typ0 = r.typ; zm = true; } });
+        if (zm) zapisz();
+        el.innerHTML = S.pozycje.map((p, k) => {
+            const r = WIERSZE[p.t], typ = r && r.typ, d = dni(p.przeglad);
+            const zmiana = p.typ0 && typ && p.typ0 !== typ;
+            const stary = d === null || d > 182;
+            return `<div class="hist-poz"><div class="hist-nag"><b>${esc(p.t)}</b> <span class="mut">${esc(r ? r.n : "")} · ${esc(typ || "–")}</span>
+                ${zmiana ? `<span class="minus male" title="Lynch: inny typ = inne oczekiwania i inne powody sprzedaży">⚠ typ zmienił się od zakupu: ${esc(p.typ0)} → ${esc(typ)}</span>` : ""}
+                ${stary ? `<span class="minus male">⚠ ${d === null ? "historia jeszcze nie przejrzana" : `ostatni przegląd ${d} dni temu`}</span>` : `<span class="mut male">przegląd ${esc(p.przeglad)}</span>`}
+                <button data-przeglad="${k}" class="male">Przejrzałem dziś</button></div>
+              <textarea data-hist="${k}" rows="3" placeholder="Dlaczego ta spółka? Co musi się wydarzyć, żeby zarobiła? Kiedy uznasz, że historia się zepsuła?">${esc(p.historia || "")}</textarea></div>`;
+        }).join("");
+        document.querySelectorAll("[data-hist]").forEach((t) => t.addEventListener("change", () => { S.pozycje[+t.dataset.hist].historia = t.value; zapisz(); }));
+        document.querySelectorAll("[data-przeglad]").forEach((b) => b.addEventListener("click", () => {
+            const p = S.pozycje[+b.dataset.przeglad]; p.przeglad = dzis(); const r = WIERSZE[p.t]; if (r && r.typ) p.typ0 = r.typ; zapisz(); historie();
+        }));
+    }
+    // skrót zasad z „One Up on Wall Street” (rozdz. 4, 18) i „Beating the Street” — własne streszczenie, bez cytatów
+    function zasady() {
+        const lista = (t, l) => `<details class="male" style="margin:6px 0"><summary><b>${t}</b></summary><ol style="margin:6px 0 0 18px;padding:0">${l.map((x) => `<li style="margin:3px 0">${x}</li>`).join("")}</ol></details>`;
+        $("zasady").innerHTML = lista("Test lustra — zanim kupisz akcje (rozdz. 4)", [
+            "Czy masz własne mieszkanie / bezpieczną sytuację, zanim ryzykujesz pieniądze na giełdzie?",
+            "Czy te pieniądze nie będą Ci potrzebne w najbliższych latach?",
+            "Czy masz cierpliwość i odporność, żeby przetrzymać spadki o 20–30 % bez paniki?"])
+          + lista("12 najgłupszych (i najgroźniejszych) zdań o kursach (rozdz. 18)", [
+            "„Skoro tak spadła, to już niżej nie spadnie.”", "„Zawsze można rozpoznać dno.”", "„Skoro tak wzrosła, to już wyżej nie wzrośnie.”",
+            "„Kosztuje tylko kilka dolarów — co mogę stracić?”", "„W końcu zawsze odbijają.”", "„Najciemniej jest przed świtem.”",
+            "„Gdy wróci do mojej ceny, sprzedam.”", "„Po co się martwić — konserwatywne akcje się nie wahają.”", "„Za długo czekam, nic się nie dzieje.”",
+            "„Ile straciłem, bo jej nie kupiłem!”", "„Przegapiłem tę, złapię następną podobną.”", "„Kurs wzrósł, więc mam rację / spadł, więc się myliłem.”"])
+          + lista("„Beating the Street” — wybrane złote zasady", [
+            "Wiedz, co posiadasz — umiej powiedzieć, dlaczego masz każdą spółkę.", "Inwestuj w spółki, nie w rynek; przewidywanie gospodarki i rynku to strata czasu.",
+            "Korekty o 10 % i więcej zdarzają się regularnie — „weekendowy zamartwiacz” sprzedaje w panice; nie bądź nim.",
+            "Spadek kursu przy dobrych fundamentach to okazja do dokupienia, nie powód do sprzedaży.", "Zakupy akcji przez zarząd to dobry znak; sprzedaż często nic nie znaczy.",
+            "Sprawdzaj historię co kilka miesięcy: czy powody zakupu wciąż są aktualne?", "Nie trzeba mieć racji zawsze — wystarczy kilka dużych sukcesów na długi czas."]);
     }
 
     // skład portfela wg typów Lyncha — LICZBA SPÓŁEK (użytkownik: „mówiłem o ilości spółek w portfelu i procentowym udziale jednej spółki”):
@@ -100,7 +143,7 @@
 
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => r.json()).then((d) => {
         WIERSZE = Object.fromEntries(d.rows.map((r) => [r.t, r]));
-        $("asof").textContent = d.generated_at; KURS_DANE = d.usdpln || null;
+        $("asof").textContent = d.generated_at; zasady(); KURS_DANE = d.usdpln || null;
         $("kurs").placeholder = KURS_DANE ? W.fmtNum(KURS_DANE, 4) + " (z danych)" : "";
         rysuj();
     }).catch(() => { $("pozycje").innerHTML = '<p class="blad">Nie udało się wczytać danych.</p>'; });

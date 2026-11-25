@@ -106,7 +106,7 @@
         return rows.filter((r) => (!q || r.t.toLowerCase().includes(q) || (r.n || "").toLowerCase().includes(q))
             && (!f.sektor || r.s === f.sektor) && (!f.typ || r.typ === f.typ) && (!f.wycena || r.et === f.wycena)
             && (!f.strategia || (r.st[f.strategia] && r.st[f.strategia][0] >= (f.min || r.st[f.strategia][1])))
-            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.buffett || !!r.bf) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)));
+            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.buffett || !!r.bf) && (!f.insiderzy || !!r.ik) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)));
     }
     // znacznik jakości: spełnia wszystkie 7 kryteriów listy „Jakość” (etapy 74–75, 83)
     const JAKOSC = "Jakość (7 kryteriów)";
@@ -260,6 +260,35 @@
         return out;
     }
 
+    // --- prognoza wg typu spółki (Lynch): ostrożnie, bez euforii ---------------------------------------------------------------
+    // wzrost zysku = 0,8 × NAJNIŻSZY z (przychody 3 lata, przychody 5 lat, prognoza EPS analityków), przycięty do zakresu, jaki Lynch uważał
+    // za realny dla typu; P/E na koniec = niższe z (dzisiejsze, mediana z 5 lat) — zakładamy, że P/E nie rośnie, a premia ponad normę znika;
+    // cykliczne liczymy od średniego zysku z 5 lat (nie od szczytu cyklu). Warianty: ostrożny (wzrost × 0,5, P/E × 0,8),
+    // bazowy, lepszy (wzrost × 1,25, ale nie ponad górę zakresu typu; P/E bez zmian). Dywidenda osobno (nie w cenie).
+    const ZAKRES_TYPU = { "Wolno rosnąca": [0, 0.05], "Stabilnie rosnąca": [0.03, 0.12], "Szybko rosnąca": [0.08, 0.25], "Cykliczna": [0, 0.06],
+        "Wychodząca z kłopotów": [0, 0.08], "Ukryte aktywa": [0, 0.04], "Duży zwycięzca (10+ lat)": [0.05, 0.15] };
+    function prognozaTypu(d) {
+        const zak = ZAKRES_TYPU[d.typ];
+        if (!zak) return { brak: "nieznany typ spółki" };
+        const eps0 = ok(d.eps_baza) && d.eps_baza > 0 ? d.eps_baza : null;
+        if (!eps0) return { brak: "spółka nie ma dodatniego zysku — nie da się rozsądnie prognozować ceny z zysku" };
+        if (!(ok(d.pe) && d.pe > 0) || !ok(d.cena)) return { brak: "brak P/E" };
+        const kand = [d.rev_cagr3, d.rev_cagr5, d.eps_next5].filter(ok);
+        if (!kand.length) return { brak: "brak historii wzrostu" };
+        const clip = (x) => Math.max(zak[0], Math.min(zak[1], x));
+        const g = clip(0.8 * Math.min(...kand));
+        const peTeraz = d.cena / eps0;                       // P/E względem zysku bazowego (u cyklicznych — średniego)
+        const peEnd = Math.min(peTeraz, ok(d.pe_med5) && d.pe_med5 > 0 ? d.pe_med5 : peTeraz);
+        const war = { ostrozny: [clip(g * 0.5), peEnd * 0.8], bazowy: [g, peEnd], lepszy: [Math.min(zak[1], g * 1.25), peEnd] };
+        const lata = d.lata || 5, out = { g, peTeraz, peEnd, eps0, zakres: zak, war: {} };
+        Object.entries(war).forEach(([k, [gk, pk]]) => {
+            const ceny = [d.cena];
+            for (let t = 1; t <= lata; t++) ceny.push(eps0 * Math.pow(1 + gk, t) * (peTeraz + (pk - peTeraz) * t / lata));
+            out.war[k] = { g: gk, pe: pk, ceny, cagr: Math.pow(ceny[lata] / d.cena, 1 / lata) - 1 };
+        });
+        return out;
+    }
+
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
     const GRUPY = {
         wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
@@ -334,7 +363,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
+    const W = { WALUTA: "USD", prognozaTypu, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

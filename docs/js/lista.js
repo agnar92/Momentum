@@ -14,13 +14,13 @@
     let MIEJSCA = {};
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
-        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, buffett: $("buf").checked, sila: $("sila").checked };
+        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, buffett: $("buf").checked, insiderzy: $("ins").checked, sila: $("sila").checked };
         const rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
             <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
-            <td class="firma"><b>${esc(r.n)}</b>${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}${W.duzy(r) ? ' <span class="jakosc duzy-z" title="Duża spółka rosnąca od 10+ lat z dobrymi fundamentami — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${r.dw ? ' <span class="dyw" title="Dywidenda wypłacana co roku przez 5 lat, bez cięcia">💰</span>' : ""}${r.bf ? ' <span class="dyw" title="Przewaga Buffetta: marża netto > 20 %, dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto">🏰</span>' : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
+            <td class="firma"><b>${esc(r.n)}</b>${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}${W.duzy(r) ? ' <span class="jakosc duzy-z" title="Duża spółka rosnąca od 10+ lat z dobrymi fundamentami — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${r.dw ? ' <span class="dyw" title="Dywidenda wypłacana co roku przez 5 lat, bez cięcia">💰</span>' : ""}${r.bf ? ' <span class="dyw" title="Przewaga Buffetta: marża netto > 20 %, dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto">🏰</span>' : ""}${r.ik ? ` <span class="dyw" title="Zarząd lub rada kupili akcje na rynku w ostatnich 12 mies. (${r.ik} os.) — wg Lyncha dobry znak">👤</span>` : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
             <td class="n ogolna">${r.sp ? `<span class="spadek" title="Fundamenty słabną 2 lata z rzędu: ${esc(r.sp.join(" i "))}">⬇</span> ` : ""}${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td class="typ">${esc(r.typ || "–")}</td>
@@ -34,7 +34,7 @@
     }
     function opcje(id, wartosci) { $(id).insertAdjacentHTML("beforeend", wartosci.map((v) => `<option>${esc(v)}</option>`).join("")); }
     function podlacz() {
-        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw", "buf", "sila"].forEach((id) => $(id).addEventListener("input", rysuj));
+        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw", "buf", "ins", "sila"].forEach((id) => $(id).addEventListener("input", rysuj));
         document.querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
             const k = th.dataset.k; st = { sort: k, kier: st.sort === k ? -st.kier : (k === "peg" || k === "nazwa" ? 1 : -1) }; zapisz(KLUCZ, st); rysuj();
         }));
