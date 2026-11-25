@@ -148,5 +148,6 @@ test("prognoza wg typu: ostrożnie — najniższy wzrost × 0,8, przycięty do t
     assert.ok(p.war.lepszy.g <= 0.12);
     assert.ok(W.prognozaTypu({ typ: "Szybko rosnąca", eps_baza: -1, pe: 20, cena: 10, rev_cagr3: 0.3 }).brak);
     const sz = W.prognozaTypu({ typ: "Szybko rosnąca", eps_baza: 1, pe: 50, cena: 50, pe_med5: 60, rev_cagr3: 0.6, eps_next5: 0.5 });
-    assert.strictEqual(sz.g, 0.25);                           // Lynch: najwyżej 25 %
+    assert.strictEqual(sz.g, 0.2);                            // bazowy najwyżej 80 % z 25 % (Lynch: ponad 25 % rzadko trwa)
+    assert.strictEqual(sz.war.lepszy.g, 0.25);
 });
