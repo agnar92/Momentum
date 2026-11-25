@@ -210,7 +210,7 @@
     const FAZY = ["Start-up", "Wczesny wzrost", "Szybki wzrost", "Dojrzały wzrost", "Dojrzała stabilizacja", "Faza schyłkowa"];
     const SCHYLEK = 6;
     function fazyLat(d) {
-        const { rev, zysk, wyplaty } = d, n = rev.length, out = [];
+        const { rev, zysk } = d, n = rev.length, out = [];
         const suma = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
         const srednia = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length >= 2 ? v.reduce((x, y) => x + y, 0) / v.length : null; };
         let maks = 0, spadekPoprz = false, schylek = false, szczytR = -Infinity, szczytZ = -Infinity, poczatek = 0, wolnoPoprz = false;
