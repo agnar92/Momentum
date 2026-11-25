@@ -245,6 +245,8 @@ def metryki(ex, fv, dzis=None, splity=()):
     # zysk znormalizowany (jak „partially normalized EPS”): zysk operacyjny − odsetki, po podatku (efektywna stopa 10–30 %, zapas 21 %);
     # pomija zyski / straty z inwestycji, sprzedaży aktywów i inne pozycje nieoperacyjne, które zawyżają lub zaniżają zysk z raportu (GAAP)
     op12, ods12, pp12, pod12, no12 = ost12("op"), ost12("odsetki"), ost12("przed_pod"), ost12("podatek"), ost12("nonop")
+    if pp12 is not None and m.get("rev_ttm"):
+        m["marza_przed"] = pp12 / m["rev_ttm"]                      # Lynch: marża przed opodatkowaniem (na tle branży — `buduj`)
     if op12 is not None and m.get("ni_ttm") is not None:
         st_ = pod12 / pp12 if pod12 is not None and pp12 and pp12 > 0 else 0.21
         # stopa < 10 % to zwykle jednorazowa korzyść podatkowa (np. ALNY: rozwiązanie odpisu na aktywa podatkowe, −1,9 mld) — wtedy ostrożnie 21 %
@@ -252,8 +254,6 @@ def metryki(ex, fv, dzis=None, splity=()):
         ni_n = (op12 - (ods12 or 0)) * (1 - st_)
         m["ni_norm"], m["stopa_pod"], m["op_ttm"], m["odsetki_ttm"] = ni_n, st_, op12, ods12
         m["roznica_norm"] = m["ni_ttm"] - ni_n                       # o ile zysk z raportu różni się od znormalizowanego
-    if pp12 is not None and m.get("rev_ttm"):
-        m["marza_przed"] = pp12 / m["rev_ttm"]                      # Lynch: marża przed opodatkowaniem (na tle branży — `buduj`)
         if no12 is not None:
             m["nonop_ttm"] = no12
         if m.get("eps") and m["ni_ttm"] > 0 and ni_n > 0:
@@ -855,7 +855,7 @@ def lynch_zakup(m, typ):
            ("P/E nie wyżej niż zwykle dla tej spółki (mediana 5 lat)", f"P/E {pe:.1f} vs {pm:.1f}".replace(".", ",") if pe and pm else "–", None if not (pe and pm) else pe <= pm),
            ("Mało funduszy w akcjonariacie (< 50 %)", f"{100 * inst:.0f} %" if inst is not None else "–", None if inst is None else inst < 0.5),
            ("Zarząd lub rada kupują akcje (12 mies.)", f"{ins} os., {_usd(m.get('ins_kupno_12m'))}" if ins else ("nikt" if ins == 0 else "–"), None if ins is None else ins > 0),
-           ("Spółka skupuje własne akcje (liczba akcji spada w 3 lata)", _p(m.get("akcje_3l")), None if m.get("akcje_3l") is None else m["akcje_3l"] < 0),
+           ("Spółka skupuje własne akcje (liczba akcji spada w 3 lata)", _p(m.get("akcje_3l"), 1), None if m.get("akcje_3l") is None else m["akcje_3l"] < 0),
            ("Zysk rósł regularnie (≥ 4 z 5 lat)", f"{m['zysk_lata']} z 5" if m.get("zysk_lata") is not None else "–", None if m.get("zysk_lata") is None else m["zysk_lata"] >= 4),
            ("Mocny bilans (gotówka > dług albo dług / kapitał < 0,5)", f"D/E {de:.2f}".replace(".", ",") if de is not None else "–",
             None if de is None and nc is None else ((nc or -1) > 0 or (de is not None and 0 <= de < 0.5)))]
@@ -877,7 +877,7 @@ def lynch_zakup(m, typ):
                 ("Główny produkt to duża część firmy, jest gdzie rosnąć (ocena własna)", "oceń sam", None)]
     elif typ == "Cykliczna":
         out += [("Zapasy nie rosną szybciej niż sprzedaż", f"zapasy {_p(m.get('zapasy_1y'))}, sprzedaż {_p(m.get('rev_1y'))}" if m.get("zapasy_1y") is not None else "–",
-                 None if m.get("zapasy_1y") is None or m.get("rev_1y") is None else m["zapasy_1y"] <= m["rev_1y"] + 0.10),
+                 None if m.get("zapasy_1y") is None or m.get("rev_1y") is None or (m.get("zapasy_przych") or 0) < 0.03 else m["zapasy_1y"] <= m["rev_1y"] + 0.10),
                 ("Kupuj w dołku cyklu: zysk spada albo P/E powyżej normy (nie przy szczycie)", f"zysk {_p(m.get('ni_1y'))}", None if m.get("ni_1y") is None else (m["ni_1y"] < 0 or bool(pe and pm and pe > pm))),
                 ("Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)", "rampa capex" if m.get("rampa_capex") else "nie", not m.get("rampa_capex")),
                 ("Nowi konkurenci, ceny surowców, popyt (ocena własna)", "oceń sam", None)]
@@ -914,7 +914,7 @@ def lynch_cechy(m):
             ("Korzysta z technologii, zamiast ją sprzedawać", "oceń sam", None),
             ("Zarząd i rada kupują akcje", f"{m['ins_kupujacy']} os. w 12 mies." if m.get("ins_kupujacy") is not None else "–",
              None if m.get("ins_kupujacy") is None else m["ins_kupujacy"] > 0),
-            ("Spółka skupuje własne akcje", _p(m.get("akcje_3l")) + " akcji w 3 lata", None if m.get("akcje_3l") is None else m["akcje_3l"] < 0)]
+            ("Spółka skupuje własne akcje", _p(m.get("akcje_3l"), 1) + " akcji w 3 lata", None if m.get("akcje_3l") is None else m["akcje_3l"] < 0)]
 
 
 def lynch_unikaj(m):
@@ -947,7 +947,8 @@ def lynch_liczby(m):
             ("Wartość księgowa (P/B)", f"{m['pb']:.2f}".replace(".", ",") if m.get("pb") else "–", None, "liczy się, co naprawdę jest w aktywach"),
             ("Przepływy pieniężne (P/FCF)", f"{m['pfcf']:.1f}".replace(".", ",") if m.get("pfcf") else "–", None if not m.get("pfcf") else m["pfcf"] <= 20, "wolny przepływ, nie zysk księgowy"),
             ("Zapasy względem sprzedaży", f"zapasy {_p(m.get('zapasy_1y'))}, sprzedaż {_p(m.get('rev_1y'))}" if m.get("zapasy_1y") is not None else "–",
-             None if m.get("zapasy_1y") is None or m.get("rev_1y") is None else m["zapasy_1y"] <= m["rev_1y"] + 0.10, "zapasy rosnące szybciej = ostrzeżenie"),
+             None if m.get("zapasy_1y") is None or m.get("rev_1y") is None or (m.get("zapasy_przych") or 0) < 0.03 else m["zapasy_1y"] <= m["rev_1y"] + 0.10,
+             "zapasy rosnące szybciej = ostrzeżenie (pomijamy, gdy zapasy < 3 % sprzedaży)"),
             ("Zobowiązania emerytalne (niedofinansowanie)", f"deficyt {100 * -em:.1f} % kapitalizacji".replace(".", ",") if em and em < 0 else ("brak deficytu" if em is not None else "brak planu / danych"),
              None if em is None else em > -0.05, "deficyt to dług wobec pracowników"),
             ("Stopa wzrostu i wskaźnik Lyncha z dywidendą", f"prognoza EPS {_p(m.get('eps_next5'))} rocznie" if m.get("eps_next5") is not None else "–", None, "patrz wskaźnik obok"),

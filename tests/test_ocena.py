@@ -337,14 +337,14 @@ def test_insiderzy_z_pliku_sec(tmp_path, monkeypatch):
         z.writestr("SUBMISSION.tsv", "ACCESSION_NUMBER\tISSUERCIK\tDOCUMENT_TYPE\nA1\t0000000123\t4\nA2\t0000000123\t4\nA3\t0000000123\t4\n")
         z.writestr("REPORTINGOWNER.tsv", "ACCESSION_NUMBER\tRPTOWNERCIK\tRPTOWNER_RELATIONSHIP\nA1\t9\tDirector\nA2\t8\tTenPercentOwner\nA3\t7\tOfficer\n")
         z.writestr("NONDERIV_TRANS.tsv", "ACCESSION_NUMBER\tTRANS_DATE\tTRANS_CODE\tTRANS_SHARES\tTRANS_PRICEPERSHARE\n"
-                   "A1\t01-NOV-2026\tP\t100\t10\nA2\t01-NOV-2026\tP\t1000\t10\nA3\t02-NOV-2026\tS\t50\t10\n")
+                   "A1\t01-NOV-2026\tP\t3000\t10\nA2\t01-NOV-2026\tP\t1000\t10\nA3\t02-NOV-2026\tS\t50\t10\n")
     (tmp_path / "form345_2026q4.zip").write_bytes(buf.getvalue())
 
     class R:
         text = '<a href="/files/x/2026q4_form345.zip">'
     monkeypatch.setattr(spolki.requests, "get", lambda *a, **k: R())
     out = spolki.insiderzy(str(tmp_path), log=lambda *a: None, dzis=dt.date(2026, 11, 25))
-    assert out["123"] == {"kupno": 1000.0, "sprzedaz": 500.0, "kupujacy": 1}
+    assert out["123"] == {"kupno": 30000.0, "sprzedaz": 500.0, "kupujacy": 1}
 
 
 def test_wydzielenie():

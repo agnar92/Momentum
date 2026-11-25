@@ -154,14 +154,16 @@ def insiderzy(cache=None, log=print, kwartaly=4, dzis=None):
                 continue
             if d_ < od or v <= 0:
                 continue
-            o = out.setdefault(sub[a], {"kupno": 0.0, "sprzedaz": 0.0, "kupujacy": set()})
+            o = out.setdefault(sub[a], {"kupno": 0.0, "sprzedaz": 0.0, "osoby": {}})
             if r["TRANS_CODE"] == "P":
                 o["kupno"] += v
-                o["kupujacy"] |= rola[a]
+                for os_ in rola[a]:
+                    o["osoby"][os_] = o["osoby"].get(os_, 0.0) + v
             else:
                 o["sprzedaz"] += v
         log(f"Insiderzy {kw}: spółek z transakcjami {len(out)}")
-    return {c: {"kupno": o["kupno"], "sprzedaz": o["sprzedaz"], "kupujacy": len(o["kupujacy"])} for c, o in out.items()}
+    # kupujący = osoby, które kupiły za ≥ 25 tys. USD w 12 mies. (drobne, regularne zakupy pracownicze, np. TSM, to nie sygnał Lyncha)
+    return {c: {"kupno": o["kupno"], "sprzedaz": o["sprzedaz"], "kupujacy": sum(1 for v in o["osoby"].values() if v >= 25000)} for c, o in out.items()}
 
 
 def yf_info(tickers, cache=None, log=print, watki=8):
