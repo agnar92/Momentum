@@ -114,6 +114,14 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
 - `spolka.html` + `js/spolka.js`: dark top card (summary facts, DCF valuation bar, type of stock), scores + key numbers, price 1Y / 5Y, metrics vs sector
   (3 columns), strategy checklists, valuation tabs PEG (EPS and growth editable, chips) / DCF (growth chips 1Y / 3Y / 5Y / EPS forecast, 5 / 7 / 10 years,
   FCF margin TTM / 5-year median, discount rate, terminal growth, reset; implied growth / margin), financial statements (quarterly / TTM / annual).
+- Card section `#krok` since Nov 2026 has EIGHT steps (user: „overview krok po kroku z pytaniami i odpowiedziami i wykresami … co przemawia za spółką”):
+  Faza / **Typ** (`krokTyp`: Lynch type, LYNCH texts, conservative 5-year projection `W.prognozaTypu` drawn by `wykresPrognozy` — user: „estymowany widok do typów
+  spółek … rozsądnie, a nie euforia”: growth = 0.8 × MIN(rev 3 y, rev 5 y, EPS forecast) clipped to `W.ZAKRES_TYPU`, end P/E = min(today, 5-year median), cyclicals from
+  5-year average EPS, scenarios ostrożny ×0.5 / P/E ×0.8, bazowy, lepszy ×1.25 capped) / Wzrost (`pytWzrost`) / **Przewaga** (`pytPrzewaga` Buffett margins, SG&A, capex,
+  pretax vs industry + `marzeWykres`) / Bezpieczeństwo (`pytBezp`, 2020 crash bars) / **Zarząd** (`krokZarzad`: insiders, buybacks, dividend, funds / analysts, 8-K 5.02
+  + payout charts) / Wycena / **Werdykt** (`zaPrzeciw`: every checked rule from 7/7, Buffett, Lynch zakup / sell list / unikaj, ⬇, ❗ warnings in „Za” / „Przeciw”
+  columns; `ocenaWlasna`: Lynch qualitative tick boxes shared with the Lynch section, localStorage `fundamenta_lynch`; PEG / DCF panel). Questions via `pytania()`.
+  The old 6-step description below still applies to the reused parts.
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW
   thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,

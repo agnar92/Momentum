@@ -319,3 +319,18 @@ td.zawin { white-space: normal; min-width: 180px; }
 .hist-nag { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .hist-nag button { margin-left: auto; padding: 3px 10px; }
 .hist-poz textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 8px; border: 1px solid var(--linia); border-radius: 8px; background: var(--pole); color: var(--tekst); }
+.kr-pytania { display: grid; gap: 2px; margin: 4px 0 12px; }
+.kr-p { display: grid; grid-template-columns: 24px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--linia); }
+.kr-p .male { margin-top: 2px; color: var(--tekst2); }
+.kr-zr { font-size: 10px; font-weight: 600; color: var(--tekst2); border: 1px solid var(--linia); border-radius: 6px; padding: 0 5px; white-space: nowrap; }
+.kr-krach { margin-top: 6px; max-width: 420px; }
+.kr-krach div { display: grid; grid-template-columns: 70px 1fr 50px; gap: 8px; align-items: center; font-size: 12px; }
+.kr-krach i { display: block; height: 10px; border-radius: 4px; background: var(--siatka); }
+.kr-krach i.lep { background: var(--zielony); } .kr-krach i.gor { background: var(--czerwony); }
+.kr-prog { grid-template-columns: 1fr repeat(4, 90px); margin-top: 8px; }
+.kr-prog i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; }
+.kr-prog-ostrozny { background: var(--czerwony); } .kr-prog-bazowy { background: var(--niebieski); } .kr-prog-lepszy { background: var(--zielony); }
+.kr-zp-t { font-weight: 700; margin-bottom: 6px; } .kr-zp-t span { font-weight: 400; color: var(--tekst2); }
+.kr-zp-w { display: grid; grid-template-columns: 18px 1fr; gap: 6px; font-size: 13px; padding: 3px 0; }
+.kr-zp.za .kr-zp-w > span:first-child { color: var(--zielony); font-weight: 700; } .kr-zp.przeciw .kr-zp-w > span:first-child { color: var(--czerwony); font-weight: 700; }
+@media (max-width: 700px) { .kr-prog { grid-template-columns: 1fr repeat(4, 62px); font-size: 12px; } }

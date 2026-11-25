@@ -421,10 +421,12 @@
           ${lista("Czego unikać", "Rozdz. 9. ✓ = brak problemu, ✗ = ostrzeżenie.", L.unikaj, "unikaj")}
         </div>`;
     }
-    function podlaczOcenyLynch() {
-        document.querySelectorAll("#lynch [data-ly]").forEach((b) => b.addEventListener("click", () => {
+    function podlaczOcenyLynch(root) {
+        (root || $("lynch")).querySelectorAll("[data-ly]").forEach((b) => b.addEventListener("click", () => {
             const k = b.dataset.ly, v = b.dataset.v === "1", ter = czytajLy()[k];
-            zapiszLy(k, ter === v ? null : v); lynch();
+            zapiszLy(k, ter === v ? null : v);
+            if (szczRys) lynch();
+            if ((S.krok || 0) === KROKI.length - 1) { const y = window.scrollY; krok(); window.scrollTo(0, y); }
         }));
     }
 
@@ -437,7 +439,7 @@
         4: "Dojrzały wzrost: rozwijać firmę i jej zyski. Spółka zarabia, przychody rosną wolniej (6–20 % rocznie).",
         5: "Dojrzała stabilizacja: bronić firmy przed zakusami konkurencji i znajdować nowe rynki. Przychody rosną < 6 % rocznie przez 5 lat (dwa lata z rzędu), zwykle z dywidendą lub skupem akcji.",
         6: "Faza schyłkowa: zmniejszać skalę działalności wraz z kurczeniem się rynku. Sprzedaż od dwóch lat niższa niż 5 lat wcześniej; spółka wychodzi z tej fazy dopiero, gdy przychody i zysk przebiją poprzedni szczyt." };
-    const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
+    const KROKI = ["Faza", "Typ", "Wzrost", "Przewaga", "Bezpieczeństwo", "Zarząd", "Wycena", "Werdykt"];
     const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
     const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
     const KR_IDX = { Wzrost: [0, 1, 2], "Rentowność": [3], "Bezpieczeństwo": [4, 5], Wycena: [6] };
@@ -615,6 +617,146 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         return `<div class="jz">${idx.map((i) => l[i]).filter(Boolean).map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart"><b>${esc(fmtKryt(co, v))}</b></span></div>`).join("")}</div>`;
     }
     const zalicz = (idx) => { const l = lista77(); if (!l) return [0, 0]; const x = idx.map((i) => l[i]).filter(Boolean); return [x.filter((k) => k[2]).length, x.length]; };
+    // --- pytania i odpowiedzi w krokach (fakty z danych; reguły Lyncha i Buffetta tak, jak je opisali; progi, których nie podali, są nasze) ---
+    const ikona3 = (s) => (s === true ? '<b class="kr-tak">✓</b>' : s === false ? '<b class="kr-nie">✗</b>' : '<span class="mut">–</span>');
+    const pytania = (l) => `<div class="kr-pytania">${l.filter(Boolean).map(([q, st, odp, zr]) => `<div class="kr-p"><span class="kr-p-i">${ikona3(st)}</span>
+        <div><b>${esc(q)}</b>${zr ? ` <span class="kr-zr">${esc(zr)}</span>` : ""}<div class="male">${odp}</div></div></div>`).join("")}</div>`;
+    const bfK = (re) => { const l = K.strategie && Object.entries(K.strategie).find(([n]) => n.startsWith("Buffett")); return l ? l[1].find(([co]) => re.test(co)) : null; };
+    const bfPyt = (q, re, fmt) => { const x = bfK(re); return x ? [q, x[2], fmt(x[1]), "Buffett"] : null; };
+    const ppct = (x, z = 0) => (W.ok(x) ? W.fmtPct(x, z, true) : "–");
+    function pytWzrost() {
+        const fz = (K.lynch && K.lynch.faza) || null;
+        return pytania([
+            bfPyt("Czy zysk na akcję rośnie stale przez 10 lat i zawsze był zysk?", /^EPS rósł/, (v) => (W.ok(v) ? `EPS rósł w ${v} z ${M.bf_eps_n || 10} lat${M.bf_eps_zysk === false ? ", była strata" : ""}` : "brak danych")),
+            ["Czy zysk rośnie regularnie?", W.ok(M.zysk_lata) ? M.zysk_lata >= 4 : null, W.ok(M.zysk_lata) ? `zysk netto (12 mies.) był wyższy niż rok wcześniej w ${M.zysk_lata} z 5 lat` : "brak danych", "Lynch"],
+            ["Czy wzrost przychodów przyspiesza czy hamuje?", W.ok(M.przysp) ? M.przysp >= 0 : null, W.ok(M.przysp) ? (M.przysp >= 0 ? "przyspiesza" : "hamuje") + ` (zmiana tempa ${ppct(M.przysp, 1)} rocznie w 5 lat)` : "brak danych"],
+            fz ? ["Faza wzrostu (szybko rosnące)", fz[0] === "Szybka ekspansja", esc(fz[0] + " — " + fz[1]), "Lynch"] : null]);
+    }
+    function pytPrzewaga() {
+        const mp = M.marza_przed, mm = M.marza_przed_med;
+        return pytania([
+            bfPyt("Czy klienci płacą więcej niż koszt produktu z dużym zapasem? (marża brutto > 40 %, 2 lata)", /^Marża brutto/, (v) => ppct(v, 1)),
+            bfPyt("Czy z każdego dolara sprzedaży zostaje dużo zysku? (marża netto > 20 %, 2 lata)", /^Marża netto/, (v) => ppct(v, 1)),
+            bfPyt("Czy koszty sprzedaży i zarządu są niskie? (SG&A < 30 % zysku brutto)", /^SG&A/, (v) => (W.ok(v) && v < 99 ? W.fmtPct(v, 0) + " zysku brutto" : "–")),
+            bfPyt("Czy firma nie musi wydawać dużo na maszyny i budynki? (capex < 25 % zysku, 3 lata)", /^Capex/, (v) => (W.ok(v) && v < 99 ? W.fmtPct(v, 0) + " zysku" : v >= 99 ? "strata" : "–")),
+            ["Czy marża przed opodatkowaniem jest wyższa niż w branży?", W.ok(mp) && W.ok(mm) ? mp >= mm : null, W.ok(mp) ? `${W.fmtPct(mp, 1)}${W.ok(mm) ? ` vs mediana branży ${W.fmtPct(mm, 1)}` : ""} — w złych czasach przetrwa ta z wyższą marżą` : "brak danych", "Lynch"]])
+            + marzeWykres();
+    }
+    function marzeWykres() {
+        const y = ((K.hist && K.hist.y) || []).filter((r, i, a) => i === a.length - 1 || Date.parse(a[i + 1][0]) - Date.parse(r[0]) > 300 * 864e5).slice(SZER < 700 ? -5 : -10);
+        if (y.length < 3) return "";
+        const et = y.map((r) => "FY" + r[0].slice(2, 4)), m = (k) => y.map((r) => (W.ok(r[k]) && r[1] > 0 ? r[k] / r[1] : null));
+        const mob = SZER < 700, sz = mob ? SZER - 60 : (SZER - 90) / 2, f = (v) => W.fmtPct(v, 0);
+        return `<div class="mut male" style="margin:12px 0 4px">Marże w kolejnych latach — stała albo rosnąca marża to znak trwałej przewagi</div>
+          <div class="kr-pyt"><div class="pole"><div class="mut male">Marża operacyjna</div>${mini(et, m(5), "var(--niebieski)", f, 130, sz, false)}</div>
+            <div class="pole"><div class="mut male">Marża netto</div>${mini(et, m(2), "var(--zielony)", f, 130, sz, false)}</div></div>`;
+    }
+    function pytBezp() {
+        const rz = M.rec_zysk, rk = M.rec_kurs_2020, rs = M.rec_spy_2020, dk = M.dlug_krotki, em = M.emerytury_mc;
+        const krach = W.ok(rk) && W.ok(rs) ? `<div class="kr-krach">${[["spółka", rk], ["S&P 500", rs]].map(([n, v]) => `<div><span>${n}</span><i style="width:${Math.min(100, 100 * Math.abs(v) / 0.7)}%" class="${n === "spółka" ? (v >= rs ? "lep" : "gor") : "med"}"></i><b>${W.fmtPct(v, 0, true)}</b></div>`).join("")}</div>` : "";
+        return pytania([
+            bfPyt("Czy spłaci dług długoterminowy z zysku w ≤ 4 lata?", /^Dług długoterminowy/, (v) => (v === 0 ? "brak długu" : W.ok(v) && v < 99 ? W.fmtNum(v, 1) + " roku zysku" : "strata — nie spłaci z zysku")),
+            bfPyt("Czy odsetki zjadają mniej niż 15 % zysku operacyjnego?", /^Odsetki/, (v) => (W.ok(v) && v < 99 ? W.fmtPct(v, 1) + " zysku operacyjnego" : v >= 99 ? "strata operacyjna" : "–")),
+            bfPyt("Czy zobowiązania są małe względem kapitału? (< 0,8 z akcjami własnymi)", /^Zobowiązania/, (v) => (W.ok(v) && v < 99 ? W.fmtNum(v, 2) : v >= 99 ? "ujemny kapitał" : "–")),
+            ["Czy mało długu jest wymagalne szybko? (dług bankowy / krótkoterminowy ≤ 30 %)", W.ok(dk) ? dk <= 0.3 : (W.ok(M.debt) && M.debt <= 0 ? true : null), W.ok(dk) ? `${W.fmtPct(dk, 0)} długu` : "brak długu lub danych", "Lynch"],
+            ["Czy plany emerytalne nie są poważnie niedofinansowane?", W.ok(em) ? em > -0.05 : null, W.ok(em) ? (em < 0 ? `deficyt ${W.fmtPct(-em, 1)} kapitalizacji` : "brak deficytu") : "brak planu / danych", "Lynch"],
+            ["Czy zysk przetrwał recesję? (2009 / 2020, spadek ≤ 25 %)", rz ? rz[1] >= -0.25 : null, rz ? `rok ${rz[0]}: zysk ${W.fmtPct(rz[1], 0, true)}` : "brak danych", "Lynch"],
+            ["Jak kurs zniósł krach 2020 na tle S&P 500?", W.ok(rk) && W.ok(rs) ? rk >= rs : null, W.ok(rk) ? `od szczytu do dołka ${W.fmtPct(rk, 0, true)} vs S&P 500 ${W.fmtPct(rs, 0, true)}${krach}` : "brak danych", "Lynch"]]);
+    }
+    function krokZarzad() {
+        const SF = seriaFazy(), mob = SZER < 700, szP = mob ? SZER - 80 : (SZER - 140) / 3;
+        const pod = (n, w, kolor, fmt, odZera = true) => `<div class="kr-pod"><div class="mut male">${n}</div>${mini(SF.et, w, kolor, fmt, 110, szP, odZera)}</div>`;
+        const zm = (K.zdarzenia || []).filter((z) => z.p.some((p) => p[0] === "5.02")).length;
+        const ins = M.ins_kupujacy;
+        return pytania([
+            ["Czy zarząd lub rada kupują akcje za własne pieniądze?", W.ok(ins) ? ins > 0 : null,
+                W.ok(ins) ? (ins > 0 ? `${ins} os. kupiło za ${W.fmtUsd(M.ins_kupno_12m)} USD w 12 mies.` : "nikt nie kupił w 12 mies.") + (W.ok(M.ins_sprzedaz_12m) && M.ins_sprzedaz_12m > 0 ? ` · sprzedaż ${W.fmtUsd(M.ins_sprzedaz_12m)} USD (Lynch: sprzedaż często nic nie znaczy)` : "") : "brak danych", "Lynch"],
+            ["Czy spółka skupuje własne akcje?", W.ok(M.akcje_3l) ? M.akcje_3l < 0 : null, W.ok(M.akcje_3l) ? `liczba akcji ${W.fmtPct(M.akcje_3l, 1, true)} w 3 lata${W.ok(M.skup_netto_mc) ? `, skup netto ${W.fmtPct(M.skup_netto_mc, 1)} kapitalizacji w 12 mies.` : ""}` : "brak danych", "Lynch"],
+            ["Czy dzieli się zyskiem przez dywidendę?", W.ok(M.div) && M.div > 0 ? !!M.dywidenda_stabilna : null,
+                W.ok(M.div) && M.div > 0 ? `${W.fmtPct(M.div, 1)} rocznie${M.dywidenda_stabilna ? ", bez cięć 5 lat" : ", były cięcia lub przerwy"}${M.dyw_rosnie_5 ? ", podnoszona 5 lat z rzędu" : ""}` : "nie płaci dywidendy (u szybko rosnących to normalne)"],
+            ["Czy fundusze i analitycy jej jeszcze nie odkryli?", W.ok(M.inst_proc) && W.ok(M.analitycy) ? M.inst_proc < 0.5 && M.analitycy <= 10 : null,
+                W.ok(M.inst_proc) ? `fundusze mają ${W.fmtPct(M.inst_proc, 0)} akcji${W.ok(M.analitycy) ? `, śledzi ją ${M.analitycy} analityków` : ""} — Lynch: im mniej, tym więcej do odkrycia` : "brak danych", "Lynch"],
+            K.zdarzenia ? ["Czy w zarządzie nie było częstych zmian? (8-K 5.02, 12 mies.)", zm <= 1, `${zm} raport(y) o zmianach w zarządzie`] : null])
+          + `<div class="mut male" style="margin:12px 0 4px">Co spółka robi z gotówką (z raportów rocznych)</div>
+            <div class="kr-pody">${pod("Skup akcji (rocznie)", SF.skup, "var(--fiolet)", kw)}${pod("Liczba akcji (mniej = skup)", SF.akcje, "var(--fiolet)", szt, false)}${pod("Dywidendy wypłacone (rocznie)", SF.dyw, "var(--fiolet)", kw)}</div>`;
+    }
+    // krok „Typ”: typ wg Lyncha, czego od niego oczekiwać i ostrożna prognoza na 5 lat (W.prognozaTypu)
+    function epsBaza(typ) {
+        if (typ === "Cykliczna") {      // średni zysk z 5 lat obrotowych na dzisiejszą liczbę akcji — nie od szczytu ani dołka cyklu
+            const y = ((K.hist && K.hist.y) || []).filter((r) => W.ok(r[2])).slice(-5);
+            if (y.length >= 3 && W.ok(M.shares) && M.shares > 0) return y.reduce((a, r) => a + r[2], 0) / y.length / M.shares;
+        }
+        return M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps;
+    }
+    function krokTyp() {
+        const ty = K.typy || [], typ = duz6() ? W.DUZY : ty[0] && ty[0][0];
+        if (!typ) return '<p class="mut">Za mało danych, żeby określić typ spółki.</p>';
+        const L = LYNCH[ty[0][0]] || null;
+        const pr = W.prognozaTypu({ typ, eps_baza: epsBaza(typ), pe: M.pe, cena: M.price, pe_med5: M.pe_med5, rev_cagr3: M.rev_cagr3, rev_cagr5: M.rev_cagr5, eps_next5: GPW ? M.ni_cagr3 : M.eps_next5 });
+        const N = { ostrozny: "Ostrożny", bazowy: "Bazowy", lepszy: "Lepszy" };
+        return pytania([
+            ["Jaki to typ spółki wg Lyncha?", null, `<b>${esc(typ)}</b>${duz6() ? ` (wg Lyncha: ${esc(ty[0][0])})` : ""} — ${esc(ty[0][2] || "")}. Pozostałe dopasowania: ${ty.slice(1, 3).map((x) => `${esc(x[0])} ${x[1]}`).join(", ") || "–"}`, "Lynch"],
+            L ? ["Czym jest i czego od niej oczekiwać?", null, esc(L[0]), "Lynch"] : null,
+            L ? ["Kiedy Lynch kazałby ją sprzedać?", null, esc(L[1]), "Lynch"] : null])
+          + `<div class="mut male" style="margin:14px 0 4px"><b>Czego rozsądnie się spodziewać przez 5 lat?</b> Ostrożna prognoza ceny z zysku — bez euforii: wzrost zysku = 80 % najniższego z (przychody 3 lata, przychody 5 lat${GPW ? "" : ", prognoza analityków"}), przycięty do tego, co Lynch uważał za realne dla typu (${pr.zakres ? `${W.fmtPct(pr.zakres[0], 0)}–${W.fmtPct(pr.zakres[1], 0)} rocznie` : "–"}); P/E za 5 lat nie wyższe niż dziś ani niż mediana z 5 lat${typ === "Cykliczna" ? "; zysk = średnia z 5 lat (nie szczyt cyklu)" : ""}. Bez dywidendy${W.ok(M.div) && M.div > 0 ? ` (dochodzi ok. ${W.fmtPct(M.div, 1)} rocznie)` : ""}.</div>
+            ${pr.brak ? `<p class="mut">Brak prognozy: ${esc(pr.brak)}.</p>` : `${wykresPrognozy(pr)}
+            <div class="kr-wsk kr-prog"><div></div><div class="mut male">wzrost zysku</div><div class="mut male">P/E za 5 lat</div><div class="mut male">cena za 5 lat</div><div class="mut male">rocznie</div>
+              ${Object.entries(pr.war).map(([k, w]) => `<div class="kr-wsk-n"><i class="kr-prog-${k}"></i>${N[k]}</div><b>${W.fmtPct(w.g, 1)}</b><b>${W.fmtNum(w.pe, 1)}×</b><b>${W.fmtCena(w.ceny[5])}</b><b class="${w.cagr >= 0 ? "plus" : "minus"}">${W.fmtPct(w.cagr, 1, true)}</b>`).join("")}</div>
+            <p class="mut male">Zysk bazowy ${W.fmtCena(pr.eps0)} na akcję${M.peg_norm_uzyte && typ !== "Cykliczna" ? " (znormalizowany — bez jednorazowych pozycji)" : ""}, P/E dziś ${W.fmtNum(pr.peTeraz, 1)}×. To nie jest wycena ani rekomendacja — pokazuje, ile zarobisz, jeśli spółka rośnie jak jej typ, a rynek przestanie płacić premię.</p>`}`;
+    }
+    function wykresPrognozy(pr) {
+        const c = (K.ceny && K.ceny.c) || [], d = (K.ceny && K.ceny.d) || [];
+        const W_ = SZER, H = SZER < 700 ? 260 : 300, L = 10, R = SZER < 700 ? 74 : 96, T = 16, B = 26;
+        const t0 = d.length ? Date.parse(d[0]) : Date.now() - 5 * 365.25 * 864e5, tN = Date.now(), tK = tN + 5 * 365.25 * 864e5;
+        const X = (t) => L + (W_ - L - R) * (t - t0) / (tK - t0);
+        const wsz = c.concat(...Object.values(pr.war).map((w) => w.ceny)).filter((v) => W.ok(v) && v > 0);
+        const mn = Math.min(...wsz) * 0.9, mx = Math.max(...wsz) * 1.05, Y = (v) => T + (H - T - B) * (1 - (Math.log(v) - Math.log(mn)) / (Math.log(mx) - Math.log(mn)));
+        const hist = c.map((v, i) => `${X(Date.parse(d[i])).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+        const pkt = (w) => w.ceny.map((v, t) => [X(tN + t * 365.25 * 864e5), Y(v)]);
+        const kol = { ostrozny: "var(--czerwony)", bazowy: "var(--niebieski)", lepszy: "var(--zielony)" };
+        const pas = pkt(pr.war.lepszy).concat(pkt(pr.war.ostrozny).reverse()).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+        let lata = "";
+        for (let r = new Date(t0).getFullYear() + 1; r <= new Date(tK).getFullYear(); r++) {
+            const x = X(Date.parse(`${r}-01-01`)); if (x < L + 20 || x > W_ - R || (SZER < 700 && r % 2)) continue;
+            lata += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" class="kr-siatka"/><text x="${x}" y="${H - 8}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`;
+        }
+        const etk = Object.entries(pr.war).map(([k, w]) => { const [x, y] = pkt(w)[5]; return { k, y, w, x }; }).sort((a, b) => a.y - b.y);
+        for (let i = 1; i < etk.length; i++) if (etk[i].y - etk[i - 1].y < 15) etk[i].y = etk[i - 1].y + 15;
+        return `<svg class="kr-mini" width="${W_}" height="${H}" viewBox="0 0 ${W_} ${H}" role="img" aria-label="Cena 5 lat wstecz i prognoza na 5 lat">
+          ${lata}<line x1="${X(tN)}" x2="${X(tN)}" y1="${T}" y2="${H - B}" style="stroke:var(--tekst2);stroke-dasharray:3 3"/>
+          <text x="${X(tN) + 4}" y="${T + 10}" class="kr-tx">dziś</text>
+          <polygon points="${pas}" style="fill:var(--niebieski);opacity:.08"/><polyline points="${hist}" style="fill:none;stroke:var(--tekst);stroke-width:2"/>
+          ${Object.entries(pr.war).map(([k, w]) => `<polyline points="${pkt(w).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")}" style="fill:none;stroke:${kol[k]};stroke-width:${k === "bazowy" ? 2.5 : 1.8};stroke-dasharray:${k === "bazowy" ? "0" : "5 4"}"/>`).join("")}
+          ${etk.map((e) => `<text x="${e.x + 6}" y="${e.y + 4}" class="kr-tx kr-tx-b" style="fill:${kol[e.k]}">${W.fmtCena(e.w.ceny[5])}</text>`).join("")}
+        </svg>`;
+    }
+    // werdykt: co przemawia za, a co przeciw — zebrane z kryteriów 7/7, Buffetta i list Lyncha (bez ocen własnych) oraz ostrzeżeń
+    function zaPrzeciw() {
+        const za = [], przeciw = [], byl = new Set();
+        const dodaj = (co, ok, zr) => { if (ok === null || ok === undefined || byl.has(co)) return; byl.add(co); (ok ? za : przeciw).push([co, zr]); };
+        (lista77() || []).forEach(([co, , ok]) => dodaj(co, ok, "7/7"));
+        const bf = K.strategie && Object.entries(K.strategie).find(([n]) => n.startsWith("Buffett"));
+        (bf ? bf[1] : []).forEach(([co, , ok]) => dodaj(co, ok, "Buffett"));
+        const L = K.lynch || {};
+        (L.zakup || []).forEach(([co, w, ok]) => { if (!/oceń sam/.test(w)) dodaj(co, ok, "Lynch"); });
+        (L.lista || []).forEach(([co, , ok]) => dodaj(co, ok, "Lynch: kiedy sprzedać"));
+        (L.unikaj || []).forEach(([co, w, ok]) => { if (!/oceń sam/.test(w) && ok === false) dodaj(co, false, "Lynch: czego unikać"); });
+        if (M.spadek_2l) dodaj("Przychody lub zysk spadają 2 lata z rzędu (⬇)", false, "sygnał sprzedaży");
+        (K.ostrzezenia || []).forEach((t) => dodaj(typeof t === "string" ? t : (t.t || t[0] || ""), false, "ostrzeżenie"));
+        const kol = (l, kl, tyt) => `<div class="pole kr-zp ${kl}"><div class="kr-zp-t">${tyt} <span>${l.length}</span></div>${l.map(([co, zr]) => `<div class="kr-zp-w"><span>${kl === "za" ? "✓" : "✗"}</span><span>${esc(co)} <span class="kr-zr">${esc(zr)}</span></span></div>`).join("") || '<p class="mut male">—</p>'}</div>`;
+        return `<div class="mut male" style="margin:14px 0 4px"><b>Co przemawia za, a co przeciw</b> — wszystkie sprawdzone reguły (7/7, Buffett, Lynch) i ostrzeżenia z danych</div>
+          <div class="siatka2">${kol(za, "za", "Za")}${kol(przeciw, "przeciw", "Przeciw")}</div>`;
+    }
+    function ocenaWlasna() {
+        const L = K.lynch || {}, moje = czytajLy();
+        const l = [].concat((L.zakup || []).filter(([, w]) => /oceń sam/.test(w)).map((x) => ["zakup", x[0]]), (L.cechy || []).filter(([, w]) => /oceń sam/.test(w)).map((x) => ["cechy", x[0]]));
+        if (!l.length) return "";
+        const tak = l.filter(([s, co]) => moje[s + ":" + co] === true).length;
+        return `<div class="mut male" style="margin:14px 0 4px"><b>Twoja ocena</b> (Lynch: tego nie policzą żadne dane) — ${tak} z ${l.length} na „tak”</div>
+          <div class="jz kr-ocena">${l.map(([s, co]) => { const k = s + ":" + co, v = moje[k];
+            return `<div class="ly-w"><span>${v === true ? ikona3(true) : v === false ? ikona3(false) : '<span class="mut">?</span>'}</span><span>${esc(co.replace(" (ocena własna)", ""))}</span>
+              <span class="ly-wart ly-moje"><button data-ly="${esc(k)}" data-v="1" class="${v === true ? "akt" : ""}">tak</button><button data-ly="${esc(k)}" data-v="0" class="${v === false ? "akt" : ""}">nie</button></span></div>`; }).join("")}</div>`;
+    }
     function krokTresc(i) {
         const SF = seriaFazy(), f = fazaTeraz(SF);
         const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
@@ -640,31 +782,33 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
                 ${etapy(f.nr)}<p class="male" style="margin:10px 0 6px">${esc(CYKL[f.nr])}</p>${wykresFaz(sf)}</div>`
                 : '<p class="mut">Za mało danych, żeby określić fazę spółki.</p>'}`;
         }
-        if (i === 1) {
+        if (i === 1) return krokTyp();
+        if (i === 5) return krokZarzad();
+        if (i === 2) {
             const w = (n, a, b, c) => `<div class="pole"><div class="mut male">${n}</div><div class="kr-cagr"><div><small>1 rok</small><b>${W.fmtPct(a, 1, true)}</b></div><div><small>3 lata (rocznie)</small><b>${W.fmtPct(b, 1, true)}</b></div><div><small>5 lat (rocznie)</small><b>${W.fmtPct(c, 1, true)}</b></div></div></div>`;
-            return `<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
+            return `${pytWzrost()}<div class="siatka2">${w("Przychody", M.rev_1y, M.rev_cagr3, M.rev_cagr5)}${w("Zysk netto", M.ni_1y, cagr(M.ni_3y, 3), cagr(M.ni_5y, 5))}</div>
               <div style="margin-top:10px">${kryteriaHtml(KR_IDX.Wzrost)}</div>
               <div class="mut male" style="margin-top:12px">Przychody i zysk netto rok po roku (z raportów)</div>
               ${(() => { const sf = seriaFazy(), y = ((K.hist && K.hist.y) || []).slice(SZER < 700 ? -5 : -8), zL = sf.et[sf.et.length - 1] === "12 m";
                 const ni = y.map((r) => r[2]).concat(zL ? [W.ok(M.ni_ttm) ? M.ni_ttm : null] : []);
                 return liniaRr(sf.et, [{ nazwa: "przychody", kolor: "var(--niebieski)", w: sf.rev }, { nazwa: "zysk netto", kolor: "var(--zielony)", w: ni }]); })()}`;
         }
-        if (i === 2) {
+        if (i === 3) {
             const j = listaJak(), dod = j ? j.filter(([co]) => /ROA|ROCE|3 lata temu/.test(co)) : [];
-            return `${kryteriaHtml(KR_IDX["Rentowność"])}
+            return `${pytPrzewaga()}${kryteriaHtml(KR_IDX["Rentowność"])}
               ${dod.length ? `<div class="mut male" style="margin:10px 0 4px">Dodatkowo z listy „Jakość (7 kryteriów)” (nie liczone do 7/7):</div><div class="jz">${dod.map(([co, v, ok]) => `<div class="ly-w"><span>${ok ? '<b class="kr-tak">✓</b>' : '<b class="kr-nie">✗</b>'}</span><span>${esc(co)}</span><span class="ly-wart">${esc(fmtKryt(co, v))}</span></div>`).join("")}</div>` : ""}
               <div class="mut male" style="margin:14px 0 6px">Przewaga w liczbach — na tle mediany ${ZB}: wysoka marża brutto = klienci płacą więcej niż u konkurencji (marka, technologia), wysoki ROIC = każdy zainwestowany dolar dużo zarabia</div>
               ${naTle("Marża brutto", M.gm, (K.med500 || {}).gm, (v) => W.fmtPct(v, 1))}${naTle("Marża operacyjna", M.om, (K.med500 || {}).om, (v) => W.fmtPct(v, 1))}
               ${naTle("Marża netto", M.nm, (K.med500 || {}).nm, (v) => W.fmtPct(v, 1))}${naTle("ROIC", M.roic, (K.med500 || {}).roic, (v) => W.fmtPct(v, 1))}`;
         }
-        if (i === 3) {
+        if (i === 4) {
             const s = K.oceny && K.oceny.sila;
-            return `${kryteriaHtml(KR_IDX["Bezpieczeństwo"])}
+            return `${pytBezp()}${kryteriaHtml(KR_IDX["Bezpieczeństwo"])}
               <div class="kr-cagr" style="margin-top:10px"><div><small>Gotówka − dług</small><b class="${M.net_cash >= 0 ? "plus" : "minus"}">${W.ok(M.net_cash) ? W.fmtUsd(M.net_cash) + " " + WAL : "–"}</b></div>
                 <div><small>Siła finansowa (0–10)</small><b>${oc(s)}</b></div><div><small>Spadek 2 lata z rzędu (⬇)</small><b class="${M.spadek_2l ? "minus" : ""}">${M.spadek_2l ? "tak" : "nie"}</b></div></div>
               <p class="mut male">Siła finansowa ≥ 7 to jedyny czynnik z wyraźną przewagą w naszych testach (etap 95: +16 pp w 3 lata).</p>`;
         }
-        if (i === 4) {
+        if (i === 6) {
             const peg = M.peg, pr = M.price, B = [0.5, 1, 2, 3], N = ["Bardzo tania", "Niedowartościowana", "Uczciwie", "Droga", "Bardzo droga"];
             let poz = null;
             if (W.ok(peg) && peg > 0) { // pięć równych stref: 0–0,5 / 0,5–1 / 1–2 / 2–3 / 3–4+
@@ -695,7 +839,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const ow5 = (n, x, opis) => `<div class="kr-sum-w"><span>${n}</span>${kropki5(x)}<b>${W.ok(x) ? W.fmtNum(x, 1) : "–"}</b>${opis ? `<span class="mut male kr-sum-o">${esc(opis)}</span>` : ""}</div>`;
         return `<div class="siatka2">
           <div class="pole kr-werd"><div class="mut male kr-werd-t">SPÓŁKA</div>
-            <div class="kr-sum-w"><span>Faza rozwoju</span><span></span><b>${f ? `${f.nr} z 5` : "–"}</b><span class="mut male kr-sum-o">${f ? esc(f.nazwa) : ""}</span></div>
+            <div class="kr-sum-w"><span>Faza rozwoju</span><span></span><b>${f ? `${f.nr} z ${W.FAZY.length}` : "–"}</b><span class="mut male kr-sum-o">${f ? esc(f.nazwa) : ""}</span></div>
             ${ow5("Wzrost", o.wzrost, "ocena 0–10 na tle " + ZB)}${ow5("Siła finansowa", o.sila, "")}${ow5("Wycena", o.wycena, "wysoko = tanio")}${ow5("Ocena ogólna", o.ogolna, "")}
             <div class="kr-sum-w kr-razem"><span>Kryteria 7/7</span>${wsz ? kropki(suma, wsz) : "<span></span>"}<b>${wsz ? `${suma} z ${wsz}` : "–"}</b></div></div>
           <div class="pole kr-werd"><div class="mut male kr-werd-t">WYCENA</div>
@@ -708,7 +852,9 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           </div></div>
           ${brak.length ? `<p class="male">Nie spełnia: ${esc(brak.join("; "))}.</p>` : wsz ? '<p class="male"><b>Spełnia wszystkie kryteria 7/7.</b></p>' : ""}
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
-          <p class="mut male">Zestawienie faktów z danych — decyzję podejmujesz sam.</p>
+          ${zaPrzeciw()}
+          ${ocenaWlasna()}
+          <p class="mut male">Zestawienie faktów z danych i reguł z książek — decyzję podejmujesz sam. Swoją „dwuminutową historię” spółki zapisz w <a href="portfel.html">portfelu</a>.</p>
           <div id="wycena" class="kr-wycena"></div>`;
     }
     document.addEventListener("click", (e) => {
@@ -751,12 +897,12 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         if (i !== undefined) S.krok = i;
         const k = S.krok || 0, el = $("krok");
         SZER = el.clientWidth - 32 || 1000;
-        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Ocena spółki według kryteriów 7/7 — przejdź kolejne kroki; na końcu podsumowanie z panelem PEG / DCF. Pozostałe dane i oceny — w <a href="#szczegoly">Szczegółach ↓</a>.</div>
+        el.innerHTML = `<h2>Ocena krok po kroku</h2><div class="pod">Pytania i odpowiedzi z danych: kryteria 7/7, reguły Buffetta i Petera Lyncha — przejdź kolejne kroki; na końcu werdykt (za / przeciw) z panelem PEG / DCF. Pozostałe dane i oceny — w <a href="#szczegoly">Szczegółach ↓</a>.</div>
           <div class="kr-kroki">${KROKI.map((n, j) => `<button data-kr="${j}" class="${j === k ? "akt" : ""}"><span>${j + 1}</span>${n}</button>`).join("")}</div>
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
         el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => { krok(+b.dataset.kr); przewinDo(el); }));
-        if (k === KROKI.length - 1) wycena();  // panel PEG / DCF (edytowalny) na końcu podsumowania
+        if (k === KROKI.length - 1) { wycena(); podlaczOcenyLynch(el); }  // panel PEG / DCF (edytowalny) i ocena własna na końcu
     }
 
     function sprawozdania(tryb) {

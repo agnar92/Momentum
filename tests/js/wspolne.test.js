@@ -137,3 +137,16 @@ test("przewaga Buffetta: trzy reguły razem", () => {
     assert.strictEqual(W.buffettM({ bf_nm: 0.25, bf_dlug_lat: 1 }), false);
     assert.strictEqual(W.filtruj([{ t: "A", st: {}, bf: 1 }, { t: "B", st: {} }], { buffett: true }).length, 1);
 });
+
+test("prognoza wg typu: ostrożnie — najniższy wzrost × 0,8, przycięty do typu, P/E nie rośnie", () => {
+    const p = W.prognozaTypu({ typ: "Stabilnie rosnąca", eps_baza: 5, pe: 30, cena: 150, pe_med5: 25, rev_cagr3: 0.2, rev_cagr5: 0.15, eps_next5: 0.1 });
+    assert.ok(Math.abs(p.g - 0.08) < 1e-9);                   // 0,8 × 10 % (najniższy), w zakresie 3–12 %
+    assert.strictEqual(p.peEnd, 25);                          // mediana 5 lat < dzisiejsze 30
+    const b = p.war.bazowy.ceny;
+    assert.ok(Math.abs(b[5] - 5 * Math.pow(1.08, 5) * 25) < 1e-9);
+    assert.ok(p.war.ostrozny.cagr < p.war.bazowy.cagr && p.war.bazowy.cagr <= p.war.lepszy.cagr);
+    assert.ok(p.war.lepszy.g <= 0.12);
+    assert.ok(W.prognozaTypu({ typ: "Szybko rosnąca", eps_baza: -1, pe: 20, cena: 10, rev_cagr3: 0.3 }).brak);
+    const sz = W.prognozaTypu({ typ: "Szybko rosnąca", eps_baza: 1, pe: 50, cena: 50, pe_med5: 60, rev_cagr3: 0.6, eps_next5: 0.5 });
+    assert.strictEqual(sz.g, 0.25);                           // Lynch: najwyżej 25 %
+});
