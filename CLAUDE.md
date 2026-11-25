@@ -145,7 +145,7 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
 
 - `dane.yml` („Dane spółek”): Saturday 05:23 UTC + manual; `python spolki.py`, commits `docs/data` (`[skip ci]`, reset onto origin/main, retry loop),
   deploys Pages.
-- `deploy-pages.yml`: Pages deploy on push to `main`.
+- `deploy-pages.yml`: Pages deploy on push to `main`. Both deploy jobs retry `deploy-pages` once after 60 s (Nov 2026: GitHub Pages often failed with „No artifacts named github-pages were found” / „Deployment failed, try again later”; a re-run always worked).
 - `tests.yml`: ruff + pytest (`tests/test_ocena.py`), ESLint + `node --test` (`tests/js/wspolne.test.js`).
 
 ## Workflow
