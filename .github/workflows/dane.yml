@@ -9,11 +9,10 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
+  actions: write
 
 concurrency:
-  group: "pages"
+  group: "dane"
   cancel-in-progress: false
 
 jobs:
@@ -56,28 +55,15 @@ jobs:
           done
           exit 1
 
+  # publikacja: osobny workflow „Deploy Pages” uruchamiany na nowym commicie z danymi. Publikowanie tutaj używało wersji commitu,
+  # od którego wystartował ten workflow — zwykle już opublikowanej po scaleniu PR, więc GitHub Pages odrzucał ją błędem (500 / brak artefaktu).
   deploy:
     needs: dane
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'docs/'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-        continue-on-error: true
-      # GitHub Pages bywa chwilowo niedostępny („No artifacts named github-pages were found”, „Deployment failed, try again later”) — ponów po minucie
-      - name: Odczekaj przed ponowieniem
-        if: steps.deployment.outcome == 'failure'
-        run: sleep 60
-      - name: Deploy to GitHub Pages (ponowienie)
-        if: steps.deployment.outcome == 'failure'
-        uses: actions/deploy-pages@v4
+      - name: Uruchom Deploy Pages na main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-pages.yml --ref main --repo "${{ github.repository }}"
