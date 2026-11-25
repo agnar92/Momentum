@@ -391,13 +391,13 @@
 
     // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
     // Tylko fakty z danych i kryteria z testów; bez werdyktu „kup / sprzedaj” (spółki wybiera użytkownik).
-    // cykl życia wg Lyncha („One Up on Wall Street”, rozdz. o szybko rosnących; opisy własne, skrócone)
-    // opisy faz rozwoju (własne, skrócone)
-    const CYKL = { 1: "Start: sprzedaż już jest, ale spółka jeszcze nie zarabia, a strata nie maleje — najbardziej ryzykowny etap.",
-        2: "Hiperwzrost: sprzedaż szybko rośnie, strata maleje albo spółka dopiero przekroczyła próg rentowności.",
-        3: "Dźwignia operacyjna: spółka zarabia, zyski rosną szybciej niż sprzedaż, a gotówka zostaje w firmie na dalszy rozwój.",
-        4: "Zwrot kapitału: spółka zarabia więcej, niż potrzebuje na rozwój, i oddaje gotówkę akcjonariuszom — dywidendy i skup akcji.",
-        5: "Schyłek: sprzedaż od dwóch lat niższa niż 5 lat wcześniej. Spółka wychodzi ze schyłku dopiero, gdy przychody i zysk przebiją poprzedni szczyt — wtedy faza liczona jest od nowa z bieżących danych." };
+    // etapy cyklu życia firmy wg A. Damodarana (opisy etapów jak na jego schemacie, warunki liczbowe nasze — z danych)
+    const CYKL = { 1: "Start-up: opracować pomysł na biznes, który zaspokaja niezaspokojoną potrzebę rynku. Sprzedaż już jest, ale spółka nie zarabia, a strata nie maleje.",
+        2: "Wczesny wzrost: stworzyć model biznesowy, który przekuwa pomysł w przychody i zyski. Spółka jeszcze traci, ale strata maleje albo sprzedaż rośnie ≥ 25 % rocznie.",
+        3: "Szybki wzrost: zbudować firmę, przekuwając przychody potencjalne w faktyczne. Spółka zarabia, a przychody rosną ≥ 20 % rocznie (3 lata).",
+        4: "Dojrzały wzrost: rozwijać firmę i jej zyski. Spółka zarabia, przychody rosną wolniej (6–20 % rocznie).",
+        5: "Dojrzała stabilizacja: bronić firmy przed zakusami konkurencji i znajdować nowe rynki. Przychody rosną < 6 % rocznie przez 5 lat (dwa lata z rzędu), zwykle z dywidendą lub skupem akcji.",
+        6: "Faza schyłkowa: zmniejszać skalę działalności wraz z kurczeniem się rynku. Sprzedaż od dwóch lat niższa niż 5 lat wcześniej; spółka wychodzi z tej fazy dopiero, gdy przychody i zysk przebiją poprzedni szczyt." };
     const KROKI = ["Faza", "Wzrost", "Rentowność", "Bezpieczeństwo", "Wycena", "Podsumowanie"];
     const lista77 = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("7/7")); return k ? K.strategie[k] : null; };
     const listaJak = () => { const k = Object.keys(K.strategie || {}).find((x) => x.startsWith("Jakość")); return k ? K.strategie[k] : null; };
@@ -458,7 +458,7 @@
           <text x="${X(ost[0])}" y="${Y(ost[1]) - 10}" class="kr-tx kr-tx-b" text-anchor="end">${esc(fmt(ost[1]))}</text>
           ${et.map((e, i) => `<text x="${X(i)}" y="${wys - 4}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}</svg>`;
     }
-    const KOL_FAZ = { 1: "var(--czerwony)", 2: "var(--zolty)", 3: "var(--niebieski)", 4: "var(--zielony)", 5: "var(--tekst2)" };
+    const KOL_FAZ = { 1: "var(--czerwony)", 2: "var(--zolty)", 3: "var(--niebieski)", 4: "var(--zielony)", 5: "var(--pomarancz)", 6: "var(--tekst2)" };
     function wykresFaz(sf) {
         // jeden wykres jak schemat cyklu, ale z danych spółki: przychody, zysk, wypłaty (dywidendy + skup); tło = faza w danym roku
         const n = sf.et.length, S_ = Math.max(280, SZER - 30), H = SZER < 700 ? 280 : 250, L = 8, R = S_ - 66, gora = 34, dol = H - 26;
@@ -495,7 +495,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${sf.et.map((e, i) => `<text x="${X(i)}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${esc(e)}</text>`).join("")}${tipy}</svg>
           <div class="kr-leg male"><span style="color:var(--niebieski)">● przychody</span><span style="color:var(--zielony)">● ${esc(sf.zyskNazwa)}</span><span style="color:var(--fiolet)">● dywidendy + skup akcji</span>
             </div>
-          <div class="kr-leg male"><span class="mut">Tło — faza (okno 3 lat, długoterminowo):</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
+          <div class="kr-leg male"><span class="mut">Tło — etap cyklu życia wg Damodarana (okno 3 lat, długoterminowo):</span>${Object.entries(KOL_FAZ).map(([k, c]) => `<span style="color:${c}">${k} ${esc(W.FAZY[k - 1])}</span>`).join("")}</div>`;
     }
     function liniaRr(et, serie, wys = 210) {
         // linie z raportów; przy każdym punkcie zmiana rok do roku (zielona / czerwona)

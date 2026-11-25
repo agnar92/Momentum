@@ -107,8 +107,8 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   thresholds work). Step 1 „Faza” = company development phases as in the user's screenshot (user: „sprzedaż jest, ale nie ma profitu, potem duża sprzedaż i profity,
   potem payout — dywidendy lub inne”): `W.fazyLat({rev, zysk, wyplaty, ltm})` = LONG-TERM phases (user: „myślałem, że to długoterminowe fazy rozwoju
   spółki, a nie sentyment w rok” — MU jumped 4/1/4/3): each FY + „12 m” judged on a 3-year window (sum of operating profit, sum of dividends + buybacks),
-  computed over the WHOLE history (up to 12 FY) and only then sliced for display; phases 1 → 2 → 3 → 4 only move forward (running max): 3-year profit ≤ 0 → 1 Start
-  (2 if loss shrinking), payouts ≥ 20 % of 3-year profit → 4, revenue ≥ 25 %/yr (3 y) at margin < 10 % → 2, else 3; 5 Schyłek only for a PERSISTENT decline (two
+  computed over the WHOLE history (up to 12 FY) and only then sliced for display; SIX stages of A. Damodaran's corporate life cycle since Nov 2026 (user showed his chart from „Wycena firmy. Storytelling i liczby”, s. 300, and asked to match it; `W.FAZY` = Start-up / Wczesny wzrost / Szybki wzrost / Dojrzały wzrost / Dojrzała stabilizacja / Faza schyłkowa, `SCHYLEK` = 6, texts `CYKL` = his stage descriptions + our numeric conditions): stages 1–5 only move forward (running max): 3-year profit ≤ 0 → 1 Start-up
+  (2 if loss shrinking or revenue ≥ 25 %/yr), profit and revenue 3 y ≥ 20 %/yr → 3, 6–20 % → 4, revenue 5 y (and 3 y) < 6 %/yr two years in a row → 5 (cyclical dips alone don't); 6 Schyłek only for a PERSISTENT decline (two
   years in a row: revenue below 5 years earlier AND 3-year average below the previous 3 years). Leaving Schyłek (user: „przychody i profit powinny przebijać
   szczyt”; literature: Dickinson 2011 — stage follows current cash-flow pattern, firms can move non-sequentially after restructuring; Damodaran 2024 — a revived
   firm behaves like a younger one) only when revenue AND the typical 3-year profit (median of the window; peaks only from full 3-year windows, so a one-off gain

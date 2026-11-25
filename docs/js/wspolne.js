@@ -206,19 +206,21 @@
     // Damodaran 2024: odrodzona spółka zachowuje się jak młodsza), a dalej znów tylko do przodu.
     // Zmiana struktury (przychody −30 % w rok bez załamania marży — wydzielenie, zmiana księgowa) nie jest schyłkiem: od tego roku historia od nowa.
     // d.ltm = ostatni punkt to 12 mies. (nakłada się na ostatni rok obrotowy, więc okno to: 12 mies. + 2 lata obrotowe przed ostatnim).
-    const FAZY = ["Start", "Hiperwzrost", "Dźwignia operacyjna", "Zwrot kapitału", "Schyłek"];
+    // etapy cyklu życia firmy wg A. Damodarana („Narrative and Numbers”, 2017; pol. „Wycena firmy. Storytelling i liczby”, 2019, s. 300; „The Corporate Life Cycle”, 2024)
+    const FAZY = ["Start-up", "Wczesny wzrost", "Szybki wzrost", "Dojrzały wzrost", "Dojrzała stabilizacja", "Faza schyłkowa"];
+    const SCHYLEK = 6;
     function fazyLat(d) {
         const { rev, zysk, wyplaty } = d, n = rev.length, out = [];
         const suma = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
         const srednia = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length >= 2 ? v.reduce((x, y) => x + y, 0) / v.length : null; };
-        let maks = 0, spadekPoprz = false, schylek = false, szczytR = -Infinity, szczytZ = -Infinity, poczatek = 0;
+        let maks = 0, spadekPoprz = false, schylek = false, szczytR = -Infinity, szczytZ = -Infinity, poczatek = 0, wolnoPoprz = false;
         for (let i = 0; i < n; i++) {
             const r = rev[i], ostatni12 = d.ltm && i === n - 1;
             if (!ok(r) || r <= 0) { out.push(null); continue; }
             // zmiana struktury (wydzielenie spółki, zmiana księgowa): przychody −30 % w rok przy marży ≥ 80 % poprzedniej → historię liczymy od nowa
             const rp = i > 0 ? rev[i - 1] : null, zp = i > 0 ? zysk[i - 1] : null;
             if (!ostatni12 && ok(rp) && rp > 0 && r < 0.7 * rp && ok(zp) && zp > 0 && ok(zysk[i]) && zysk[i] / r >= 0.8 * (zp / rp)) {
-                poczatek = i; szczytR = -Infinity; szczytZ = -Infinity; schylek = false; spadekPoprz = false;
+                poczatek = i; szczytR = -Infinity; szczytZ = -Infinity; schylek = false; spadekPoprz = false; wolnoPoprz = false;
             }
             const jest = (j) => j >= poczatek;
             const b = ostatni12 ? i - 1 : i, okno = [b - 2, b - 1, i].filter(jest), wczesniej = [b - 5, b - 4, b - 3].filter(jest);
@@ -227,12 +229,15 @@
             const spadek = !!(s3 !== null && s3w !== null && s3 < s3w && (r5 !== null ? r < r5 : r3 !== null && r < r3));
             const z3 = suma(zysk, okno), w3 = suma(wyplaty, okno), p3 = suma(rev, okno);
             const g3 = r3 !== null && r3 > 0 ? Math.pow(r / r3, 1 / 3) - 1 : (i > 0 && ok(rev[i - 1]) && rev[i - 1] > 0 ? r / rev[i - 1] - 1 : null);
-            let f = null;  // faza z bieżących danych (okno 3 lat)
+            // wolny wzrost: przychody 5 lat (zapas 3 lata) < 6 % rocznie — dojrzała stabilizacja dopiero, gdy trwa 2 lata z rzędu (cykliczne dołki nie wystarczą)
+            const g5 = r5 !== null && r5 > 0 ? Math.pow(r / r5, 1 / 5) - 1 : null;
+            const wolno = !!(z3 !== null && z3 > 0 && ok(g5) && g5 < 0.06 && (!ok(g3) || g3 < 0.06));
+            let f = null;  // etap z bieżących danych (okno 3 lat)
             if (z3 !== null) {
-                if (z3 <= 0) f = i > 0 && ok(zysk[i - 1]) && ok(zysk[i]) && zysk[i] > zysk[i - 1] ? 2 : 1;
-                else if (w3 !== null && w3 >= 0.2 * z3) f = 4;
-                else if (ok(g3) && g3 >= 0.25 && p3 && z3 / p3 < 0.10) f = 2;
-                else f = 3;
+                if (z3 <= 0) f = (i > 0 && ok(zysk[i - 1]) && ok(zysk[i]) && zysk[i] > zysk[i - 1]) || (ok(g3) && g3 >= 0.25) ? 2 : 1;   // strata maleje / sprzedaż szybko rośnie → wczesny wzrost
+                else if (wolno && wolnoPoprz) f = 5;
+                else if (ok(g3) && g3 >= 0.20) f = 3;
+                else f = 4;
             }
             // „typowy” zysk z 3 lat = mediana (jeden rok z jednorazowym zyskiem nie zawyża szczytu, np. MDLZ 2015); przy 1–2 latach — średnia
             const zw = okno.filter((j) => ok(zysk[j])).map((j) => zysk[j]).sort((x, y) => x - y);
@@ -240,15 +245,15 @@
             if (schylek) {
                 // wyjście ze schyłku: przychody i typowy zysk z 3 lat (mediana) powyżej szczytów sprzed schyłku → faza od nowa z bieżących danych
                 if (r > szczytR && zs3 !== null && zs3 > szczytZ && f) { schylek = false; maks = f; out.push(f); }
-                else out.push(5);
-            } else if (spadek && (ostatni12 ? out[i - 1] === 5 || spadekPoprz : spadekPoprz)) {
-                schylek = true; out.push(5);
+                else out.push(SCHYLEK);
+            } else if (spadek && (ostatni12 ? out[i - 1] === SCHYLEK || spadekPoprz : spadekPoprz)) {
+                schylek = true; out.push(SCHYLEK);
             } else {
                 if (f) maks = Math.max(maks, f);
                 out.push(maks || null);
             }
             if (!schylek) { szczytR = Math.max(szczytR, r); if (zw.length >= 3) szczytZ = Math.max(szczytZ, zs3); }  // szczyt zysku tylko z pełnych okien 3 lat
-            if (!ostatni12) spadekPoprz = spadek;
+            if (!ostatni12) { spadekPoprz = spadek; wolnoPoprz = wolno; }
         }
         return out;
     }
