@@ -275,3 +275,21 @@ def test_buffett_reguly():
     assert len(lst) == 8 and all(ok for _, _, ok in lst) and O.buffett3(m)
     m2 = O.buffett(dict(yr, ni={e: -1.0 for e in lata}), ch, y)
     assert m2["bf_dlug_lat"] == O.BRAK_BF and not O.buffett3(m2)
+
+
+def test_finviz_ponawia_po_odmowie(monkeypatch):
+    """Finviz 403 / 429: czekamy i ponawiamy zamiast kończyć cały przebieg błędem."""
+    import spolki
+    monkeypatch.setattr(spolki.time, "sleep", lambda s: None)
+    strona = '<script type="application/json" data-ssr-props="x">{"data": {"rows": [{"text": {"ticker": "AAA"}, "numbers": {"marketCap": 1}}], "totalCount": 1}}</script>'
+
+    class R:
+        def __init__(self, kod):
+            self.status_code, self.text = kod, strona if kod == 200 else ""
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise RuntimeError(self.status_code)
+    kody = iter([403, 429, 200] + [200] * 10)
+    out = spolki.finviz(log=lambda *a: None, get=lambda *a, **k: R(next(kody)), pause=0)
+    assert "AAA" in out

@@ -38,7 +38,14 @@ def finviz(filters="cap_largeover", log=print, get=None, pause=0.7):
     for v in VIEWS:
         off = 1
         for _ in range(80):
-            r = get(URL, params={"v": v, "f": filters, "r": off}, headers=HEADERS, timeout=30)
+            r = None
+            for proba, czekaj in enumerate((0, 60, 180, 420)):      # Finviz bywa chwilowo niedostępny (403 / 429 po wielu zapytaniach) — czekamy i ponawiamy
+                if czekaj:
+                    log(f"Finviz odmówił ({r.status_code}), ponawiam za {czekaj} s (próba {proba + 1})")
+                    time.sleep(czekaj)
+                r = get(URL, params={"v": v, "f": filters, "r": off}, headers=HEADERS, timeout=30)
+                if r.status_code not in (403, 429, 503):
+                    break
             r.raise_for_status()
             rows, t = ssr_rows(r.text)
             total = t if t is not None else total

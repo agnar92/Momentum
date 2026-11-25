@@ -16,7 +16,7 @@ Informational only, not investment advice. Code comments, UI and CLI messages ar
 
 `python spolki.py [--top 500] [--cache DIR] [--out docs/data]`:
 1. Finviz screener `cap_largeover`, views 111 / 121 / 161, all pages (SSR JSON, `ssr_rows`) → 500 largest by `marketCap` (Finviz units: marketCap in
-   millions, percentages in %). < 400 rows = nothing written.
+   millions, percentages in %); 403 / 429 / 503 → wait 60 / 180 / 420 s and retry (Nov 2026: Finviz refused the CI runner after a long run). < 400 rows = nothing written.
 2. SEC: CIK from `company_tickers.json`, companyfacts per ticker (4 threads, `SEC_UA` env / secret) → `fundamenty.wyciag`: for every key ALL tags of its
    list are kept ({tag: rows}) and `polacz` picks, per date, the first tag that has a value (companies switch tags, e.g. Revenues →
    RevenueFromContract…; NVDA's marketable securities tag stopped). Quarters (`kwartalne`): 3-month values plus differences of cumulative values of the
