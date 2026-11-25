@@ -315,7 +315,7 @@ def metryki(ex, fv, dzis=None, splity=()):
             else:
                 break
         m["dlug_rosnie_kw"] = n_
-    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc", "op", "skup", "dyw", "gp", "sga", "sm", "ga", "koszt") if ex.get(k)}
+    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc", "op", "skup", "dyw", "gp", "sga", "sm", "ga", "koszt", "odsetki") if ex.get(k)}
 
     shd = F.roczne(ex["sh_dil"]) if not sh and ex.get("sh_dil") else {}
 
@@ -364,8 +364,7 @@ BRAK_BF = 99.0      # strata / ujemny kapitał: reguła niespełniona (pokazywan
 
 
 def buffett(yr, ch, lata_y, debt=None, de_fv=None):
-    """Etap 111: reguły z „Warren Buffett and the Interpretation of Financial Statements” potwierdzone na danych 2012–2026 (5 lat; bez odsetek
-    i EPS 9 z 10 lat). Lata obrotowe: marże z 2 ostatnich lat (najniższa), EPS 5 lat z zysku netto ÷ liczby akcji (po splitach), capex ÷ zysk z 3 lat,
+    """Reguły z „Warren Buffett and the Interpretation of Financial Statements” (etap 111). Lata obrotowe: marże z 2 ostatnich lat (najniższa), EPS 5 lat z zysku netto ÷ liczby akcji (po splitach), capex ÷ zysk z 3 lat,
     SG&A ÷ zysk brutto z ostatniego roku; bilans z ostatniej daty kapitału."""
     m = {}
     rev = yr.get("rev", {})
@@ -387,11 +386,15 @@ def buffett(yr, ch, lata_y, debt=None, de_fv=None):
         v = [marza(k, e) for e in fy[-2:]]
         if all(x is not None for x in v):
             m[pole] = _r(min(v))
-    # EPS: zysk netto ÷ liczba akcji na koniec roku (hist.y [2], [8] — już po splitach), 6 lat obrotowych = 5 zmian
-    y = [r for i, r in enumerate(lata_y) if i == len(lata_y) - 1 or (F.D(lata_y[i + 1][0]) - F.D(r[0])).days > 300][-6:]
-    if len(y) == 6 and all(r[2] is not None and r[8] for r in y):
+    # EPS (książka: 10 lat, stały wzrost): zysk netto ÷ liczba akcji na koniec roku (hist.y [2], [8] — już po splitach), do 11 lat obrotowych = 10 zmian;
+    # krótsza historia (≥ 6 lat) — z dostępnych lat, nadal najwyżej jeden rok spadku
+    y = [r for i, r in enumerate(lata_y) if i == len(lata_y) - 1 or (F.D(lata_y[i + 1][0]) - F.D(r[0])).days > 300][-11:]
+    while y and (y[0][2] is None or not y[0][8]):
+        y = y[1:]
+    if len(y) >= 6 and all(r[2] is not None and r[8] for r in y):
         eps = [r[2] / r[8] for r in y]
-        m["bf_eps_lata"] = sum(eps[i + 1] > eps[i] for i in range(5))
+        m["bf_eps_lata"] = sum(eps[i + 1] > eps[i] for i in range(len(eps) - 1))
+        m["bf_eps_n"] = len(eps) - 1
         m["bf_eps_zysk"] = all(v > 0 for v in eps)
     # zobowiązania ÷ (kapitał + akcje własne), ostatnia data kapitału
     if ch.get("eq"):
@@ -411,6 +414,12 @@ def buffett(yr, ch, lata_y, debt=None, de_fv=None):
         ni0 = yr.get("ni", {}).get(e0)
         if dl is not None and ni0 is not None:
             m["bf_dlug_lat"] = 0.0 if dl <= 0 else (_r(dl / ni0) if ni0 > 0 else BRAK_BF)
+    # odsetki ÷ zysk operacyjny (ostatni rok obrotowy); brak odsetek przy braku długu = 0
+    op0, ods0 = yr.get("op", {}).get(e0), yr.get("odsetki", {}).get(e0)
+    if ods0 is None and m.get("bf_dlug_lat") == 0.0:
+        ods0 = 0.0
+    if op0 is not None and ods0 is not None:
+        m["bf_ods"] = _r(abs(ods0) / op0) if op0 > 0 else BRAK_BF
     cx = [yr.get("capex", {}).get(e) for e in fy[-3:]]
     ni = [yr.get("ni", {}).get(e) for e in fy[-3:]]
     if len(fy) >= 3 and all(v is not None for v in cx + ni):
@@ -425,13 +434,16 @@ def buffett(yr, ch, lata_y, debt=None, de_fv=None):
 
 
 def buffett_lista(m):
-    """Lista „Buffett (7 kryteriów)” — tylko reguły potwierdzone w etapie 111."""
+    """Lista „Buffett (8 reguł)” — wszystkie reguły z książki Mary Buffett (użytkownik: „zdanie Buffetta jest ważniejsze niż backtesty”);
+    etap 111 potwierdził 6, odsetki i EPS 10 lat — wynik dodatni, ale niepotwierdzony (za mało danych / jedna połowa ujemna)."""
     def lt(k, p):
         return m.get(k) is not None and m[k] < p
     return [("Marża brutto > 40 % (2 lata)", m.get("bf_gm"), _gt(m.get("bf_gm"), 0.40)),
             ("Marża netto > 20 % (2 lata)", m.get("bf_nm"), _gt(m.get("bf_nm"), 0.20)),
-            ("EPS rósł w ≥ 4 z 5 lat, zawsze zysk", m.get("bf_eps_lata"), (m.get("bf_eps_lata") or 0) >= 4 and bool(m.get("bf_eps_zysk"))),
+            ("EPS rósł w ≥ 9 z 10 lat, zawsze zysk", m.get("bf_eps_lata"),
+             m.get("bf_eps_lata") is not None and m["bf_eps_lata"] >= m["bf_eps_n"] - 1 and bool(m.get("bf_eps_zysk"))),
             ("Zobowiązania ÷ (kapitał + akcje własne) < 0,8", m.get("bf_de"), lt("bf_de", 0.8)),
+            ("Odsetki < 15 % zysku operacyjnego", m.get("bf_ods"), lt("bf_ods", 0.15)),
             ("Dług długoterminowy ≤ 4 × zysk netto", m.get("bf_dlug_lat"), m.get("bf_dlug_lat") is not None and m["bf_dlug_lat"] <= 4),
             ("Capex < 25 % zysku netto (3 lata)", m.get("bf_capex_ni"), lt("bf_capex_ni", 0.25)),
             ("SG&A < 30 % zysku brutto", m.get("bf_sga_gp"), lt("bf_sga_gp", 0.30))]
@@ -815,7 +827,7 @@ def strategie(m, sektor):
            ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1)]
-    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon, "Duży zwycięzca (10+ lat)": duz, "Buffett (7 kryteriów)": buffett_lista(m),
+    out = {"Jakość (7 kryteriów)": jak, "Konsekwentny wzrost": kon, "Duży zwycięzca (10+ lat)": duz, "Buffett (8 reguł)": buffett_lista(m),
            "Zyskowność (4 kryteria)": zys, "Przepływy pieniężne (4 kryteria)": prz}
     if not wykl:
         out = {"7/7 (niskie ryzyko)": lr, **out}

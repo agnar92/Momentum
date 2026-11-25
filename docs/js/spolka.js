@@ -190,7 +190,8 @@
             if (/Buffett|akcje własne|4 × zysk|zysku netto \(3 lata\)|SG&A/.test(n) && v >= 99) return /kapitał/.test(n) ? "ujemny kapitał" : "strata";
             if (/4 × zysk/.test(n)) return v <= 0 ? "brak długu" : W.fmtNum(v, 1) + " × zysk";
             if (/Zobowiązania/.test(n)) return W.fmtNum(v);
-            if (/≥ 4 z 5 lat/.test(n)) return v + " z 5" + (M.bf_eps_zysk === false ? ", była strata" : "");
+            if (/≥ 9 z 10 lat/.test(n)) return v + " z " + M.bf_eps_n + (M.bf_eps_zysk === false ? ", była strata" : "");
+            if (/Odsetki/.test(n) && v >= 99) return "strata operacyjna";
             if (/Dług|PEG/.test(n)) return W.fmtNum(v);
             if (/FCF > 0/.test(n)) return W.fmtUsd(v);
             if (/Lata|≥ 3 z 5|≥ 2 z 3|z 10 lat/.test(n)) return String(v);
@@ -199,7 +200,7 @@
             if (/ROE wyższe/.test(n)) return (n.match(/niż (.*)$/) || ["", ""])[1] + " " + W.fmtPct(v, 0) + " → dziś " + W.fmtPct(M.roe_sec, 0);
             return W.fmtPct(v, 1);
         };
-        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/) i z filmów autora (Zyskowność, Przepływy pieniężne — jeszcze nie sprawdzone u nas w całości); Buffett — reguły z książki Mary Buffett potwierdzone na danych 2012–2026: ile z nich spółka dziś spełnia.</div><div class="kol3">` +
+        $("strategie").innerHTML = `<h2>Strategie</h2><div class="pod">Kryteria z naszego badania (research/), z filmów autora (Zyskowność, Przepływy pieniężne) i 8 reguł Buffetta z książki Mary Buffett: ile z nich spółka dziś spełnia.</div><div class="kol3">` +
             Object.entries(K.strategie).map(([n, kr]) => {
                 const ile = kr.filter((x) => x[2]).length;
                 return `<div class="kol" style="border:1px solid var(--linia);border-radius:10px;padding:10px"><div style="display:flex;justify-content:space-between"><b>${esc(n)}</b>
@@ -370,23 +371,22 @@
     function lynch() {
         const el = $("lynch"), L = K.lynch, typ = K.typy && K.typy[0] && K.typy[0][0];
         if (!typ || !LYNCH[typ]) { el.hidden = true; return; }
-        // etap 92: ⚠ tylko dla sygnałów potwierdzonych w teście; niepotwierdzone i nietestowane — szare ○
-        const ikona = (s, st) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? (st === "potwierdzony" ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut" title="sygnał Lyncha niepotwierdzony w naszym teście">○</span>') : '<span class="mut">–</span>');
-        const stTxt = { potwierdzony: "potwierdzony w teście", niepotwierdzony: "niepotwierdzony w teście", nietestowany: "nietestowany" };
+        // wszystkie sygnały Lyncha liczą się tak samo (użytkownik: „jeżeli Lynch mówi, że działa, to działa”)
+        const ikona = (s) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? '<b style="color:var(--czerwony)">⚠</b>' : '<span class="mut">–</span>');
         const wsk = L && W.ok(L.wskaznik) ? L.wskaznik : null;
         const ocWsk = wsk === null ? "" : wsk >= 2 ? "bardzo dobrze" : wsk >= 1.5 ? "przyzwoicie" : wsk >= 1 ? "słabo" : "drogo";
         const lista = (L && L.lista) || [];
-        const ost = lista.filter((x) => x[2] === false && x[3] === "potwierdzony").length, inne = lista.filter((x) => x[2] === false && x[3] !== "potwierdzony").length;
+        const ost = lista.filter((x) => x[2] === false).length;
         el.innerHTML = `<h2>Peter Lynch: typ, faza i kiedy sprzedać</h2><div class="pod">Metoda z książki „One Up on Wall Street” (P. Lynch, 1989). Typ: <b>${esc(typ)}</b>${L && L.faza ? ` · faza: <b>${esc(L.faza[0])}</b> <span class="mut">(${esc(L.faza[1])})</span>` : ""}.</div>
           <div class="siatka2"><div class="male">
             <p style="margin:0 0 8px"><b>Czym jest:</b> ${esc(LYNCH[typ][0])}</p>
             <p style="margin:0 0 8px"><b>Kiedy sprzedać (Lynch):</b> ${esc(LYNCH[typ][1])}</p>
             <p style="margin:0" class="mut">Wskaźnik Lyncha z dywidendą = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze.
               ${wsk !== null ? ` Tutaj: <b>${W.fmtNum(wsk)}</b> — ${ocWsk}.` : ""}</p></div>
-          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">${ost} potwierdzony sygnał ostrzegawczy</b>` : ""}${inne ? ` · ${inne} sygnał(y) Lyncha niepotwierdzone w teście` : ""}</div>
-            ${lista.length ? `<div class="jz">${lista.map(([co, w, s, st]) => `<div class="ly-w"><span>${ikona(s, st)}</span><span>${esc(co)}<br><span class="mut" style="font-size:11px">${esc(stTxt[st] || "")}</span></span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
+          <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">sygnały ostrzegawcze: ${ost}</b>` : ""}</div>
+            ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="ly-w"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
               : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
-            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy potwierdzony w naszym teście · ○ sygnał wg Lyncha, ale w teście 2012–2026 spółki z nim nie wypadały wyraźnie gorzej (etap 92) · – brak danych lub do oceny samemu. Potwierdzone w testach 2012–2026 (etapy 92–93): u wolno rosnących spadek sprzedaży lub zysku 2 lata z rzędu (−11 pp w 3 lata) i dywidenda rosnąca 5 lat (+11 pp), u stabilnie rosnących wysoka marża netto (+28 pp). Pozostałe reguły Lyncha — w metodzie.</p></div></div>`;
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>`;
     }
 
     // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.
