@@ -394,7 +394,7 @@
     // etapy cyklu życia firmy wg A. Damodarana (opisy etapów jak na jego schemacie, warunki liczbowe nasze — z danych)
     const CYKL = { 1: "Start-up: opracować pomysł na biznes, który zaspokaja niezaspokojoną potrzebę rynku. Sprzedaż już jest, ale spółka nie zarabia, a strata nie maleje.",
         2: "Wczesny wzrost: stworzyć model biznesowy, który przekuwa pomysł w przychody i zyski. Spółka jeszcze traci, ale strata maleje albo sprzedaż rośnie ≥ 25 % rocznie.",
-        3: "Szybki wzrost: zbudować firmę, przekuwając przychody potencjalne w faktyczne. Spółka zarabia, a przychody rosną ≥ 20 % rocznie (3 lata).",
+        3: "Szybki wzrost: zbudować firmę, przekuwając przychody potencjalne w faktyczne. Spółka zarabia, a przychody rosną ≥ 20 % rocznie (3 lata). Tu wraca też dojrzała spółka, której sprzedaż znów rośnie tak szybko drugi rok z rzędu (odmłodzenie wg Damodarana).",
         4: "Dojrzały wzrost: rozwijać firmę i jej zyski. Spółka zarabia, przychody rosną wolniej (6–20 % rocznie).",
         5: "Dojrzała stabilizacja: bronić firmy przed zakusami konkurencji i znajdować nowe rynki. Przychody rosną < 6 % rocznie przez 5 lat (dwa lata z rzędu), zwykle z dywidendą lub skupem akcji.",
         6: "Faza schyłkowa: zmniejszać skalę działalności wraz z kurczeniem się rynku. Sprzedaż od dwóch lat niższa niż 5 lat wcześniej; spółka wychodzi z tej fazy dopiero, gdy przychody i zysk przebiją poprzedni szczyt." };

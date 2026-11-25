@@ -213,14 +213,14 @@
         const { rev, zysk } = d, n = rev.length, out = [];
         const suma = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length ? v.reduce((x, y) => x + y, 0) : null; };
         const srednia = (a, idx) => { const v = idx.filter((j) => j >= 0 && ok(a[j])).map((j) => a[j]); return v.length >= 2 ? v.reduce((x, y) => x + y, 0) / v.length : null; };
-        let maks = 0, spadekPoprz = false, schylek = false, szczytR = -Infinity, szczytZ = -Infinity, poczatek = 0, wolnoPoprz = false;
+        let maks = 0, spadekPoprz = false, schylek = false, szczytR = -Infinity, szczytZ = -Infinity, poczatek = 0, wolnoPoprz = false, szybkoPoprz = false;
         for (let i = 0; i < n; i++) {
             const r = rev[i], ostatni12 = d.ltm && i === n - 1;
             if (!ok(r) || r <= 0) { out.push(null); continue; }
             // zmiana struktury (wydzielenie spółki, zmiana księgowa): przychody −30 % w rok przy marży ≥ 80 % poprzedniej → historię liczymy od nowa
             const rp = i > 0 ? rev[i - 1] : null, zp = i > 0 ? zysk[i - 1] : null;
             if (!ostatni12 && ok(rp) && rp > 0 && r < 0.7 * rp && ok(zp) && zp > 0 && ok(zysk[i]) && zysk[i] / r >= 0.8 * (zp / rp)) {
-                poczatek = i; szczytR = -Infinity; szczytZ = -Infinity; schylek = false; spadekPoprz = false; wolnoPoprz = false;
+                poczatek = i; szczytR = -Infinity; szczytZ = -Infinity; schylek = false; spadekPoprz = false; wolnoPoprz = false; szybkoPoprz = false;
             }
             const jest = (j) => j >= poczatek;
             const b = ostatni12 ? i - 1 : i, okno = [b - 2, b - 1, i].filter(jest), wczesniej = [b - 5, b - 4, b - 3].filter(jest);
@@ -249,11 +249,13 @@
             } else if (spadek && (ostatni12 ? out[i - 1] === SCHYLEK || spadekPoprz : spadekPoprz)) {
                 schylek = true; out.push(SCHYLEK);
             } else {
-                if (f) maks = Math.max(maks, f);
+                // odmłodzenie (Damodaran): dojrzała spółka, której przychody znów rosną ≥ 20 % rocznie (3 lata) drugi rok z rzędu, wraca do szybkiego wzrostu
+                if (f === 3 && maks > 3 && szybkoPoprz) maks = 3;
+                else if (f) maks = Math.max(maks, f);
                 out.push(maks || null);
             }
             if (!schylek) { szczytR = Math.max(szczytR, r); if (zw.length >= 3) szczytZ = Math.max(szczytZ, zs3); }  // szczyt zysku tylko z pełnych okien 3 lat
-            if (!ostatni12) { spadekPoprz = spadek; wolnoPoprz = wolno; }
+            if (!ostatni12) { spadekPoprz = spadek; wolnoPoprz = wolno; szybkoPoprz = f === 3; }
         }
         return out;
     }

@@ -117,6 +117,9 @@ test("fazy rozwoju spółki: okno 3 lat, tylko do przodu, schyłek przy trwałym
     const o = W.fazyLat({ rev: [100, 110, 120, 100, 90, 85, 80, 115, 130, 150], zysk: [10, 12, 14, 5, 3, 2, 1, 13, 20, 25], wyplaty: [5, 5, 5, 0, 0, 0, 0, 0, 0, 0] });
     assert.deepStrictEqual(o, [4, 4, 4, 4, 4, 6, 6, 6, 4, 4]);
 
+    // odmłodzenie (Damodaran): dojrzała spółka znów rośnie ≥ 20 % rocznie dwa lata z rzędu → z powrotem szybki wzrost
+    const n = W.fazyLat({ rev: [100, 108, 116, 125, 135, 180, 250, 350], zysk: [20, 22, 24, 26, 28, 50, 90, 150], wyplaty: [] });
+    assert.deepStrictEqual(n, [4, 4, 4, 4, 4, 4, 4, 3]);
     // wydzielenie spółki (przychody −50 % w rok, marża bez zmian) to nie schyłek
     const w = W.fazyLat({ rev: [80, 82, 84, 86, 88, 40, 42, 44], zysk: [16, 16.4, 16.8, 17.2, 17.6, 8, 8.4, 8.8], wyplaty: [8, 8, 8, 8, 8, 4, 4, 4] });
     assert.ok(!w.includes(6), JSON.stringify(w));
