@@ -159,3 +159,14 @@ test("prognoza dla cyklicznej na szczycie: trzy drogi cyklu (średni / połowa /
     assert.ok(p.war.ostrozny.cagr < 0 && p.war.lepszy.cagr > 0);     // powrót do średniej = spadek, utrzymany zysk = wzrost
     assert.ok(Math.abs(p.war.lepszy.pe - 555 / 74) < 1e-9);         // P/E nie rośnie
 });
+
+test("prognozaTypu: cykliczna i szybko rosnąca — wariant lepszy od dzisiejszego zysku z wzrostem szybko rosnącej (≤ 20 %)", () => {
+    const d = { typ: "Cykliczna", eps_baza: 4, eps_teraz: 10, pe: 10, cena: 100, pe_med5: 15, rev_cagr3: 0.4, rev_cagr5: 0.3, eps_next5: 0.35 };
+    const a = W.prognozaTypu(d), b = W.prognozaTypu({ ...d, szybka: true });
+    assert.ok(!a.szybka && b.szybka);
+    assert.strictEqual(b.war.lepszy.g, 0.2);
+    assert.strictEqual(b.war.lepszy.eps, 10);
+    assert.ok(b.war.lepszy.cagr > a.war.lepszy.cagr);
+    assert.strictEqual(b.war.ostrozny.cagr, a.war.ostrozny.cagr);
+    assert.ok(b.war.lepszy.pe <= 10);
+});

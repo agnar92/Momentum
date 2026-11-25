@@ -351,3 +351,15 @@ def test_wydzielenie():
     from momentum import zdarzenia as Z
     d = {"filings": {"recent": {"form": ["10-K", "10-12B", "10-12B/A"], "filingDate": ["2024-02-01", "2019-03-01", "2019-04-01"]}}}
     assert Z.wydzielenie(d) == "2019-03-01" and Z.wydzielenie({}) is None
+
+
+def test_cykliczna_peg_nie_dotyczy():
+    y = [["2016", 100, 10], ["2017", 90, 5], ["2018", 120, 12], ["2019", 100, -1], ["2020", 130, 15], ["2021", 140, 14]]
+    assert O.cykl_spadki(y) == 2
+    m = {"cykliczna": 70, "cykl_spadki": 2, "peg": 0.2, "pe": 8, "pe_med5": 20, "ni_1y": 1.5}
+    assert O.cykliczna(m) and not O.cykliczna({"cykliczna": 40, "cykl_spadki": 3}) and not O.cykliczna({"cykliczna": 100, "cykl_spadki": 1})
+    ost = O.ostrzezenia(m)
+    assert m.get("cykl_szczyt") and any("cykliczna" in x for x in ost)
+    st = O.strategie(dict(m, rev_5y=1, rev_1y=0.2, ni_1y=0.2, roe=0.3, de=0.1, fcf=1), "Technology")
+    peg = [k for k in next(v for n, v in st.items() if n.startswith("7/7")) if k[0].startswith("PEG")][0]
+    assert "nie dotyczy" in peg[0] and peg[2] is False

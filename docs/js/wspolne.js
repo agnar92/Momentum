@@ -156,6 +156,7 @@
             if (!pierwszy && x.ost && x.ost.d && x.ost.d.slice(0, 7) === o.dzis.slice(0, 7)) { x.powod = `już kupione w tym miesiącu (${x.ost.d})`; return; }
             if (!pierwszy && x.ruch !== null && Math.abs(x.ruch) < DOKUP.ruch) { x.powod = `kurs ${fmtPct(x.ruch, 1, true)} od ostatniego zakupu — czekam na ruch ±${Math.round(100 * DOKUP.ruch)} %`; return; }
             x.pierwszy = pierwszy;
+            if (r.cy) x.uwagi.push(r.csz ? "⚠ cykliczna przy rekordowym zysku — wg Lyncha niski PEG / P/E może oznaczać szczyt cyklu" : "⚠ cykliczna — PEG jej nie opisuje (Lynch)");
             x.plan = Math.min((pierwszy ? DOKUP.pierwszy : DOKUP.kolejny) * cel, cel - x.wartosc);
         });
         // budżet miesiąca (opcjonalnie): najpierw spółki z największą liczbą punktów
@@ -282,10 +283,13 @@
         // ostrożny: zysk wraca do średniej z 5 lat, bazowy: połowa drogi, lepszy: zysk zostaje na dzisiejszym poziomie (wzrost w zakresie typu)
         const cykl = d.typ === "Cykliczna" && ok(d.eps_teraz) && d.eps_teraz > eps0;
         const e = cykl ? { ostrozny: eps0, bazowy: (eps0 + d.eps_teraz) / 2, lepszy: d.eps_teraz } : { ostrozny: eps0, bazowy: eps0, lepszy: eps0 };
-        const war = cykl ? { ostrozny: [clip(g * 0.5), 0.8], bazowy: [g, 1], lepszy: [Math.min(zak[1], g * 1.25), 1] }
-            : { ostrozny: [clip(g * 0.5), 0.8], bazowy: [g, 1], lepszy: [Math.min(zak[1], g * 1.25), 1] };
+        const war = { ostrozny: [clip(g * 0.5), 0.8], bazowy: [g, 1], lepszy: [Math.min(zak[1], g * 1.25), 1] };
+        // cykliczna, która jest też wyraźnie szybko rosnąca (szybka = true): wariant „lepszy” jak u szybko rosnącej — od dzisiejszego zysku,
+        // wzrost 0,8 × najniższy z historii / prognozy w zakresie szybko rosnącej, najwyżej 20 % rocznie; P/E dalej nie rośnie
+        const zs = ZAKRES_TYPU["Szybko rosnąca"], gSzybka = cykl && d.szybka ? Math.min(0.2, Math.max(zs[0], Math.min(zs[1], 0.8 * Math.min(...kand)))) : null;
+        if (gSzybka !== null) war.lepszy = [gSzybka, 1];
         const peTeraz = d.cena / eps0, peEnd = peEndZ(eps0);
-        const lata = d.lata || 5, out = { g, peTeraz, peEnd, eps0, cykl, zakres: zak, war: {} };
+        const lata = d.lata || 5, out = { g, peTeraz, peEnd, eps0, cykl, szybka: gSzybka !== null, zakres: zak, war: {} };
         Object.entries(war).forEach(([k, [gk, mn]]) => {
             const e0 = e[k], pt = d.cena / e0, pk = peEndZ(e0) * mn, ceny = [d.cena];
             for (let t = 1; t <= lata; t++) ceny.push(e0 * Math.pow(1 + gk, t) * (pt + (pk - pt) * t / lata));

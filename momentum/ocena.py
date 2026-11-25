@@ -585,6 +585,24 @@ def mediany(rows):
     return out
 
 
+def cykl_spadki(y, lat=10):
+    """Liczba lat obrotowych (z ostatnich `lat` przejść), w których przychody spadły o ≥ 5 % i zysk netto o ≥ 30 % (albo była strata) — powtarzalny cykl."""
+    y = [r for r in (y or []) if r[1]][-(lat + 1):]
+    n = 0
+    for a, b in zip(y, y[1:]):
+        if a[1] > 0 and b[1] / a[1] - 1 <= -0.05:
+            ni_a, ni_b = a[2], b[2]
+            if ni_a is None or ni_b is None or ni_a <= 0 or ni_b <= 0 or ni_b / ni_a - 1 <= -0.3:
+                n += 1
+    return n
+
+
+def cykliczna(m):
+    """Lynch: spółka cykliczna — przychody wahają się mocno (dopasowanie „Cykliczna” ≥ 60) i co najmniej 2 razy w 10 latach spadły przychody
+    razem z zyskiem (`cykl_spadki`); samo przyspieszenie wzrostu (np. NVDA) to nie cykl. Dla nich PEG i niskie P/E nie działają."""
+    return (m.get("cykliczna") or 0) >= 60 and (m.get("cykl_spadki") or 0) >= 2
+
+
 def oceny(rows):
     """Uzupełnia r['pct'] (percentyle wskaźników), r['oceny'] (wzrost, siła, wycena, ogólna; 0-10) i r['med500'] (mediany wszystkich spółek)."""
     for r in rows:
@@ -596,6 +614,9 @@ def oceny(rows):
         for pole, kier in pola:
             for r, p in zip(rows, percentyle(rows, pole, kier)):
                 r["pct"][pole] = p
+    for r in rows:
+        if cykliczna(r["m"]):
+            r["pct"]["peg"] = None       # cykliczne: PEG pomijamy w ocenie wyceny (liczy się jak brak danych — neutralnie)
     wszystkie = sum(len(p) for p in GRUPY.values())
     for r in rows:
         n = sum(1 for g, pola in GRUPY.items() for p, _ in pola if r["pct"].get(p) is not None)
@@ -684,6 +705,11 @@ def _pl(x, d=1):
 def ostrzezenia(m, typ=None, rank=None):
     """Realność prognozy wzrostu (film autora o przewidywaniu zysków): lista ostrzeżeń dla karty spółki."""
     out = []
+    pe, pm, n1 = m.get("pe"), m.get("pe_med5"), m.get("ni_1y")
+    if cykliczna(m) and pe and pe > 0 and n1 is not None and n1 >= 0.5 and (pm is None or pe < pm):
+        m["cykl_szczyt"] = True
+        out.append(f"Spółka cykliczna z rekordowym skokiem zysku ({_pl(100 * n1)} % r/r) i niskim P/E ({_pl(pe)}" + (f" vs zwykle {_pl(pm)}" if pm else "") + ") — "
+                   "wg Lyncha niskie P/E u cyklicznych przy szczytowych zyskach to często znak szczytu cyklu, a nie okazja; PEG tu nie działa.")
     g, r5, lata = m.get("eps_next5"), m.get("rev_cagr5"), [x for x in (m.get("rev_lata") or []) if x is not None]
     if g is not None and g >= 0.15 and r5 is not None and r5 < 0.05:
         out.append(f"Prognoza wzrostu EPS {100 * g:.0f} % rocznie przy przychodach rosnących {_pl(100 * r5)} % rocznie przez 5 lat — "
@@ -986,7 +1012,8 @@ def strategie(m, sektor):
           ("ROE > 15 %", m.get("roe"), _gt(m.get("roe"), 0.15)),
           ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
           ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),
-          ("PEG 0–2", m.get("peg"), m.get("peg") is not None and 0 < m["peg"] < 2)]   # użytkownik: „daj te 7/7 kryteriów PEG do 2” (wcześniej 0–1)
+          ("PEG 0–2" + (" (nie dotyczy cyklicznych)" if cykliczna(m) else ""), m.get("peg"),
+           m.get("peg") is not None and 0 < m["peg"] < 2 and not cykliczna(m))]   # użytkownik: „daj te 7/7 kryteriów PEG do 2”; Lynch: PEG nie dla cyklicznych
     jak = [("Przychody 5 lat > 8 %/rok" + zl, m.get("rev_cagr5"), _gt(m.get("rev_cagr5"), 0.08)),
            ("Dług / kapitał 0–1", m.get("de"), m.get("de") is not None and 0 <= m["de"] < 1),
            ("FCF > 0", m.get("fcf_ttm"), _gt(m.get("fcf_ttm"), 0)),

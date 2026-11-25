@@ -683,8 +683,23 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
     }
     // krok „Typ”: typ wg Lyncha i ostrożna prognoza na 5 lat (W.prognozaTypu); spółka o wyraźnie cyklicznych przychodach (dopasowanie „Cykliczna” ≥ 60)
     // liczona jak cykliczna — od średniego zysku z 5 lat, nie od szczytu cyklu (użytkownik: „rozsądnie, a nie euforia”)
-    const cyklicznaFit = () => { const c = (K.typy || []).find((x) => x[0] === "Cykliczna"); return c ? c[1] : 0; };
-    function typPrognozy() { const ty = K.typy || []; if (!ty[0]) return null; if (cyklicznaFit() >= 60) return "Cykliczna"; return duz6() ? W.DUZY : ty[0][0]; }
+    const fitTypu = (n) => { const c = (K.typy || []).find((x) => x[0] === n); return c ? c[1] : 0; };
+    const cyklicznaFit = () => fitTypu("Cykliczna");
+    // Lynch: PEG i niskie P/E nie opisują spółek cyklicznych (niskie P/E przy rekordowych zyskach = często szczyt cyklu); M.cykl_peg = ocena.cykliczna
+    // (dopasowanie ≥ 60 i ≥ 2 lata spadku przychodów i zysku w 10 latach)
+    function cyklSpadki() {     // jak ocena.cykl_spadki: lata (z 10) ze spadkiem przychodów ≥ 5 % i zysku ≥ 30 % (lub stratą)
+        const y = ((K.hist && K.hist.y) || []).filter((r) => r[1]).slice(-11);
+        let n = 0;
+        for (let i = 1; i < y.length; i++) {
+            const a = y[i - 1], b = y[i];
+            if (a[1] > 0 && b[1] / a[1] - 1 <= -0.05 && (!W.ok(a[2]) || !W.ok(b[2]) || a[2] <= 0 || b[2] <= 0 || b[2] / a[2] - 1 <= -0.3)) n++;
+        }
+        return n;
+    }
+    const cykliczna = () => (M.cykl_peg !== undefined ? !!M.cykl_peg : cyklicznaFit() >= 60 && cyklSpadki() >= 2);
+    // jak ostrzeżenie w ocena.ostrzezenia: cykliczna z zyskiem +50 % r/r i P/E poniżej mediany 5 lat — wg Lyncha często szczyt cyklu
+    const cyklSzczyt = () => cykliczna() && W.ok(M.pe) && M.pe > 0 && W.ok(M.ni_1y) && M.ni_1y >= 0.5 && (!W.ok(M.pe_med5) || M.pe < M.pe_med5);
+    function typPrognozy() { const ty = K.typy || []; if (!ty[0]) return null; if (cykliczna()) return "Cykliczna"; return duz6() ? W.DUZY : ty[0][0]; }
     function epsBaza(typ) {
         if (typ === "Cykliczna") {      // średni zysk z 5 lat obrotowych na dzisiejszą liczbę akcji
             const y = ((K.hist && K.hist.y) || []).filter((r) => W.ok(r[2])).slice(-5);
@@ -694,7 +709,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
     }
     function prognozaKarty() {
         const typ = typPrognozy(); if (!typ) return { brak: "brak typu" };
-        return W.prognozaTypu({ typ, eps_baza: epsBaza(typ), eps_teraz: typ === "Cykliczna" ? (M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps) : null, pe: M.pe, cena: M.price, pe_med5: M.pe_med5, rev_cagr3: M.rev_cagr3, rev_cagr5: M.rev_cagr5, eps_next5: GPW ? M.ni_cagr3 : M.eps_next5 });
+        return W.prognozaTypu({ typ, eps_baza: epsBaza(typ), eps_teraz: typ === "Cykliczna" ? (M.peg_norm_uzyte && W.ok(M.eps_norm) ? M.eps_norm : M.eps) : null, szybka: fitTypu("Szybko rosnąca") >= 60, pe: M.pe, cena: M.price, pe_med5: M.pe_med5, rev_cagr3: M.rev_cagr3, rev_cagr5: M.rev_cagr5, eps_next5: GPW ? M.ni_cagr3 : M.eps_next5 });
     }
     function krokTyp() {
         const ty = K.typy || [], typ = duz6() ? W.DUZY : ty[0] && ty[0][0];
@@ -706,7 +721,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${pr.brak ? `<p class="mut">Brak prognozy na 5 lat: ${esc(pr.brak)}.</p>` : `
           <div class="kr-scen">${Object.entries(pr.war).map(([k, w]) => `<div class="kr-scen-k kr-scen-${k}"><small>${N[k]}</small><b class="${w.cagr >= 0 ? "plus" : "minus"}">${W.fmtPct(w.cagr, 1, true)}</b><span>rocznie · ${W.fmtCena(w.ceny[5])}</span></div>`).join("")}</div>
           ${wykresPrognozy(pr)}
-          ${pr.cykl ? `<p class="mut male" style="margin:2px 0 6px">Spółka cykliczna — trzy drogi cyklu: <b>ostrożny</b> = zysk wraca do średniej z 5 lat (${W.fmtCena(pr.war.ostrozny.eps)} na akcję), <b>bazowy</b> = połowa drogi (${W.fmtCena(pr.war.bazowy.eps)}), <b>lepszy</b> = zysk zostaje jak dziś (${W.fmtCena(pr.war.lepszy.eps)}).</p>` : ""}
+          ${pr.cykl ? `<p class="mut male" style="margin:2px 0 6px">Spółka cykliczna — trzy drogi cyklu: <b>ostrożny</b> = zysk wraca do średniej z 5 lat (${W.fmtCena(pr.war.ostrozny.eps)} na akcję), <b>bazowy</b> = połowa drogi (${W.fmtCena(pr.war.bazowy.eps)}), <b>lepszy</b> = zysk zostaje jak dziś (${W.fmtCena(pr.war.lepszy.eps)})${pr.szybka ? ` i rośnie jak u szybko rosnącej (${W.fmtPct(pr.war.lepszy.g, 0)} rocznie) — spółka pasuje też do tego typu` : ""}.</p>` : ""}
           ${wiecejTxt("Jak liczymy prognozę", `Zysk ${W.fmtCena(pr.eps0)} na akcję${pr.cykl ? " w wariancie ostrożnym (średnia z 5 lat), w bazowym połowa drogi do dzisiejszego, w lepszym dzisiejszy —" : tp === "Cykliczna" ? " (średnia z 5 lat — spółka cykliczna, nie liczymy od szczytu cyklu)" : M.peg_norm_uzyte ? " (znormalizowany)" : ""} rośnie przez 5 lat w tempie 80 % najniższego z: przychody 3 lata, przychody 5 lat${GPW ? "" : ", prognoza analityków"}, w zakresie realnym dla typu wg Lyncha (${W.fmtPct(pr.zakres[0], 0)}–${W.fmtPct(pr.zakres[1], 0)} rocznie); P/E za 5 lat nie wyższe niż dzisiejsze (liczone od zysku danego wariantu) ani niż mediana z 5 lat. Bez dywidendy${W.ok(M.div) && M.div > 0 ? ` (dochodzi ok. ${W.fmtPct(M.div, 1)} rocznie)` : ""}. To nie jest wycena ani rekomendacja.
             <div class="kr-wsk kr-prog"><div></div><div class="mut male">wzrost zysku</div><div class="mut male">P/E za 5 lat</div><div class="mut male">cena za 5 lat</div><div class="mut male">rocznie</div>
               ${Object.entries(pr.war).map(([k, w]) => `<div class="kr-wsk-n"><i class="kr-prog-${k}"></i>${N[k]}</div><b>${W.fmtPct(w.g, 1)}</b><b>${W.fmtNum(w.pe, 1)}×</b><b>${W.fmtCena(w.ceny[5])}</b><b>${W.fmtPct(w.cagr, 1, true)}</b>`).join("")}</div>`)}`}`;
@@ -721,7 +736,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const kaf = (i, tyt, glowna, pod, kl) => `<button data-kr="${i}" class="kr-kafel ${kl || ""}"><small>${i + 1}. ${tyt}</small><b>${glowna}</b><span>${pod}</span></button>`;
         const lc = (l) => { const o = ocenaKafla(l); return [o.n ? `${o.t} z ${o.n} ✓` : "brak danych", o.kl]; };
         const [wz, wzk] = lc(lWzrost()), [pw, pwk] = lc(lPrzewaga()), [bz, bzk] = lc(lBezp()), [zr, zrk] = lc(lZarzad());
-        const pegKl = !W.ok(M.peg) || M.peg <= 0 ? "" : M.peg < 1 ? "dob" : M.peg < 2 ? "sr" : "zle";
+        const pegKl = cykliczna() ? (cyklSzczyt() ? "zle" : "sr") : !W.ok(M.peg) || M.peg <= 0 ? "" : M.peg < 1 ? "dob" : M.peg < 2 ? "sr" : "zle";
         const zpKl = zp.za.length + zp.przeciw.length ? (zp.za.length / (zp.za.length + zp.przeciw.length) >= 0.7 ? "dob" : zp.za.length / (zp.za.length + zp.przeciw.length) >= 0.5 ? "sr" : "zle") : "";
         const baz = pr.war ? pr.war.bazowy.cagr : null;
         return `<div class="kr-przeglad">
@@ -731,7 +746,8 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${kaf(3, "Przewaga", W.ok(M.nm) ? W.fmtPct(M.nm, 0) : "–", `marża netto · ${pw}`, pwk)}
           ${kaf(4, "Bezpieczeństwo", W.ok(M.net_cash) ? (M.net_cash >= 0 ? "gotówka > dług" : "dług > gotówka") : "–", bz, bzk)}
           ${kaf(5, "Zarząd", W.ok(M.ins_kupujacy) && M.ins_kupujacy > 0 ? "kupuje akcje" : W.ok(M.akcje_3l) && M.akcje_3l < 0 ? "skup akcji" : "–", zr, zrk)}
-          ${kaf(6, "Wycena", W.ok(M.peg) && M.peg > 0 ? `PEG ${W.fmtNum(M.peg)}` : "–", esc(K.etykieta || ""), pegKl)}
+          ${cykliczna() ? kaf(6, "Wycena", cyklSzczyt() ? "⚠ szczyt?" : "PEG nie dotyczy", "spółka cykliczna" + (K.etykieta ? " · " + esc(K.etykieta) : ""), pegKl)
+            : kaf(6, "Wycena", W.ok(M.peg) && M.peg > 0 ? `PEG ${W.fmtNum(M.peg)}` : "–", esc(K.etykieta || ""), pegKl)}
           ${kaf(7, "Werdykt", `<span class="plus">${zp.za.length}</span> : <span class="minus">${zp.przeciw.length}</span>`, "za : przeciw", zpKl)}
         </div>`;
     }
@@ -851,7 +867,8 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
             }
             const h = peHistoria(), poPe = h ? (h.teraz <= h.t1 ? ["tanio", "kr-tak"] : h.teraz >= h.t2 ? ["drogo", "kr-nie"] : ["normalnie", ""]) : null;
             const wsk = [["P/S (cena / sprzedaż)", M.ps, null], ["P/E (cena / zysk)", M.pe, M.fpe], ["P/FCF (cena / wolne przepływy)", M.pfcf, null]];
-            return `${pytania(kr77("Wycena"))}
+            const cyOstr = cykliczna() ? `<div class="ostrzezenie">⚠ <b>Spółka cykliczna — PEG nie dotyczy.</b> Lynch: u cyklicznych niskie P/E przy rekordowych zyskach to często szczyt cyklu, a nie okazja; lepszy moment bywa przy niskich zyskach i wysokim P/E.${cyklSzczyt() ? ` <b>Teraz:</b> zysk ${W.fmtPct(M.ni_1y, 0, true)} r/r, P/E ${W.fmtNum(M.pe, 1)}×${W.ok(M.pe_med5) ? ` (mediana 5 lat ${W.fmtNum(M.pe_med5, 1)}×)` : ""}.` : ""} Ocena wyceny liczona bez PEG, etykieta z DCF.</div>` : "";
+            return `${cyOstr}${pytania(kr77("Wycena"))}
               <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
               <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
