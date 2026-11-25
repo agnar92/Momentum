@@ -49,7 +49,8 @@
         const wl = czytaj("fundamenta_wlasne", {});     // własne dane z karty spółki: ocena przeliczona w przeglądarce
         d.rows.forEach((r) => { if (wl[r.t] && wl[r.t].o) { r.o = wl[r.t].o; r.moje = Object.keys(wl[r.t].w || {}).length; } });
         W.sortuj(d.rows, "ogolna", -1).filter((r) => r.o && W.ok(r.o.ogolna)).forEach((r, i) => { MIEJSCA[r.t] = i + 1; });
-        const [y, m, dd] = d.generated_at.split("-"); $("asof").textContent = `${dd}.${m}.${y}`;
+        const pl = (x) => { const [y, m, dd] = x.split("-"); return `${dd}.${m}.${y}`; };
+        $("asof").textContent = pl(d.generated_at) + (d.fv_data && d.fv_data < d.generated_at ? ` (ceny i sprawozdania; prognozy EPS i marże z Finviz z ${pl(d.fv_data)})` : "");
         opcje("sektor", d.sektory);
         opcje("typ", [...new Set(d.rows.map((r) => r.typ).filter(Boolean))].sort());
         opcje("wycena", ["Bardzo tania", "Niedowartościowana", "Wyceniona uczciwie", "Droga", "Bardzo droga"]);

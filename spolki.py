@@ -189,6 +189,42 @@ def zwroty(c):
     return {"1t": f(1), "1m": f(4), "1r": f(52), "5l": v[-1] / v[0] - 1 if v[0] > 0 else None}
 
 
+def finviz_z_kart(out=OUT):
+    """Zapas, gdy Finviz blokuje serwery GitHuba (403, listopad 2026): wiersze w formacie Finviz odtworzone z ostatnich kart spółek
+    (wskaźniki rynkowe i prognoza EPS z ostatniego udanego odczytu; ceny i wskaźniki zależne od ceny aktualizuje `aktualizuj_ceny`)."""
+    d = os.path.join(out, "spolki")
+    fv = {}
+    pr = lambda x: None if x is None else x * 100        # noqa: E731 — Finviz podaje procenty
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        k = json.load(open(os.path.join(d, f)))
+        m = k.get("m") or {}
+        if not m.get("mcap") or not m.get("price"):
+            continue
+        fv[k["t"]] = dict(ticker=k["t"], company=k.get("n"), sector=k.get("sector"), industry=k.get("industry"), country=k.get("country"), www=k.get("www"),
+                          price=m["price"], marketCap=m["mcap"] / 1e6, PE=m.get("pe"), forwardPE=m.get("fpe"), PS=m.get("ps"), PB=m.get("pb"), PC=m.get("pc"),
+                          PFCF=m.get("pfcf"), dividendYield=pr(m.get("div")), estLTGrowth=pr(m.get("eps_next5")), epsYoY1=pr(m.get("eps_ny")),
+                          grossMargin=pr(m.get("gm")), operMargin=pr(m.get("om")), netMargin=pr(m.get("nm")), roe=pr(m.get("roe")), roa=pr(m.get("roa")),
+                          roi=pr(m.get("roic_fv")), curRatio=m.get("cr"), quickRatio=m.get("qr"), debtEq=m.get("de"),
+                          sales5Years=pr(m.get("rev_cagr5")) if m.get("zrodlo_wzrostu") == "Finviz" else None, fv_data=k.get("fv_data") or k.get("generated_at"))
+    return fv
+
+
+def aktualizuj_ceny(fv, px):
+    """Wiersze z kart: cena z ostatniego notowania tygodniowego, wskaźniki cena / X i kapitalizacja przeliczone proporcjonalnie, stopa dywidendy odwrotnie."""
+    for t, r in fv.items():
+        c = px.get(t)
+        if not c or not c[1] or not r.get("price"):
+            continue
+        k = c[1][-1] / r["price"]
+        r["price"] = c[1][-1]
+        r["marketCap"] *= k
+        for p in ("PE", "forwardPE", "PS", "PB", "PC", "PFCF"):
+            if r.get(p):
+                r[p] *= k
+        if r.get("dividendYield"):
+            r["dividendYield"] /= k
+
+
 def wybierz(fv, top=500):
     """500 największych wg kapitalizacji BEZ sektorów trudnych do przewidzenia (finanse, surowce, energia, użyteczność publiczna, nieruchomości)."""
     return sorted((r for r in fv.values() if r.get("marketCap") and r.get("sector") not in ocena.SEKTORY_WYKL), key=lambda r: -r["marketCap"])[:top]
@@ -221,7 +257,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
         sc = ocena.dcf_scenariusze(m, hist, r.get("sector"))
         m["dcf"] = sc["base"]["wartosc"] if sc else None
         m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None
-        rows.append(dict(t=t, n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
+        rows.append(dict(t=t, fv_data=r.get("fv_data"), n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
                          rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t)), zdarzenia=(zd or {}).get(t)))
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     ocena.oceny(rows)
@@ -278,10 +314,12 @@ def zapisz(rows, out=OUT, today=None, usdpln=None):
         karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
+        karta["fv_data"] = r.get("fv_data") or today.isoformat()     # data odczytu wskaźników Finviz (przy zapasie — starsza)
         karta["dcf_param"] = ocena.DCF
         json.dump(_czysc(karta), open(os.path.join(out, "spolki", f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     json.dump(_czysc(ocena.rozklady(rows)), open(os.path.join(out, "sektory.json"), "w"), ensure_ascii=False, separators=(",", ":"))
-    json.dump(_czysc(dict(generated_at=today.isoformat(), usdpln=usdpln, n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
+    fvd = min((r.get("fv_data") or today.isoformat() for r in rows), default=today.isoformat())
+    json.dump(_czysc(dict(generated_at=today.isoformat(), fv_data=fvd, usdpln=usdpln, n=len(lista), sektory=sorted({x["s"] for x in lista if x["s"]}), rows=lista)),
               open(os.path.join(out, "lista.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 
 
@@ -291,10 +329,18 @@ def main(argv=None):
     ap.add_argument("--cache", default=None, help="katalog podręczny wyciągów SEC (lokalnie, przyspiesza ponowne uruchomienia)")
     ap.add_argument("--out", default=OUT)
     a = ap.parse_args(argv)
-    fv = finviz()
-    if len(fv) < 400:
-        print(f"Finviz zwrócił {len(fv)} spółek — za mało, nic nie zapisuję.")
-        return 1
+    try:
+        fv = finviz()
+    except requests.RequestException as e:
+        print(f"Finviz niedostępny ({e}).")
+        fv = {}
+    zapas = len(fv) < 400
+    if zapas:                                               # Finviz blokuje — spółki i wskaźniki rynkowe z ostatnich kart, ceny aktualne z yfinance
+        fv = finviz_z_kart(a.out)
+        print(f"Zapas: {len(fv)} spółek z ostatnich kart (wskaźniki Finviz z {min((r['fv_data'] for r in fv.values() if r.get('fv_data')), default='?')}).")
+        if len(fv) < 400:
+            print("Za mało spółek w zapasie — nic nie zapisuję.")
+            return 1
     top = [r["ticker"] for r in wybierz(fv, a.top + 200)]       # zapas: część spółek odpada (krócej niż 5 lat na rynku)
     if a.cache:
         os.makedirs(a.cache, exist_ok=True)
@@ -304,6 +350,8 @@ def main(argv=None):
         print("Za mało danych SEC — nic nie zapisuję.")
         return 1
     px = ceny(top)
+    if zapas:
+        aktualizuj_ceny(fv, px)
     zd = sec_zdarzenia(top, mapa, a.cache)
     rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd)
     pln = kursy(["PLN"]).get("PLN")                       # USD za 1 PLN -> kurs USD/PLN do portfela (IKE w złotówkach)

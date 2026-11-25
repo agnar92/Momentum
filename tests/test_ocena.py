@@ -293,3 +293,20 @@ def test_finviz_ponawia_po_odmowie(monkeypatch):
     kody = iter([403, 429, 200] + [200] * 10)
     out = spolki.finviz(log=lambda *a: None, get=lambda *a, **k: R(next(kody)), pause=0)
     assert "AAA" in out
+
+
+def test_finviz_zapas_z_kart(tmp_path):
+    """Finviz blokuje: wiersze odtworzone z kart, wskaźniki cena / X przeliczone z nowej ceny."""
+    import json as js
+    import spolki
+    d = tmp_path / "spolki"
+    d.mkdir()
+    m = dict(price=100.0, mcap=1e9, pe=20.0, ps=5.0, pfcf=25.0, div=0.02, eps_next5=0.1, gm=0.5, de=0.3)
+    (d / "AAA.json").write_text(js.dumps(dict(t="AAA", n="Aaa Inc", sector="Technology", m=m, generated_at="2026-11-20")))
+    fv = spolki.finviz_z_kart(str(tmp_path))
+    r = fv["AAA"]
+    assert r["marketCap"] == 1000 and r["estLTGrowth"] == 10 and r["grossMargin"] == 50 and r["fv_data"] == "2026-11-20"
+    spolki.aktualizuj_ceny(fv, {"AAA": (["2026-11-27"], [110.0], [])})
+    assert abs(r["PE"] - 22) < 1e-9 and abs(r["marketCap"] - 1100) < 1e-9 and abs(r["dividendYield"] - 2 / 1.1) < 1e-9 and r["price"] == 110
+    mm, _ = O.metryki({}, r)
+    assert abs(mm["pe"] - 22) < 1e-9 and abs(mm["peg"] - 2.2) < 1e-9
