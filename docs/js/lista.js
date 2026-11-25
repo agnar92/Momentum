@@ -23,7 +23,7 @@
             <td class="firma"><b>${esc(r.n)}</b>${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}${W.duzy(r) ? ' <span class="jakosc duzy-z" title="Duża spółka rosnąca od 10+ lat z dobrymi fundamentami — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${r.dw ? ' <span class="dyw" title="Dywidenda wypłacana co roku przez 5 lat, bez cięcia">💰</span>' : ""}${r.bf ? ' <span class="dyw" title="Przewaga Buffetta: marża netto > 20 %, dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto">🏰</span>' : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
             <td class="n ogolna">${r.sp ? `<span class="spadek" title="Fundamenty słabną 2 lata z rzędu: ${esc(r.sp.join(" i "))}">⬇</span> ` : ""}${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
-            <td>${esc(r.typ || "–")}</td>
+            <td class="typ">${esc(r.typ || "–")}</td>
             <td class="n">${W.ok(r.peg) && r.peg > 0 ? W.fmtNum(r.peg, 2) : "–"}</td>
             <td class="n ${r.dcf_pot > 0 ? "plus" : r.dcf_pot < 0 ? "minus" : ""}">${W.fmtPct(r.dcf_pot, 0, true)}</td>
             <td>${r.et ? `<span class="pill p-${slug(r.et)}">${esc(r.et)}</span>` : "–"}</td>

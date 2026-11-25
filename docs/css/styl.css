@@ -33,14 +33,14 @@
 body { margin: 0; background: var(--tlo); color: var(--tekst); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Inter, sans-serif; }
 a { color: inherit; }
 .gora { background: var(--karta); border-bottom: 1px solid var(--linia); position: sticky; top: 0; z-index: 10; }
-.gora .w { max-width: 1320px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.gora .w { max-width: 1440px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .logo { font-weight: 800; font-size: 20px; text-decoration: none; }
 .logo span { color: var(--akcent); }
 .gora nav a { color: var(--tekst2); text-decoration: none; margin-right: 14px; font-weight: 600; }
 .gora nav a.akt { color: var(--tekst); }
 .szukaj { margin-left: auto; position: relative; }
 .szukaj input { width: 260px; max-width: 70vw; padding: 8px 12px; border: 1px solid var(--linia); border-radius: 10px; font: inherit; background: var(--pole); color: var(--tekst); }
-.main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+.main { max-width: 1440px; margin: 0 auto; padding: 16px; }
 .karta { background: var(--karta); border: 1px solid var(--linia); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
 .karta h2 { margin: 0 0 2px; font-size: 20px; }
 .karta .pod { color: var(--tekst2); font-size: 12px; margin-bottom: 12px; }
@@ -56,8 +56,14 @@ th, td { padding: 9px 8px; border-bottom: 1px solid var(--linia); text-align: le
 th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--tekst2); cursor: pointer; user-select: none; }
 th.n, td.n { text-align: right; }
 tbody tr:hover { background: var(--hover); cursor: pointer; }
+.firma { white-space: normal; min-width: 170px; max-width: 250px; }
 .firma b { display: block; }
-.firma small { color: var(--tekst2); }
+.firma small { display: block; color: var(--tekst2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* lista spółek: cała tabela na szerokość strony bez przewijania w bok (użytkownik: „muszę przewijać w prawo”) */
+#lista td, .tabela-wrap th { padding: 8px 6px; }
+.tabela-wrap .pill { white-space: nowrap; }
+#lista .ocena { min-width: 36px; padding: 4px 6px; }
+#lista td.typ { white-space: normal; min-width: 80px; }
 .ocena { display: inline-block; min-width: 42px; text-align: center; padding: 4px 8px; border-radius: 8px; font-weight: 700; }
 .o-swietna { background: #bbf7d0; color: #14532d; } .o-dobra { background: var(--zielony-tlo); color: #166534; }
 .o-srednia { background: var(--zolty-tlo); color: #92400e; } .o-slaba { background: var(--czerwony-tlo); color: #991b1b; } .brak { color: var(--tekst2); }
