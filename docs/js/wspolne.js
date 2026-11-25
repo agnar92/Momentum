@@ -227,7 +227,7 @@
             const r5 = jest(b - 5) && ok(rev[b - 5]) ? rev[b - 5] : null, r3 = jest(b - 3) && ok(rev[b - 3]) ? rev[b - 3] : null;
             const s3 = srednia(rev, okno), s3w = srednia(rev, wczesniej);
             const spadek = !!(s3 !== null && s3w !== null && s3 < s3w && (r5 !== null ? r < r5 : r3 !== null && r < r3));
-            const z3 = suma(zysk, okno), w3 = suma(wyplaty, okno), p3 = suma(rev, okno);
+            const z3 = suma(zysk, okno);
             const g3 = r3 !== null && r3 > 0 ? Math.pow(r / r3, 1 / 3) - 1 : (i > 0 && ok(rev[i - 1]) && rev[i - 1] > 0 ? r / rev[i - 1] - 1 : null);
             // wolny wzrost: przychody 5 lat (zapas 3 lata) < 6 % rocznie — dojrzała stabilizacja dopiero, gdy trwa 2 lata z rzędu (cykliczne dołki nie wystarczą)
             const g5 = r5 !== null && r5 > 0 ? Math.pow(r / r5, 1 / 5) - 1 : null;
