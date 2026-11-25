@@ -243,8 +243,8 @@ td.zawin { white-space: normal; min-width: 180px; }
 .kr-mini { display: block; max-width: 100%; height: auto; margin-top: 4px; overflow: visible; }
 .kr-faza { margin-top: 12px; border: 2px solid var(--zielony); border-radius: 12px; padding: 12px; }
 .kr-faza-t { font-size: 17px; margin-bottom: 8px; }
-.kr-etapy { display: grid; grid-template-columns: repeat(5, 1fr); position: relative; margin: 6px 0 0; }
-.kr-etapy::before { content: ""; position: absolute; left: 10%; right: 10%; top: 13px; height: 2px; background: var(--siatka); }
+.kr-etapy { display: grid; grid-template-columns: repeat(6, 1fr); position: relative; margin: 6px 0 0; }
+.kr-etapy::before { content: ""; position: absolute; left: 8%; right: 8%; top: 13px; height: 2px; background: var(--siatka); }
 .kr-etapy div { position: relative; text-align: center; color: var(--tekst2); }
 .kr-etapy span { display: grid; place-items: center; margin: 0 auto 4px; width: 28px; height: 28px; border-radius: 50%; background: var(--karta); border: 2px solid var(--siatka); font-weight: 700; font-size: 13px; }
 .kr-etapy small { display: block; font-size: 12px; line-height: 1.2; }

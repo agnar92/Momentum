@@ -106,20 +106,23 @@ test("dokup: cel 10 % konta, pierwszy zakup 20 % celu, kolejne 10 % raz w miesi�
 
 test("fazy rozwoju spółki: okno 3 lat, tylko do przodu, schyłek przy trwałym spadku", () => {
     const f = W.fazyLat({ rev: [10, 20, 40, 70, 90, 100, 110, 120], zysk: [-5, -3, 2, 15, 25, 30, 33, 36], wyplaty: [0, 0, 0, 1, 10, 12, 14, 15] });
-    assert.deepStrictEqual(f, [1, 2, 2, 3, 4, 4, 4, 4]);
+    assert.deepStrictEqual(f, [1, 2, 2, 3, 3, 3, 4, 4]);
     // spółka cykliczna (jak MU): rok ze stratą i dołek przychodów nie cofają fazy ani nie dają schyłku
     const c = W.fazyLat({ rev: [30, 23, 21, 28, 31, 15, 25, 37, 133], zysk: [15, 7, 3, 6, 10, -6, 1, 10, 99], wyplaty: [0.1, 2.7, 0.3, 1.3, 2.9, 0.9, 0.8, 0.5, 1.3] });
-    assert.deepStrictEqual(c, [3, 3, 3, 4, 4, 4, 4, 4, 4]);
+    assert.deepStrictEqual(c, [4, 4, 4, 4, 4, 4, 5, 5, 5]);   // cykliczna dojrzała: bez schyłku, z czasem stabilizacja
     // trwały spadek przychodów → schyłek
     const s = W.fazyLat({ rev: [100, 100, 100, 95, 90, 85, 80, 75], zysk: [10, 10, 10, 9, 8, 7, 6, 5], wyplaty: [5, 5, 5, 5, 5, 5, 5, 5] });
-    assert.deepStrictEqual(s.slice(-2), [5, 5]);
+    assert.deepStrictEqual(s.slice(-2), [6, 6]);
     // schyłek trwa, dopóki przychody i zysk nie przebiją szczytów; potem faza od nowa z bieżących danych
     const o = W.fazyLat({ rev: [100, 110, 120, 100, 90, 85, 80, 115, 130, 150], zysk: [10, 12, 14, 5, 3, 2, 1, 13, 20, 25], wyplaty: [5, 5, 5, 0, 0, 0, 0, 0, 0, 0] });
-    assert.deepStrictEqual(o, [4, 4, 4, 4, 4, 5, 5, 5, 3, 3]);
+    assert.deepStrictEqual(o, [4, 4, 4, 4, 4, 6, 6, 6, 4, 4]);
 
+    // odmłodzenie (Damodaran): dojrzała spółka znów rośnie ≥ 20 % rocznie dwa lata z rzędu → z powrotem szybki wzrost
+    const n = W.fazyLat({ rev: [100, 108, 116, 125, 135, 180, 250, 350], zysk: [20, 22, 24, 26, 28, 50, 90, 150], wyplaty: [] });
+    assert.deepStrictEqual(n, [4, 4, 4, 4, 4, 4, 4, 3]);
     // wydzielenie spółki (przychody −50 % w rok, marża bez zmian) to nie schyłek
     const w = W.fazyLat({ rev: [80, 82, 84, 86, 88, 40, 42, 44], zysk: [16, 16.4, 16.8, 17.2, 17.6, 8, 8.4, 8.8], wyplaty: [8, 8, 8, 8, 8, 4, 4, 4] });
-    assert.ok(!w.includes(5), JSON.stringify(w));
+    assert.ok(!w.includes(6), JSON.stringify(w));
 });
 
 test("PEG Lyncha: wzrost najwyżej 25 %", () => {

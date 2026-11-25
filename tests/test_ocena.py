@@ -263,13 +263,33 @@ def test_buffett_reguly():
     """Etap 111: reguły Buffetta z lat obrotowych; zysk brutto z przychodów − kosztu, gdy brak GrossProfit."""
     lata = [f"{r}-12-31" for r in range(2019, 2026)]
     yr = {"rev": {e: 100.0 + 10 * i for i, e in enumerate(lata)}, "ni": {e: 25.0 + 2 * i for i, e in enumerate(lata)},
-          "koszt": {e: 40.0 for e in lata}, "sga": {e: 15.0 for e in lata}, "capex": {e: 4.0 for e in lata}}
+          "koszt": {e: 40.0 for e in lata}, "sga": {e: 15.0 for e in lata}, "capex": {e: 4.0 for e in lata},
+          "op": {e: 40.0 for e in lata}, "odsetki": {e: 2.0 for e in lata}}
     ch = {"eq": {lata[-1]: 100.0}, "zob": {lata[-1]: 70.0}, "skarb": {lata[-1]: -20.0}, "dlug_dl": {lata[-1]: 50.0}}
     y = [[e, yr["rev"][e], yr["ni"][e], 0, 0, 0, 0, 0, 10.0] for e in lata]
     m = O.buffett(yr, ch, y)
-    assert abs(m["bf_gm"] - (150 - 40) / 150) < 1e-3 and m["bf_eps_lata"] == 5 and m["bf_eps_zysk"]
+    assert abs(m["bf_gm"] - (150 - 40) / 150) < 1e-3 and m["bf_eps_lata"] == 6 and m["bf_eps_n"] == 6 and m["bf_eps_zysk"]
     assert abs(m["bf_de"] - 70 / 120) < 1e-3 and abs(m["bf_dlug_lat"] - 50 / 37) < 1e-3
+    assert abs(m["bf_ods"] - 0.05) < 1e-6
     lst = O.buffett_lista(m)
-    assert len(lst) == 7 and all(ok for _, _, ok in lst) and O.buffett3(m)
+    assert len(lst) == 8 and all(ok for _, _, ok in lst) and O.buffett3(m)
     m2 = O.buffett(dict(yr, ni={e: -1.0 for e in lata}), ch, y)
     assert m2["bf_dlug_lat"] == O.BRAK_BF and not O.buffett3(m2)
+
+
+def test_finviz_ponawia_po_odmowie(monkeypatch):
+    """Finviz 403 / 429: czekamy i ponawiamy zamiast kończyć cały przebieg błędem."""
+    import spolki
+    monkeypatch.setattr(spolki.time, "sleep", lambda s: None)
+    strona = '<script type="application/json" data-ssr-props="x">{"data": {"rows": [{"text": {"ticker": "AAA"}, "numbers": {"marketCap": 1}}], "totalCount": 1}}</script>'
+
+    class R:
+        def __init__(self, kod):
+            self.status_code, self.text = kod, strona if kod == 200 else ""
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise RuntimeError(self.status_code)
+    kody = iter([403, 429, 200] + [200] * 10)
+    out = spolki.finviz(log=lambda *a: None, get=lambda *a, **k: R(next(kody)), pause=0)
+    assert "AAA" in out
