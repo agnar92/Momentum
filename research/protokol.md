@@ -1661,3 +1661,18 @@ różnica Q1 vs Q5 po 5 latach −1,3 pp [−8,7; +9,4] → teza Jag Capital (17
 [−20,9; +18,8] → **niepotwierdzona** (PEG z przeszłego wzrostu); vs spółki ze stratą +15,4 [−36,5; +35,2] — kierunek zgodny, bez pewności; 3) rozkład zwrotu: 5 lat —
 przychody 53 % (górne 25 %: 39 %), skup akcji 14 % (6 %), marża 12 % (28 %), P/E i dywidendy 22 % (26 %); 10 lat (starty 2012–16) przychody 44 %; 1 rok górne 25 %:
 P/E 52 %. Kierunek BCG potwierdzony (rok = wycena, dłużej = sprzedaż), ale 60 % nie — u nas 40–53 %, dla najlepszych spółek ważna też marża.
+
+## Etap 113 — portfel 10 spółek z najwyższym potencjałem DCF (protokół przed uruchomieniem, 2026-11-25)
+
+Użytkownik: „sprawdź inwestowanie w spółki, które mają top 10 najwyższy potencjał DCF”. Tylko sprawdzenie.
+- Potencjał DCF w styczniu każdego roku jak w etapie 105 (`dcf_wzgl`: przychody TTM, wzrost = przychody 3 lata 0–25 %, marża FCF 0–60 %, r 10 %, tg 3 %, 5 + 5 lat,
+  gotówka netto; bez korekty o SBC i bez prognozy EPS — tych danych historycznie nie mamy) ÷ kapitalizacja − 1. Zbiór: top 500 USA PIT bez wykluczonych sektorów.
+- Portfele (równe wagi, przegląd w styczniu, koszt 0,1 % obrotu, 2012-01 → 2026-09): A) top 10 po potencjale DCF; B) top 10 po DCF wśród spółek z dodatnim
+  FCF i D/E < 1; C) top 10 po DCF wśród Jakość 7/7 + bez ⬇ (pula B z etapu 107). Porównanie: SPY, równe wagi całego zbioru; połowy 2012–18 / 2019–26, obsunięcie.
+- Cecha: najwyższe 10 % potencjału DCF vs reszta, nadwyżka 12 / 36 / 60 mies. (bootstrap po latach startu, połowy).
+- Teza „top 10 DCF bije rynek” potwierdzona, gdy portfel A lub B ma wyższy zwrot roczny niż SPY w obu połowach.
+
+**Wynik etapu 113** (`r138_etap113.py`, `wyniki/r138_etap113.md`): A) top 10 po potencjale DCF 12,4 %/rok (2012–18 6,4 %, 2019–26 18,1 %, obsunięcie −30 %),
+B) wśród FCF > 0 i D/E < 1 12,5 % (8,1 / 16,7 %), C) wśród Jakość 7/7 12,0 % (5,0 / 18,6 %, −39 %); SPY 14,7 % (12,0 / 17,2 %), równe wagi zbioru 13,7 %. Górne 10 %
+potencjału DCF vs reszta: 12 mies. −1,6 pp, 36 mies. −3,5, 60 mies. +1,3 (wszystkie przedziały obejmują 0, pierwsza połowa zawsze ujemna). **Teza niepotwierdzona**:
+najwyższy potencjał DCF częściej oznacza tanią spółkę z problemami (LUMN, WBD, CNC, LUV, GM) niż okazję. W 2012 tylko 3 spółki z danymi. Tylko sprawdzenie.
