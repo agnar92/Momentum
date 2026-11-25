@@ -26,7 +26,7 @@
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">PEG / DCF w podsumowaniu ↓</a></div>` : "";
         $("top").innerHTML = `
           <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
-            <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}</div>
+            <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}${K.cik ? ` · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(K.cik)}&type=10-K" target="_blank" rel="noopener">raporty w SEC</a>` : ""}</div>
             <div id="do-portfela" style="margin-top:10px"></div></div>
           <div class="siatka2">
             <div class="pole"><div class="mut male">W skrócie</div><p style="font-size:15px;margin:6px 0">${esc(fakty.join(", ") || "Brak danych z raportów.")}.</p>
@@ -51,7 +51,8 @@
             : '<button id="pf-dodaj" class="akt">＋ Dodaj do portfela</button>';
         const zapisz = (v) => { try { localStorage.setItem(PF_KLUCZ, JSON.stringify(v)); } catch (e) { /* tryb prywatny */ } przyciskPortfela(); };
         if (jest) $("pf-usun").addEventListener("click", () => { if (window.confirm(`Usunąć ${K.t} z portfela (razem z liczbą akcji i średnim kosztem)?`)) zapisz({ ...pf, pozycje: pf.pozycje.filter((p) => p.t !== K.t) }); });
-        else $("pf-dodaj").addEventListener("click", () => zapisz({ ...pf, pozycje: (pf.pozycje || []).concat([{ t: K.t, akcje: 0, koszt: null }]) }));
+        else $("pf-dodaj").addEventListener("click", () => zapisz({ ...pf, pozycje: (pf.pozycje || []).concat([{ t: K.t, akcje: 0, koszt: null,
+            typ0: (K.typy && K.typy[0] && K.typy[0][0]) || null, dod: new Date().toISOString().slice(0, 10) }]) }));
     }
 
     // --- własne dane użytkownika (brakujące wskaźniki, np. młoda spółka): localStorage, ocena przeliczana w przeglądarce ---
@@ -386,7 +387,45 @@
           <div><div class="mut male" style="margin-bottom:4px">Lista kontrolna z danych${ost ? ` — <b style="color:var(--czerwony)">sygnały ostrzegawcze: ${ost}</b>` : ""}</div>
             ${lista.length ? `<div class="jz">${lista.map(([co, w, s]) => `<div class="ly-w"><span>${ikona(s)}</span><span>${esc(co)}</span><span class="mut ly-wart">${esc(w)}</span></div>`).join("")}</div>`
               : '<p class="mut male">Brak danych do listy kontrolnej (dane odświeżą się przy najbliższej aktualizacji).</p>'}
-            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>`;
+            <p class="mut male" style="margin-top:6px">✓ w porządku · ⚠ sygnał ostrzegawczy wg Lyncha · – brak danych lub do oceny samemu.</p></div></div>${lynchListy(L)}`;
+        podlaczOcenyLynch();
+    }
+    // --- Lynch: listy z książki (rozdz. 8, 9, 13, 15); punkty „oceń sam” zaznacza użytkownik (localStorage `fundamenta_lynch`) ---
+    const LY_KLUCZ = "fundamenta_lynch";
+    const czytajLy = () => { try { return (JSON.parse(localStorage.getItem(LY_KLUCZ)) || {})[K.t] || {}; } catch (e) { return {}; } };
+    function zapiszLy(k, v) {
+        try { const w = JSON.parse(localStorage.getItem(LY_KLUCZ)) || {}; w[K.t] = { ...(w[K.t] || {}), [k]: v }; localStorage.setItem(LY_KLUCZ, JSON.stringify(w)); } catch (e) { /* tryb prywatny */ }
+    }
+    function lynchListy(L) {
+        if (!L || !L.zakup) return "";
+        const moje = czytajLy();
+        const ik = (s) => (s === true ? '<b style="color:var(--zielony)">✓</b>' : s === false ? '<b style="color:var(--czerwony)">✗</b>' : '<span class="mut">–</span>');
+        const wiersz = (sekcja) => ([co, w, s], i) => {
+            const klucz = sekcja + ":" + co;
+            if (s === null && /oceń sam/.test(w)) {
+                const v = moje[klucz];
+                return `<div class="ly-w"><span>${v === true ? ik(true) : v === false ? ik(false) : '<span class="mut">?</span>'}</span><span>${esc(co)}</span>
+                  <span class="ly-wart ly-moje"><button data-ly="${esc(klucz)}" data-v="1" class="${v === true ? "akt" : ""}">tak</button><button data-ly="${esc(klucz)}" data-v="0" class="${v === false ? "akt" : ""}">nie</button></span></div>`;
+            }
+            return `<div class="ly-w"><span>${ik(s)}</span><span>${esc(co)}</span><span class="mut ly-wart">${esc(w)}</span></div>`;
+        };
+        const ile = (l, sek) => `${l.map(([co, w, s]) => (s === null && /oceń sam/.test(w) ? moje[sek + ":" + co] : s)).filter((x) => x === true).length} z ${l.length}`;
+        const lista = (tyt, pod, l, sek) => `<div class="ly-blok"><h3>${esc(tyt)} <span class="mut male">${ile(l, sek)}</span></h3><div class="mut male" style="margin-bottom:4px">${pod}</div>
+          <div class="jz">${l.map(wiersz(sek)).join("")}</div></div>`;
+        const liczby = `<div class="ly-blok"><h3>Liczby, które się liczą</h3><div class="mut male" style="margin-bottom:4px">Rozdz. 13: dziesięć liczb, które Lynch sprawdzał przy każdej spółce.</div>
+          <div class="jz">${(L.liczby || []).map(([co, w, s, kom]) => `<div class="ly-w"><span>${ik(s)}</span><span>${esc(co)}<br><span class="mut" style="font-size:11px">${esc(kom)}</span></span><span class="ly-wart"><b>${esc(w)}</b></span></div>`).join("")}</div></div>`;
+        return `<div class="ly-listy">
+          ${lista("Przed zakupem: lista kontrolna", `Rozdz. 15 („The Final Checklist”) — wspólne punkty i punkty dla typu: <b>${esc((K.typy && K.typy[0] && K.typy[0][0]) || "")}</b>.`, L.zakup, "zakup")}
+          ${liczby}
+          ${lista("13 cech idealnej spółki", "Rozdz. 8. Im więcej cech, tym lepiej; nie trzeba mieć wszystkich. Punkty „tak / nie” oceniasz sam — zapamiętamy je w tej przeglądarce.", L.cechy, "cechy")}
+          ${lista("Czego unikać", "Rozdz. 9. ✓ = brak problemu, ✗ = ostrzeżenie.", L.unikaj, "unikaj")}
+        </div>`;
+    }
+    function podlaczOcenyLynch() {
+        document.querySelectorAll("#lynch [data-ly]").forEach((b) => b.addEventListener("click", () => {
+            const k = b.dataset.ly, v = b.dataset.v === "1", ter = czytajLy()[k];
+            zapiszLy(k, ter === v ? null : v); lynch();
+        }));
     }
 
     // --- Ocena krok po kroku (użytkownik: „mini ocena spółki … krok po kroku” z kryteriów 7/7): faza, wzrost, rentowność, bezpieczeństwo, wycena, podsumowanie.

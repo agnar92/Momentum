@@ -80,7 +80,7 @@ def cik_mapa():
 def sec_zdarzenia(tickers, mapa, cache=None, log=print, watki=4):
     """Zdarzenia z raportów 8-K / spóźnionych i poprawionych raportów okresowych (momentum/zdarzenia.py), ostatnie 12 miesięcy."""
     zad = [t for t in tickers if t in mapa]
-    out, lock = {}, threading.Lock()
+    out, wyd, lock = {}, {}, threading.Lock()
     def praca():
         while True:
             with lock:
@@ -97,10 +97,121 @@ def sec_zdarzenia(tickers, mapa, cache=None, log=print, watki=4):
                 time.sleep(0.25)
             with lock:
                 out[t] = zdarzenia.z_submissions(d, mapa[t])
+                wyd[t] = zdarzenia.wydzielenie(d)
     th = [threading.Thread(target=praca) for _ in range(watki)]
     [x.start() for x in th]
     [x.join() for x in th]
-    log(f"Zdarzenia SEC: {len(out)} spółek, poważne w {sum(1 for v in out.values() if any(z['poz'] == 2 for z in v))}")
+    log(f"Zdarzenia SEC: {len(out)} spółek, poważne w {sum(1 for v in out.values() if any(z['poz'] == 2 for z in v))}, wydzielone ze spółki matki: {sum(1 for v in wyd.values() if v)}")
+    return out, wyd
+
+
+def insiderzy(cache=None, log=print, kwartaly=4, dzis=None):
+    """Lynch: zakupy akcji przez zarząd i radę (członkowie zarządu, dyrektorzy) na rynku w ostatnich 12 mies. — zbiorcze dane SEC z formularzy 3/4/5
+    (pliki kwartalne). {cik: {kupno: USD, kupujacy: liczba osób, sprzedaz: USD}}. Kod transakcji P = kupno na rynku, S = sprzedaż."""
+    import csv
+    import io
+    import zipfile
+    dzis = dzis or dt.date.today()
+    od = dzis - dt.timedelta(days=365)
+    try:
+        strona = requests.get("https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets", headers=UA, timeout=60).text
+    except requests.RequestException as e:
+        log(f"Insiderzy: brak listy plików ({e})")
+        return {}
+    pliki = sorted(set(re.findall(r'href="([^"]*?(\d{4}q\d)_form345\.zip)"', strona)), key=lambda x: x[1], reverse=True)[:kwartaly]
+    out = {}
+    for url, kw in pliki:
+        p = os.path.join(cache, f"form345_{kw}.zip") if cache else None
+        if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
+            dane = open(p, "rb").read()
+        else:
+            try:
+                r = requests.get("https://www.sec.gov" + url if url.startswith("/") else url, headers=UA, timeout=180)
+                r.raise_for_status()
+                dane = r.content
+            except requests.RequestException as e:
+                log(f"Insiderzy {kw}: błąd ({e})")
+                continue
+            if p:
+                open(p, "wb").write(dane)
+            time.sleep(0.5)
+        z = zipfile.ZipFile(io.BytesIO(dane))
+        czytaj = lambda n: csv.DictReader(io.TextIOWrapper(z.open(n), encoding="utf-8", errors="replace"), delimiter="\t")   # noqa: E731
+        sub = {r["ACCESSION_NUMBER"]: r["ISSUERCIK"].lstrip("0") for r in czytaj("SUBMISSION.tsv") if r.get("DOCUMENT_TYPE", "").startswith("4")}
+        rola = {}
+        for r in czytaj("REPORTINGOWNER.tsv"):
+            rel = r.get("RPTOWNER_RELATIONSHIP") or ""
+            if "Director" in rel or "Officer" in rel:                     # zarząd i rada; sami duzi akcjonariusze (10 %) się nie liczą
+                rola.setdefault(r["ACCESSION_NUMBER"], set()).add(r["RPTOWNERCIK"])
+        for r in czytaj("NONDERIV_TRANS.tsv"):
+            a = r["ACCESSION_NUMBER"]
+            if a not in sub or a not in rola or r.get("TRANS_CODE") not in ("P", "S"):
+                continue
+            try:
+                d_ = dt.datetime.strptime(r["TRANS_DATE"][:11], "%d-%b-%Y").date()
+                v = float(r["TRANS_SHARES"] or 0) * float(r["TRANS_PRICEPERSHARE"] or 0)
+            except ValueError:
+                continue
+            if d_ < od or v <= 0:
+                continue
+            o = out.setdefault(sub[a], {"kupno": 0.0, "sprzedaz": 0.0, "kupujacy": set()})
+            if r["TRANS_CODE"] == "P":
+                o["kupno"] += v
+                o["kupujacy"] |= rola[a]
+            else:
+                o["sprzedaz"] += v
+        log(f"Insiderzy {kw}: spółek z transakcjami {len(out)}")
+    return {c: {"kupno": o["kupno"], "sprzedaz": o["sprzedaz"], "kupujacy": len(o["kupujacy"])} for c, o in out.items()}
+
+
+def yf_info(tickers, cache=None, log=print, watki=8):
+    """Lynch (13 cech, lista kontrolna): udział funduszy w akcjonariacie i liczba analityków (yfinance info), {t: {inst, analitycy}}."""
+    import yfinance as yf
+    zad, out, lock = list(tickers), {}, threading.Lock()
+    def praca():
+        while True:
+            with lock:
+                if not zad:
+                    return
+                t = zad.pop()
+            p = os.path.join(cache, f"{t}.yi.json") if cache else None
+            d = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
+            if d is None:
+                try:
+                    i = yf.Ticker(t.replace(".", "-")).info or {}
+                    d = {"inst": i.get("heldPercentInstitutions"), "analitycy": i.get("numberOfAnalystOpinions")}
+                except Exception:  # noqa: BLE001 — pojedyncza spółka bez danych nie przerywa pobierania
+                    d = {}
+                if p and d:
+                    json.dump(d, open(p, "w"))
+            with lock:
+                out[t] = d
+    th = [threading.Thread(target=praca) for _ in range(watki)]
+    [x.start() for x in th]
+    [x.join() for x in th]
+    log(f"yfinance info: {sum(1 for v in out.values() if v.get('inst') is not None)} spółek z udziałem funduszy")
+    return out
+
+
+def recesja_2020(tickers, log=print):
+    """Lynch: jak spółka zniosła recesję — spadek kursu od szczytu (styczeń–luty 2020) do dołka (marzec–kwiecień 2020) i to samo dla S&P 500 (SPY)."""
+    import yfinance as yf
+    out = {}
+    lst = list(tickers) + ["SPY"]
+    for i in range(0, len(lst), 100):
+        part = lst[i:i + 100]
+        try:
+            d = yf.download(part, start="2020-01-01", end="2020-05-01", interval="1d", auto_adjust=True, progress=False, group_by="column", threads=True)["Close"]
+        except Exception as e:  # noqa: BLE001
+            log(f"recesja 2020: błąd ({e})")
+            continue
+        for t in part:
+            if t in d:
+                s_ = d[t].dropna()
+                a, b = s_[: "2020-02-29"], s_["2020-03-01":]
+                if len(a) > 10 and len(b) > 10:
+                    out[t] = float(b.min() / a.max() - 1)
+    log(f"recesja 2020: {len(out)} spółek")
     return out
 
 
@@ -116,7 +227,7 @@ def sec_wyciagi(tickers, cache=None, log=print, watki=4, mapa=None):
                 t = zad.pop()
             p = os.path.join(cache, f"{t}.json") if cache else None
             ex = json.load(open(p)) if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400 else None
-            if ex is None or ex.get("v", 1) < 8 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend, SG&A i zobowiązań) -> pobierz ponownie
+            if ex is None or ex.get("v", 1) < 9 and ex.get("rev"):    # stary format cache (bez waluty / akcji rozwodnionych / SBC, leasingu, skupu akcji, dywidend, SG&A i zobowiązań) -> pobierz ponownie
                 d = sec_get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{mapa[t]:010d}.json")
                 ex = fundamenty.wyciag(d["facts"]) if d and "facts" in d else {"waluta": None}
                 if p:
@@ -237,7 +348,7 @@ def notowana_5_lat(c, dzis=None):
     return dt.date.fromisoformat(c[0][0]) <= (dzis or dt.date.today()) - dt.timedelta(days=round(4.9 * 365.25))
 
 
-def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
+def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None, dod=None):
     """500 największych wg kapitalizacji (bez wykluczonych sektorów) spośród spółek notowanych co najmniej 5 lat (użytkownik: „top 500 po kapitalizacji,
     które są minimum 5 lat na rynku”); `kandydaci` = tickery z pobranymi danymi (domyślnie top wg kapitalizacji). Brak kursów (błąd yfinance) -> wiek
     ze sprawozdań: przychody sprzed 5 lat w SEC."""
@@ -257,7 +368,8 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
         sc = ocena.dcf_scenariusze(m, hist, r.get("sector"))
         m["dcf"] = sc["base"]["wartosc"] if sc else None
         m["dcf_pot"] = m["dcf"] / m["price"] - 1 if m.get("dcf") is not None and m.get("price") else None
-        rows.append(dict(t=t, fv_data=r.get("fv_data"), n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
+        lynch_dodatki(m, t, dod or {}, zwroty(px.get(t)))
+        rows.append(dict(t=t, cik=(dod or {}).get("mapa", {}).get(t), fv_data=r.get("fv_data"), n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
                          rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t)), zdarzenia=(zd or {}).get(t)))
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     ocena.oceny(rows)
@@ -282,9 +394,42 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None):
         prog = nms[int(len(nms) * 2 / 3)]
         for r in stab:
             r["m"]["nm_gorna_tercyla_stab"] = r["m"]["nm"] >= prog
+    # Lynch (rozdz. 13): marża przed opodatkowaniem na tle branży (mediana; mniej niż 5 spółek w branży → sektor)
+    grupy = {}
+    for r in rows:
+        if r["m"].get("marza_przed") is not None:
+            grupy.setdefault(("i", r["industry"]), []).append(r["m"]["marza_przed"])
+            grupy.setdefault(("s", r["sector"]), []).append(r["m"]["marza_przed"])
+    for r in rows:
+        g = grupy.get(("i", r["industry"])) or []
+        if len(g) < 5:
+            g = grupy.get(("s", r["sector"])) or []
+        if len(g) >= 5:
+            g = sorted(g)
+            r["m"]["marza_przed_med"] = g[len(g) // 2]
     for r in rows:
         r["lynch"] = ocena.lynch(r["m"], r["typy"][0][0] if r["typy"] else None, r.get("zdarzenia"))
     return rows
+
+
+def lynch_dodatki(m, t, dod, zw=None):
+    """Dane spoza raportów spółki do metody Lyncha: zakupy przez zarząd, udział funduszy, analitycy, wydzielenie, recesja 2020, „najgorętsza spółka”."""
+    cik = dod.get("mapa", {}).get(t)
+    ins = dod.get("insiderzy", {}).get(str(cik)) if cik else None
+    if dod.get("insiderzy") and cik:
+        ins = ins or {"kupno": 0.0, "sprzedaz": 0.0, "kupujacy": 0}
+        m["ins_kupno_12m"], m["ins_sprzedaz_12m"], m["ins_kupujacy"] = ins["kupno"], ins["sprzedaz"], ins["kupujacy"]
+    yi = dod.get("yf", {}).get(t) or {}
+    m["inst_proc"], m["analitycy"] = yi.get("inst"), yi.get("analitycy")
+    w = dod.get("wydzielenia", {}).get(t)
+    if w:
+        m["wydzielona"] = w
+    rc = dod.get("recesja", {})
+    if t in rc and "SPY" in rc:
+        m["rec_kurs_2020"], m["rec_spy_2020"] = rc[t], rc["SPY"]
+    r1 = (zw or {}).get("1r")
+    # rozdz. 9 (czego unikać): najgorętsza spółka w gorącej branży — kurs ≥ 2× w rok przy P/E ≥ 50 albo stracie (nasze progi)
+    m["goraca"] = bool(r1 is not None and r1 >= 1.0 and (not m.get("pe") or m["pe"] <= 0 or m["pe"] >= 50))
 
 
 def _czysc(x):
@@ -308,10 +453,10 @@ def zapisz(rows, out=OUT, today=None, usdpln=None):
         lista.append(dict(t=r["t"], n=r["n"], s=r["sector"], i=r["industry"], rank=r["rank"], c=r["m"].get("price"), mc=r["m"].get("mcap"),
                           o=r["oceny"], typ=r["typy"][0][0] if r["typy"] else None, peg=r["m"].get("peg"), pe=r["m"].get("pe"),
                           dcf_pot=r["m"].get("dcf_pot"), et=r["etykieta"], st=st, zw=r["zw"], rev_1y=r["m"].get("rev_1y"), rev_cagr5=r["m"].get("rev_cagr5"),
-                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None, bf=1 if ocena.buffett3(r["m"]) else None,
+                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None, bf=1 if ocena.buffett3(r["m"]) else None, ik=r["m"].get("ins_kupujacy") or None,
                           zd=sum(1 for z in r["zdarzenia"] or [] if z["poz"] == 2) or None, om=r["m"].get("od_maks_12m"),
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
-        karta = {k: r[k] for k in ("t", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}
+        karta = {k: r.get(k) for k in ("t", "cik", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}
         karta["ceny"] = {"d": r["ceny"][0], "c": r["ceny"][1]} if r["ceny"] else None
         karta["generated_at"] = today.isoformat()
         karta["fv_data"] = r.get("fv_data") or today.isoformat()     # data odczytu wskaźników Finviz (przy zapasie — starsza)
@@ -352,8 +497,9 @@ def main(argv=None):
     px = ceny(top)
     if zapas:
         aktualizuj_ceny(fv, px)
-    zd = sec_zdarzenia(top, mapa, a.cache)
-    rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd)
+    zd, wyd = sec_zdarzenia(top, mapa, a.cache)
+    dod = dict(mapa=mapa, wydzielenia=wyd, insiderzy=insiderzy(a.cache), yf=yf_info(top, a.cache), recesja=recesja_2020(top))
+    rows = buduj(fv, ex, px, a.top, kandydaci=top, zd=zd, dod=dod)
     pln = kursy(["PLN"]).get("PLN")                       # USD za 1 PLN -> kurs USD/PLN do portfela (IKE w złotówkach)
     zapisz(rows, a.out, usdpln=1 / pln if pln else None)
     print(f"Zapisano {len(rows)} spółek; z danymi SEC {sum(1 for v in ex.values() if v.get('rev'))}, z cenami {len(px)}.")

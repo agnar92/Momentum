@@ -310,3 +310,44 @@ def test_finviz_zapas_z_kart(tmp_path):
     assert abs(r["PE"] - 22) < 1e-9 and abs(r["marketCap"] - 1100) < 1e-9 and abs(r["dividendYield"] - 2 / 1.1) < 1e-9 and r["price"] == 110
     mm, _ = O.metryki({}, r)
     assert abs(mm["pe"] - 22) < 1e-9 and abs(mm["peg"] - 2.2) < 1e-9
+
+
+def test_lynch_listy():
+    """Rozdz. 8, 9, 13, 15: listy liczą się z danych; punkty jakościowe zostają do oceny własnej (None)."""
+    m = dict(pe=15.0, pe_med5=20.0, peg=0.8, inst_proc=0.4, ins_kupujacy=2, ins_kupno_12m=2e6, akcje_3l=-0.05, zysk_lata=5, de=0.2, net_cash=1e9,
+             rev_cagr5=0.12, rec_zysk=(2020, -0.1), rec_kurs_2020=-0.25, rec_spy_2020=-0.34, dyworsyfikacja=False, wydzielona="2019-05-01",
+             analitycy=8, emerytury_mc=-0.02, marza_przed=0.25, marza_przed_med=0.15, net_cash_mc=0.1, gotowka_na_akcje=5.0, mcap=1e10)
+    L = O.lynch(m, "Stabilnie rosnąca")
+    zak = {co: s for co, _, s in L["zakup"]}
+    assert zak["Zarząd lub rada kupują akcje (12 mies.)"] is True and zak["Zysk przetrwał recesję (2009 / 2020: spadek ≤ 25 %)"] is True
+    assert any(s is None and w == "oceń sam" for _, w, s in L["zakup"])
+    assert len(L["cechy"]) == 13 and dict((c, s) for c, _, s in L["cechy"])["Wydzielona ze spółki matki"] is True
+    assert all(s is not False for _, _, s in L["unikaj"])
+    liczby = {c: s for c, _, s, _ in L["liczby"]}
+    assert liczby["Marża przed opodatkowaniem na tle branży"] is True and liczby["Zobowiązania emerytalne (niedofinansowanie)"] is True
+
+
+def test_insiderzy_z_pliku_sec(tmp_path, monkeypatch):
+    """Zbiorcze dane SEC Form 4: liczą się zakupy na rynku (P) zarządu i rady, nie 10-procentowych akcjonariuszy."""
+    import io
+    import zipfile
+    import spolki
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("SUBMISSION.tsv", "ACCESSION_NUMBER\tISSUERCIK\tDOCUMENT_TYPE\nA1\t0000000123\t4\nA2\t0000000123\t4\nA3\t0000000123\t4\n")
+        z.writestr("REPORTINGOWNER.tsv", "ACCESSION_NUMBER\tRPTOWNERCIK\tRPTOWNER_RELATIONSHIP\nA1\t9\tDirector\nA2\t8\tTenPercentOwner\nA3\t7\tOfficer\n")
+        z.writestr("NONDERIV_TRANS.tsv", "ACCESSION_NUMBER\tTRANS_DATE\tTRANS_CODE\tTRANS_SHARES\tTRANS_PRICEPERSHARE\n"
+                   "A1\t01-NOV-2026\tP\t100\t10\nA2\t01-NOV-2026\tP\t1000\t10\nA3\t02-NOV-2026\tS\t50\t10\n")
+    (tmp_path / "form345_2026q4.zip").write_bytes(buf.getvalue())
+
+    class R:
+        text = '<a href="/files/x/2026q4_form345.zip">'
+    monkeypatch.setattr(spolki.requests, "get", lambda *a, **k: R())
+    out = spolki.insiderzy(str(tmp_path), log=lambda *a: None, dzis=dt.date(2026, 11, 25))
+    assert out["123"] == {"kupno": 1000.0, "sprzedaz": 500.0, "kupujacy": 1}
+
+
+def test_wydzielenie():
+    from momentum import zdarzenia as Z
+    d = {"filings": {"recent": {"form": ["10-K", "10-12B", "10-12B/A"], "filingDate": ["2024-02-01", "2019-03-01", "2019-04-01"]}}}
+    assert Z.wydzielenie(d) == "2019-03-01" and Z.wydzielenie({}) is None

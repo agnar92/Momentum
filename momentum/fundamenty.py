@@ -32,7 +32,8 @@ TAGI = {
     "sga": ("USD", ["SellingGeneralAndAdministrativeExpense"]),
     "sm": ("USD", ["SellingAndMarketingExpense"]),
     "ga": ("USD", ["GeneralAndAdministrativeExpense"]),
-    "koszt": ("USD", ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"]),   # zysk brutto = przychody − koszt, gdy brak GrossProfit (NFLX, GOOGL)
+    "koszt": ("USD", ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold"]),
+    "przejecia": ("USD", ["PaymentsToAcquireBusinessesNetOfCashAcquired", "PaymentsToAcquireBusinessesGross"]),   # Lynch: „dyworsyfikacja”   # zysk brutto = przychody − koszt, gdy brak GrossProfit (NFLX, GOOGL)
 }
 CHWILE = {
     "cash": ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents", "Cash"],
@@ -49,6 +50,10 @@ CHWILE = {
     "pasywa": ["LiabilitiesAndStockholdersEquity"],
     "skarb": ["TreasuryStockValue", "TreasuryStockCommonValue"],
     "dlug_dl": ["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations", "LongTermDebt", "SeniorNotes"],   # VRSN: SeniorNotes
+    # Lynch, „liczby, które się liczą”: niedofinansowane zobowiązania emerytalne (ujemny stan = deficyt), wartość firmy z przejęć
+    "emerytury": ["DefinedBenefitPlanFundedStatusOfPlan"],
+    "emer_zob": ["DefinedBenefitPensionPlanLiabilitiesNoncurrent", "PensionAndOtherPostretirementDefinedBenefitPlansLiabilitiesNoncurrent"],   # zobowiązanie (dodatnie)
+    "goodwill": ["Goodwill"],
 }
 # emitenci zagraniczni (20-F) raportujący w MSSF: te same klucze, tagi ifrs-full (tylko lata obrotowe; kwartałów 6-K nie ma w XBRL)
 TAGI_IFRS = {
@@ -69,6 +74,7 @@ TAGI_IFRS = {
     "sm": ["DistributionCosts", "SellingExpense"],
     "ga": ["AdministrativeExpense"],
     "koszt": ["CostOfSales"],
+    "przejecia": ["CashFlowsUsedInObtainingControlOfSubsidiariesOrOtherBusinessesClassifiedAsInvestingActivities"],
 }
 CHWILE_IFRS = {
     "cash": ["CashAndCashEquivalents"],
@@ -80,6 +86,7 @@ CHWILE_IFRS = {
     "zob": ["Liabilities"],
     "skarb": ["TreasuryShares"],
     "dlug_dl": ["NoncurrentPortionOfNoncurrentBorrowings", "LongtermBorrowings"],
+    "goodwill": ["Goodwill"],
 }
 DLUG = ["LongTermDebtNoncurrent", "LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings", "CommercialPaper",
         "LongTermDebtAndCapitalLeaseObligations", "LongTermDebtAndCapitalLeaseObligationsCurrent", "LongTermDebt"]
@@ -202,7 +209,7 @@ def wyciag(facts):
     # zapas dla spółek z kilkoma klasami akcji (META, PLTR: brak dei): średnia rozwodniona liczba akcji z rachunku zysków
     out["sh_dil"] = [[x["start"], x["end"], x["val"], x["filed"]] for x in (g.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("units", {}).get("shares", [])
                      if "start" in x and x["val"]]
-    out["v"] = 8
+    out["v"] = 9
     return out
 
 
@@ -244,6 +251,13 @@ def dlug(d, end):
     if w.get("LongTermDebt") is not None:
         return w["LongTermDebt"] + st
     return (cur or 0) + st if (cur or st) else 0.0
+
+
+def dlug_krotki(d, end):
+    """Lynch: dług bankowy / krótkoterminowy (wymagalny szybko) jest groźniejszy niż obligacje długoterminowe — część bieżąca + pożyczki + papiery komercyjne."""
+    w = {t: chwilowe(rows).get(end) for t, rows in d.items()}
+    cur = w.get("LongTermDebtCurrent") or w.get("DebtCurrent") or w.get("LongTermDebtAndCapitalLeaseObligationsCurrent") or 0
+    return cur + (w.get("ShortTermBorrowings") or 0) + (w.get("CommercialPaper") or 0)
 
 
 def cagr(a, b, lat):

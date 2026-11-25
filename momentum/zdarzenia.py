@@ -73,3 +73,11 @@ def ostrzezenia(zd):
             if poz == 2:
                 out.append(f"Zdarzenie zgłoszone do SEC {z['d']}: {opis} ({'punkt ' + k if '.' in k else k}).")
     return out
+
+
+def wydzielenie(d):
+    """Lynch (13 cech idealnej spółki): spółka wydzielona ze spółki matki — data pierwszego formularza 10-12B (rejestracja akcji przy wydzieleniu)
+    w historii raportów; None, gdy brak."""
+    r = ((d or {}).get("filings") or {}).get("recent") or {}
+    daty = [r["filingDate"][i] for i, f in enumerate(r.get("form") or []) if f in ("10-12B", "10-12B/A", "10-12G", "10-12G/A")]
+    return min(daty) if daty else None

@@ -134,7 +134,7 @@ def metryki(ex, fv, dzis=None, splity=()):
         if ca_ and rt and abs((F.D(list(ca_)[-1]) - F.D(rt[-1][0])).days) <= 200:
             m["capex_przych"] = list(ca_.values())[-1] / m["rev_ttm"]
     # bilans: ostatni znany i sprzed 5 lat
-    ch = {k: F.polacz(ex[k], F.chwilowe) for k in ("cash", "sti", "eq", "assets", "lc", "zapasy", "zob", "pasywa", "skarb", "dlug_dl") if ex.get(k)}
+    ch = {k: F.polacz(ex[k], F.chwilowe) for k in ("cash", "sti", "eq", "assets", "lc", "zapasy", "zob", "pasywa", "skarb", "dlug_dl", "emerytury", "emer_zob", "goodwill") if ex.get(k)}
     if ch.get("eq"):
         e = list(ch["eq"])[-1]
         m["cash"] = (ch.get("cash", {}).get(e) or 0) + (ch.get("sti", {}).get(e) or 0)
@@ -154,6 +154,8 @@ def metryki(ex, fv, dzis=None, splity=()):
         e3 = F.wartosc_lata_temu(list(ch["eq"].items()), e, 3)       # etap 79: szybki wzrost kapitału (emisje, przejęcia) = gorzej
         m["kapital_3l"] = (m["equity"] / e3) ** (1 / 3) - 1 if e3 and e3 > 0 and m["equity"] > 0 else None
         m["net_cash"] = m["cash"] - m["debt"] if m["cash"] is not None else None
+        if m["debt"] and m["debt"] > 0:
+            m["dlug_krotki"] = F.dlug_krotki(ex.get("debt", {}), e) / m["debt"]     # Lynch: udział długu wymagalnego szybko
         a, lc = ch.get("assets", {}).get(e), ch.get("lc", {}).get(e)
         m["aktywa"] = a
         if ot and a and lc is not None and a - lc > 0:
@@ -250,6 +252,8 @@ def metryki(ex, fv, dzis=None, splity=()):
         ni_n = (op12 - (ods12 or 0)) * (1 - st_)
         m["ni_norm"], m["stopa_pod"], m["op_ttm"], m["odsetki_ttm"] = ni_n, st_, op12, ods12
         m["roznica_norm"] = m["ni_ttm"] - ni_n                       # o ile zysk z raportu różni się od znormalizowanego
+    if pp12 is not None and m.get("rev_ttm"):
+        m["marza_przed"] = pp12 / m["rev_ttm"]                      # Lynch: marża przed opodatkowaniem (na tle branży — `buduj`)
         if no12 is not None:
             m["nonop_ttm"] = no12
         if m.get("eps") and m["ni_ttm"] > 0 and ni_n > 0:
@@ -315,7 +319,7 @@ def metryki(ex, fv, dzis=None, splity=()):
             else:
                 break
         m["dlug_rosnie_kw"] = n_
-    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc", "op", "skup", "dyw", "gp", "sga", "sm", "ga", "koszt", "odsetki") if ex.get(k)}
+    yr = {k: F.polacz(ex[k], F.roczne, k == "rev") for k in ("rev", "ni", "ocf", "capex", "sbc", "op", "skup", "dyw", "gp", "sga", "sm", "ga", "koszt", "odsetki", "przejecia") if ex.get(k)}
 
     shd = F.roczne(ex["sh_dil"]) if not sh and ex.get("sh_dil") else {}
 
@@ -351,6 +355,7 @@ def metryki(ex, fv, dzis=None, splity=()):
                             hist["y"][j][8] = _r(hist["y"][j][8] * mn, 0)
                     ak = [r[8] for r in hist["y"]]
     m.update(buffett(yr, ch, hist["y"], ex.get("debt", {}), m.get("de")))
+    m.update(lynch_dane(yr, ch, hist["y"], m))
     # ostatnie 12 mies. (punkt „12 m” na wykresach): przychody, zysk operacyjny, skup, dywidendy, liczba akcji
     sk12, dv12 = ost12("skup"), ost12("dyw") if "dyw" in q else None
     if dv12 is None and yr.get("dyw") and rt and abs((F.D(list(yr["dyw"])[-1]) - F.D(rt[-1][0])).days) <= 200:
@@ -358,6 +363,50 @@ def metryki(ex, fv, dzis=None, splity=()):
     hist["ltm"] = [rt[-1][0] if rt else None, _r(m.get("rev_ttm"), 0), _r(m.get("op_ttm"), 0), _r(abs(sk12) if sk12 is not None else None, 0),
                    _r(abs(dv12) if dv12 is not None else None, 0), _r(akcje_na(list(sh)[-1]) if sh else None, 0)]
     return m, hist
+
+
+def lynch_dane(yr, ch, lata_y, m):
+    """Liczby z „One Up on Wall Street” (rozdz. 9, 13, 15), których nie ma gdzie indziej: deficyt emerytalny, przejęcia i wartość firmy (dyworsyfikacja),
+    gotówka netto na akcję, zachowanie zysku w recesji (2009, 2020), dołek zysku w 3 ostatnich latach (spółka wychodząca z kłopotów)."""
+    out = {}
+    rev = yr.get("rev", {})
+    fy = [e for i, e in enumerate(list(rev)) if i == len(rev) - 1 or (F.D(list(rev)[i + 1]) - F.D(e)).days > 300]
+    em = ch.get("emerytury") or {e_: -v for e_, v in (ch.get("emer_zob") or {}).items()}   # stan planu (ujemny = deficyt) albo zobowiązanie w bilansie
+    if em and m.get("mcap"):
+        e_, v = list(em.items())[-1]
+        if fy and abs((F.D(e_) - F.D(fy[-1])).days) <= 400:
+            out["emerytury_mc"] = min(0.0, v) / m["mcap"]               # deficyt (ujemny) jako % kapitalizacji; nadwyżka = 0
+    if len(fy) >= 4 and rev.get(fy[-1]):
+        pj = [yr.get("przejecia", {}).get(e) for e in fy[-3:]]
+        if yr.get("przejecia"):
+            out["przejecia_3l"] = sum(abs(x or 0) for x in pj) / rev[fy[-1]]
+        gw = ch.get("goodwill") or {}
+        g0, g3 = gw.get(fy[-1]), gw.get(fy[-4])
+        r3 = rev[fy[-1]] / rev[fy[-4]] - 1 if rev.get(fy[-4]) else None
+        if g0 and g3 and g3 > 0:
+            out["goodwill_3l"] = g0 / g3 - 1
+        if out.get("przejecia_3l") is not None and r3 is not None:
+            # dyworsyfikacja (nasze progi): przejęcia z 3 lat ≥ 25 % rocznych przychodów i wartość firmy rośnie szybciej niż sprzedaż
+            out["dyworsyfikacja"] = out["przejecia_3l"] >= 0.25 and (out.get("goodwill_3l") or 0) > r3
+    if m.get("net_cash") is not None and m.get("shares"):
+        out["gotowka_na_akcje"] = m["net_cash"] / m["shares"]
+    # recesje: zmiana zysku netto w roku obrotowym 2009 i 2020 względem poprzedniego
+    ni = yr.get("ni", {})
+    rec = []
+    for rok in (2009, 2020):
+        e1 = next((e for e in fy if e[:4] == str(rok) or (e[:4] == str(rok + 1) and e[5:7] <= "03")), None)
+        if e1 and fy.index(e1) > 0:
+            e0 = fy[fy.index(e1) - 1]
+            if ni.get(e0) and ni.get(e1) is not None and ni[e0] > 0:
+                rec.append((rok, ni[e1] / ni[e0] - 1))
+    if rec:
+        out["rec_zysk"] = min(rec, key=lambda x: x[1])                  # najgorsza recesja: (rok, zmiana zysku)
+    zl = [r[2] for r in lata_y[-4:] if r[2] is not None]
+    if len(zl) == 4:
+        dolek = min(zl[:3])
+        out["zysk_dolek_3l"] = bool(dolek <= 0 or dolek < 0.5 * max(zl[:3]))      # strata albo spadek zysku o połowę w 3 latach
+        out["zysk_poprawa"] = bool(m.get("ni_ttm") is not None and m["ni_ttm"] > dolek and (m.get("ni_ttm") or 0) > 0)
+    return out
 
 
 BRAK_BF = 99.0      # strata / ujemny kapitał: reguła niespełniona (pokazywane opisem, nie liczbą)
@@ -597,10 +646,18 @@ def typy(m, sektor, duza=20e9, g_off=0.0):
     if zm is not None:
         cyk = 100 * (zm - 0.15) / 0.35 + (20 if sektor in ("Basic Materials", "Energy", "Industrials", "Consumer Cyclical") else 0)
         out.append(("Cykliczna", _clip(cyk), "przychody wahają się mocno z roku na rok"))
-    if m.get("ni_ttm") is not None and m.get("ni_1y") is None and m["ni_ttm"] > 0:
+    # Lynch, rozdz. 7: wychodząca z kłopotów = strata albo zysk o połowę niższy w ostatnich 3 latach, a teraz zysk wraca
+    if m.get("zysk_dolek_3l") is not None:
+        if m["zysk_dolek_3l"]:
+            out.append(("Wychodząca z kłopotów", 85.0 if m.get("zysk_poprawa") else 55.0,
+                        "strata lub zysk −50 % w ostatnich 3 latach" + (", zysk wraca" if m.get("zysk_poprawa") else ", poprawy jeszcze nie widać")))
+    elif m.get("ni_ttm") is not None and m.get("ni_1y") is None and m["ni_ttm"] > 0:
         out.append(("Wychodząca z kłopotów", 70.0, "zysk wrócił po stratach"))
-    if m.get("pb") and m.get("net_cash_mc") is not None:
-        out.append(("Ukryte aktywa", _clip(100 * (m["net_cash_mc"] - 0.1) / 0.3 + (30 if m["pb"] < 1.5 else 0)), "dużo gotówki / niska cena do wartości księgowej"))
+    # ukryte aktywa: gotówka netto ≥ 30 % kapitalizacji albo cena poniżej wartości księgowej
+    if m.get("net_cash_mc") is not None or m.get("pb"):
+        nc, pb = m.get("net_cash_mc") or 0, m.get("pb")
+        out.append(("Ukryte aktywa", _clip(100 * (nc - 0.1) / 0.3 + (40 if pb and 0 < pb < 1 else 20 if pb and pb < 1.5 else 0)),
+                    "dużo gotówki netto / cena poniżej wartości księgowej"))
     return sorted(out, key=lambda x: -x[1])
 
 
@@ -763,11 +820,139 @@ def lynch(m, typ, zd=None):
     zmiany = sum(1 for z in zd or [] for p in z["p"] if p[0] == "5.02")
     if typ == "Szybko rosnąca" and zd is not None:
         lista.append(("Zmiany w zarządzie w 12 mies. (8-K 5.02) — sprawdź, czy nie odchodzą kluczowi ludzie", f"{zmiany} raport(y)", None))
+    inst = m.get("inst_proc")
+    if typ == "Szybko rosnąca":
+        # rozdz. 17: sprzedaj szybko rosnącą, gdy fundusze już ją masowo posiadają, a P/E jest absurdalne
+        lista.append(("Fundusze nie posiadają jej już masowo przy P/E ≥ 50", f"fundusze {100 * inst:.0f} %, P/E {pe:.0f}" if inst is not None and pe else "–",
+                      None if inst is None or not pe else not (inst >= 0.8 and pe >= 50)))
     g = m.get("eps_next5")
     wsk = (100 * g + 100 * (m.get("div") or 0)) / pe if g and pe and pe > 0 else None
     # wynik etapu 92 (research/wyniki/r117_etap92.md): ⚠ tylko dla sygnałów potwierdzonych w teście; reszta = „niepotwierdzony” / „nietestowany”
     lista = [(co, w, s, TEST_LYNCH.get((typ, co), "nietestowany")) for co, w, s in lista]
-    return dict(faza=faza(m) if typ == "Szybko rosnąca" else None, lista=lista, wskaznik=wsk)
+    return dict(faza=faza(m) if typ == "Szybko rosnąca" else None, lista=lista, wskaznik=wsk,
+                zakup=lynch_zakup(m, typ), cechy=lynch_cechy(m), unikaj=lynch_unikaj(m), liczby=lynch_liczby(m))
+
+
+def _p(x, z=0):
+    return "–" if x is None else f"{100 * x:+.{z}f} %".replace("+-", "−").replace(".", ",")
+
+
+def _usd(x):
+    if x is None:
+        return "–"
+    a = abs(x)
+    t = f"{a / 1e9:.1f} mld" if a >= 1e9 else f"{a / 1e6:.1f} mln" if a >= 1e6 else f"{a / 1e3:.0f} tys."
+    return ("−" if x < 0 else "") + t.replace(".", ",") + " USD"
+
+
+def lynch_zakup(m, typ):
+    """Rozdz. 15 („The Final Checklist”): co sprawdzić przed zakupem — wspólne dla wszystkich spółek i osobno dla typu.
+    [(co, wartość, True / False / None)]; None = brak danych albo ocena własna (opis w nawiasie). Progi liczbowe, których Lynch nie podał, są nasze."""
+    pe, pm, peg = m.get("pe"), m.get("pe_med5"), m.get("peg")
+    inst, ins = m.get("inst_proc"), m.get("ins_kupujacy")
+    de, nc = m.get("de"), m.get("net_cash")
+    out = [("P/E nie wyższe niż stopa wzrostu zysku (PEG ≤ 1; do 2 jeszcze rozsądnie)", f"PEG {peg:.2f}".replace(".", ",") if peg else "–", None if peg is None else peg <= 1),
+           ("P/E nie wyżej niż zwykle dla tej spółki (mediana 5 lat)", f"P/E {pe:.1f} vs {pm:.1f}".replace(".", ",") if pe and pm else "–", None if not (pe and pm) else pe <= pm),
+           ("Mało funduszy w akcjonariacie (< 50 %)", f"{100 * inst:.0f} %" if inst is not None else "–", None if inst is None else inst < 0.5),
+           ("Zarząd lub rada kupują akcje (12 mies.)", f"{ins} os., {_usd(m.get('ins_kupno_12m'))}" if ins else ("nikt" if ins == 0 else "–"), None if ins is None else ins > 0),
+           ("Spółka skupuje własne akcje (liczba akcji spada w 3 lata)", _p(m.get("akcje_3l")), None if m.get("akcje_3l") is None else m["akcje_3l"] < 0),
+           ("Zysk rósł regularnie (≥ 4 z 5 lat)", f"{m['zysk_lata']} z 5" if m.get("zysk_lata") is not None else "–", None if m.get("zysk_lata") is None else m["zysk_lata"] >= 4),
+           ("Mocny bilans (gotówka > dług albo dług / kapitał < 0,5)", f"D/E {de:.2f}".replace(".", ",") if de is not None else "–",
+            None if de is None and nc is None else ((nc or -1) > 0 or (de is not None and 0 <= de < 0.5)))]
+    if typ == "Wolno rosnąca":
+        wypl = m["div"] * m["mcap"] / m["ni_ttm"] if m.get("div") and m.get("mcap") and m.get("ni_ttm") and m["ni_ttm"] > 0 else None
+        out += [("Dywidenda wypłacana regularnie i podnoszona (5 lat)", "tak" if m.get("dyw_rosnie_5") else "nie", None if m.get("dyw_rosnie_5") is None else bool(m["dyw_rosnie_5"])),
+                ("Wypłata to rozsądna część zysku (< 70 %)", f"{100 * wypl:.0f} % zysku" if wypl else "–", None if wypl is None else wypl < 0.7)]
+    elif typ == "Stabilnie rosnąca":
+        rz, rk, rs = m.get("rec_zysk"), m.get("rec_kurs_2020"), m.get("rec_spy_2020")
+        out += [("Brak dyworsyfikacji (przejęć spoza branży)", "dużo przejęć" if m.get("dyworsyfikacja") else "nie", None if m.get("dyworsyfikacja") is None else not m["dyworsyfikacja"]),
+                ("Długoterminowy wzrost przychodów 8–18 % rocznie", _p(m.get("rev_cagr5")), None if m.get("rev_cagr5") is None else 0.08 <= m["rev_cagr5"] <= 0.18),
+                ("Zysk przetrwał recesję (2009 / 2020: spadek ≤ 25 %)", f"{rz[0]}: {_p(rz[1])}" if rz else "–", None if not rz else rz[1] >= -0.25),
+                ("Kurs w krachu 2020 spadł nie bardziej niż S&P 500", f"{_p(rk)} vs {_p(rs)}" if rk is not None and rs is not None else "–", None if rk is None or rs is None else rk >= rs)]
+    elif typ == "Szybko rosnąca":
+        g3 = m.get("rev_cagr3")
+        out += [("Wzrost 20–25 %, a nie podejrzanie szybki (przychody 3 lata 15–35 % rocznie)", _p(g3), None if g3 is None else 0.15 <= g3 <= 0.35),
+                ("Ekspansja trwa (faza szybkiej ekspansji)", (faza(m) or ("–",))[0], None if not faza(m) else faza(m)[0] == "Szybka ekspansja"),
+                ("Mało analityków śledzi spółkę (≤ 10)", str(m["analitycy"]) if m.get("analitycy") is not None else "–", None if m.get("analitycy") is None else m["analitycy"] <= 10),
+                ("Główny produkt to duża część firmy, jest gdzie rosnąć (ocena własna)", "oceń sam", None)]
+    elif typ == "Cykliczna":
+        out += [("Zapasy nie rosną szybciej niż sprzedaż", f"zapasy {_p(m.get('zapasy_1y'))}, sprzedaż {_p(m.get('rev_1y'))}" if m.get("zapasy_1y") is not None else "–",
+                 None if m.get("zapasy_1y") is None or m.get("rev_1y") is None else m["zapasy_1y"] <= m["rev_1y"] + 0.10),
+                ("Kupuj w dołku cyklu: zysk spada albo P/E powyżej normy (nie przy szczycie)", f"zysk {_p(m.get('ni_1y'))}", None if m.get("ni_1y") is None else (m["ni_1y"] < 0 or bool(pe and pm and pe > pm))),
+                ("Brak gwałtownej rozbudowy mocy (capex ≥ 2× w 2 lata)", "rampa capex" if m.get("rampa_capex") else "nie", not m.get("rampa_capex")),
+                ("Nowi konkurenci, ceny surowców, popyt (ocena własna)", "oceń sam", None)]
+    elif typ == "Wychodząca z kłopotów":
+        dk = m.get("dlug_krotki")
+        out += [("Gotówka względem długu (przetrwa bez nowego finansowania)", _usd(nc) + " netto" if nc is not None else "–", None if nc is None else nc > 0 or (m.get("cash") or 0) >= 0.5 * (m.get("debt") or 0)),
+                ("Mało długu wymagalnego szybko (≤ 30 % długu)", f"{100 * dk:.0f} % długu" if dk is not None else "brak długu", None if dk is None else dk <= 0.3),
+                ("Biznes wraca: sprzedaż w ostatnim kwartale rośnie r/r", _p(m.get("rev_q_yoy")), None if m.get("rev_q_yoy") is None else m["rev_q_yoy"] > 0),
+                ("Jak spółka chce się naprawić — cięcie kosztów, sprzedaż części (ocena własna)", "oceń sam", None)]
+    elif typ == "Ukryte aktywa":
+        out += [("Wartość aktywów względem ceny (gotówka netto ≥ 30 % kapitalizacji lub P/B < 1)", f"gotówka {_p(m.get('net_cash_mc'))}, P/B {m['pb']:.2f}".replace(".", ",") if m.get("pb") else "–",
+                 None if m.get("net_cash_mc") is None and not m.get("pb") else ((m.get("net_cash_mc") or 0) >= 0.3 or 0 < (m.get("pb") or 9) < 1)),
+                ("Dług nie zjada aktywów (nie rośnie 5 kwartałów z rzędu)", f"rośnie {m['dlug_rosnie_kw']} kw." if m.get("dlug_rosnie_kw") is not None else "–",
+                 None if m.get("dlug_rosnie_kw") is None else m["dlug_rosnie_kw"] < 5),
+                ("Brak nowych emisji akcji (3 lata ≤ +5 %)", _p(m.get("akcje_3l")), None if m.get("akcje_3l") is None else m["akcje_3l"] <= 0.05)]
+    out.append(("Znasz produkt / jesteś klientem i umiesz opowiedzieć historię spółki w 2 minuty (ocena własna)", "oceń sam", None))
+    return out
+
+
+def lynch_cechy(m):
+    """Rozdz. 8: 13 cech idealnej spółki (wg Lyncha). Te, których nie da się policzyć, zostają do oceny własnej (None)."""
+    inst, an = m.get("inst_proc"), m.get("analitycy")
+    return [("Nudna nazwa", "oceń sam", None),
+            ("Nudna działalność", "oceń sam", None),
+            ("Działalność, która odstrasza (nieprzyjemna, „brudna”)", "oceń sam", None),
+            ("Wydzielona ze spółki matki", f"tak ({m['wydzielona'][:4]})" if m.get("wydzielona") else "nie", bool(m.get("wydzielona"))),
+            ("Fundusze jej nie mają, analitycy nie śledzą", f"fundusze {100 * inst:.0f} %, analityków {an}" if inst is not None and an is not None else "–",
+             None if inst is None or an is None else inst < 0.5 and an <= 10),
+            ("Krążą o niej złe plotki (np. o odpadach toksycznych)", "oceń sam", None),
+            ("Kojarzy się z czymś przygnębiającym", "oceń sam", None),
+            ("Branża bez wzrostu (mniej konkurencji)", "oceń sam", None),
+            ("Ma niszę, do której trudno wejść", "oceń sam", None),
+            ("Ludzie wciąż kupują jej produkt (zużywalny)", "oceń sam", None),
+            ("Korzysta z technologii, zamiast ją sprzedawać", "oceń sam", None),
+            ("Zarząd i rada kupują akcje", f"{m['ins_kupujacy']} os. w 12 mies." if m.get("ins_kupujacy") is not None else "–",
+             None if m.get("ins_kupujacy") is None else m["ins_kupujacy"] > 0),
+            ("Spółka skupuje własne akcje", _p(m.get("akcje_3l")) + " akcji w 3 lata", None if m.get("akcje_3l") is None else m["akcje_3l"] < 0)]
+
+
+def lynch_unikaj(m):
+    """Rozdz. 9: czego unikać. True = w porządku (brak problemu), False = ostrzeżenie."""
+    nm = m.get("ni_ttm")
+    szept = nm is not None and nm <= 0 and (m.get("ps") or 0) >= 20
+    return [("Najgorętsza spółka w gorącej branży (kurs ≥ 2× w rok przy P/E ≥ 50 lub stracie)", "tak" if m.get("goraca") else "nie", not m.get("goraca")),
+            ("„Dyworsyfikacja”: przejęcia ≥ 25 % przychodów w 3 lata i wartość firmy rośnie szybciej niż sprzedaż",
+             f"przejęcia {_p(m.get('przejecia_3l'), 0).lstrip('+')} przychodów" if m.get("przejecia_3l") is not None else "–", None if m.get("dyworsyfikacja") is None else not m["dyworsyfikacja"]),
+            ("„Spółka-szept”: bez zysku, za to z wielką historią (strata i P/S ≥ 20)", f"P/S {m['ps']:.0f}" if m.get("ps") else "–", None if nm is None else not szept),
+            ("„Następny Microsoft / następny Walmart”", "oceń sam", None),
+            ("Pośrednik zależny od jednego dużego klienta", "oceń sam (raport roczny)", None),
+            ("Ekscytująca, modna nazwa", "oceń sam", None)]
+
+
+def lynch_liczby(m):
+    """Rozdz. 13 („Some Famous Numbers”): [(liczba, wartość, ocena True / False / None, komentarz)]."""
+    mp, mm = m.get("marza_przed"), m.get("marza_przed_med")
+    em, dk = m.get("emerytury_mc"), m.get("dlug_krotki")
+    nc_a = m.get("gotowka_na_akcje")
+    return [("Udział głównego produktu w sprzedaży", "brak danych o segmentach", None, "sprawdź w raporcie rocznym"),
+            ("P/E na tle własnej historii", f"{m['pe']:.1f} vs mediana 5 lat {m['pe_med5']:.1f}".replace(".", ",") if m.get("pe") and m.get("pe_med5") else "–",
+             None if not (m.get("pe") and m.get("pe_med5")) else m["pe"] <= m["pe_med5"], "niżej niż zwykle = taniej"),
+            ("Gotówka netto na akcję", f"{nc_a:.2f} USD = {100 * m['net_cash_mc']:.0f} % ceny".replace(".", ",", 1) if nc_a is not None and m.get("net_cash_mc") is not None else "–",
+             None if m.get("net_cash_mc") is None else m["net_cash_mc"] > 0, "część ceny pokryta gotówką"),
+            ("Dług / kapitał i dług krótkoterminowy", (f"D/E {m['de']:.2f}".replace(".", ",") if m.get("de") is not None else "D/E –") + (f", krótkoterminowy {100 * dk:.0f} % długu" if dk is not None else ""),
+             None if m.get("de") is None else 0 <= m["de"] < 0.5 and (dk is None or dk <= 0.3), "dług bankowy (wymagalny szybko) groźniejszy niż obligacje"),
+            ("Dywidenda", (f"{100 * m['div']:.1f} %".replace(".", ",") if m.get("div") else "brak") + (", bez cięć 5 lat" if m.get("dywidenda_stabilna") else ""),
+             None if not m.get("div") else bool(m.get("dywidenda_stabilna")), "u wolno rosnących i stabilnych: czy przetrwa recesję"),
+            ("Wartość księgowa (P/B)", f"{m['pb']:.2f}".replace(".", ",") if m.get("pb") else "–", None, "liczy się, co naprawdę jest w aktywach"),
+            ("Przepływy pieniężne (P/FCF)", f"{m['pfcf']:.1f}".replace(".", ",") if m.get("pfcf") else "–", None if not m.get("pfcf") else m["pfcf"] <= 20, "wolny przepływ, nie zysk księgowy"),
+            ("Zapasy względem sprzedaży", f"zapasy {_p(m.get('zapasy_1y'))}, sprzedaż {_p(m.get('rev_1y'))}" if m.get("zapasy_1y") is not None else "–",
+             None if m.get("zapasy_1y") is None or m.get("rev_1y") is None else m["zapasy_1y"] <= m["rev_1y"] + 0.10, "zapasy rosnące szybciej = ostrzeżenie"),
+            ("Zobowiązania emerytalne (niedofinansowanie)", f"deficyt {100 * -em:.1f} % kapitalizacji".replace(".", ",") if em and em < 0 else ("brak deficytu" if em is not None else "brak planu / danych"),
+             None if em is None else em > -0.05, "deficyt to dług wobec pracowników"),
+            ("Stopa wzrostu i wskaźnik Lyncha z dywidendą", f"prognoza EPS {_p(m.get('eps_next5'))} rocznie" if m.get("eps_next5") is not None else "–", None, "patrz wskaźnik obok"),
+            ("Marża przed opodatkowaniem na tle branży", f"{100 * mp:.1f} % vs mediana {100 * mm:.1f} %".replace(".", ",") if mp is not None and mm is not None else (_p(mp) if mp is not None else "–"),
+             None if mp is None or mm is None else mp >= mm, "w złych czasach przetrwa ta z wyższą marżą")]
 
 
 _NP = "niepotwierdzony"
