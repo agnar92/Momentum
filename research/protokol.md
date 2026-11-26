@@ -1733,3 +1733,23 @@ Symulacja miesięczna, wpłata 1 jednostki na początku każdego miesiąca, kosz
 D 16,1, SPY 14,8. 2019–26: D 33–34 % (−37 %), A 18–25 %, SPY 16,5 %; 2013–19: D 12,6–13,2 % ≈ SPY 13,3 %. Główna przyczyna: warunki dokupu (PEG 0–2, ±7 %, raz
 w miesiącu, krok 10 % celu) zostawiają większość wpłat w gotówce; PEG przy dokupie obniża wynik o ~1 pp (A vs C, gotówka w SPY). Ograniczenia: historyczny PEG
 wśród BD brak w 2013–15 (0–1 spółek), mało spółek BD (7–32), dane PEG z przeszłego wzrostu. Tylko sprawdzenie — nic na stronę.
+
+## Etap 117 — szukanie sposobu wyboru „dobra spółka w dobrej cenie” z podziałem na lata odkrywania i lata sprawdzające (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „przeprowadź badania, które wyłonią sposób wyceny spółki, który z dużym prawdopodobieństwem pokaże przyszły wzrost na podstawie fundamentów z lat
+wcześniejszych; przetestuj wszystko, wszystkie kombinacje; zachowuj się jak inwestor na 10–20 lat”. Tylko sprawdzenie — nic na stronę bez decyzji użytkownika.
+Ochrona przed przypadkiem (przy ~120 kombinacjach kilka „wygra” losowo): **odkrywanie** na startach 2012–2017, **sprawdzenie** tylko wybranych na startach
+2018–2023 (36 mies.) / 2018–2021 (60 mies.), których przy wyborze nie oglądamy. Cel: nadwyżka zwrotu nad medianą zbioru (top 500 USA PIT bez wykluczonych sektorów).
+- **Cechy** (styczeń, percentyl w zbiorze, kierunek ustalony z góry z teorii, brak = 0,5):
+  jakość — Siła (etap 95), liczba kryteriów Jakość 7, ROE, ROA, ROCE, marże brutto / operacyjna / netto / FCF, D/E (−), zmiana liczby akcji (jak w Sile), przychody
+  3 i 5 lat, lata z przychodami > 10 %, lata ze wzrostem zysku, lata z wysokim ROIC, zmiana ROE 3 lata, zmienność zysku (−), reguły Buffetta (marża brutto > 40 %,
+  netto > 20 %, EPS 4/5, skoryg. D/E < 0,8, dług ≤ 4 × zysk, capex ÷ zysk (−), SG&A ÷ zysk brutto (−));
+  wycena (wyżej = taniej) — V/P dochodu rezydualnego (etap 114), EBIT/EV, potencjał DCF (etap 113), 1/PEG, E/P, FCF/kapitalizacja, B/P, S/P, sprzedaż/EV,
+  P/E względem własnej mediany 5 lat (−); moment — zwrot 12-1 mies. (+), zwrot 3 lata (−, odwrócenie długoterminowe).
+- **Złożone z góry (teoria):** Q = średnia percentyli jakości, V = średnia percentyli wyceny, QV = (Q + V) / 2, QVM = (Q + V + zwrot 12-1) / 3;
+  model liniowy (grzbietowy, λ = 10) na percentylach wszystkich cech, uczony tylko na latach odkrywania, cel = percentyl zwrotu 60 mies.
+- **Kombinacje:** filtr jakości {wszystkie, Siła ≥ 7, Jakość 7/7, górne 30 % Q, Buffett 3 + 6 + 8} × wybór ceny {bez, górne 30 % każdej miary wyceny w filtrze, górne
+  30 % V} × moment {bez, zwrot 12-1 w górnej połowie} = 120; miara w odkrywaniu: średnia po latach mediany nadwyżki 60 mies. (min. średnio 5 spółek).
+- **Do sprawdzenia** idą: 5 najlepszych kombinacji z odkrywania + z góry: górne 20 % Q, V, QV, QVM i modelu. Sposób „działa”, gdy w latach sprawdzających
+  nadwyżka 36 mies. > 0 z przedziałem bootstrap (po latach) bez 0 i nadwyżka 60 mies. > 0.
+- Na końcu portfele top 20 (równe wagi, przegląd w styczniu, koszt 0,1 %) dla sposobów, które przeszły (albo najlepszych 3), 2012-01 → 2026-09 vs SPY, połowy.
