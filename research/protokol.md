@@ -1697,3 +1697,13 @@ EBIT/EV: górne 10 % 60 mies. −19,0 [−42,8; +0,4], wśród FCF > 0 i D/E < 1
 [−7,0; +11,8]). Portfele: top 10 Greenblatt 14,7 %/rok = SPY 14,7 % (2012–18 13,5 vs 12,0 %, 2019–26 15,7 vs 17,2 %), top 30 14,6 %; top 10 V/P 14,0 % (obsunięcie
 −38 %), top 10 EBIT/EV 12,6 % (−42 %). Wzorzec jak w literaturze po 2007: „tanie” spółki przegrywały w 2019–26; w 2012–18 V/P i Greenblatt lekko lepsze od SPY.
 Teza „model wyceny przewiduje zwroty” **niepotwierdzona** dla żadnego z trzech. Tylko sprawdzenie — nic na stronę.
+
+## Etap 115 — kupno „tanio” wśród dobrych spółek: DCF vs PEG vs P/E na tle własnych 5 lat (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „jak się ma kupowanie po DCF, do PEG i do historycznego P/E (5 lat, jeżeli jest nisko — kupować); oczywiście fundamenty muszą być dobre”. Tylko sprawdzenie.
+- Pule jakości (styczeń, PIT): **J** = przychody 5 lat > 8 %/rok, ROE > 15 %, FCF > 0, D/E 0–1 (rdzeń „Jakość 7”); **J77** = pula B z etapu 107 (Jakość 7/7 + 7/7 bez PEG + bez ⬇).
+- Sygnały „tanio” (jak na stronie): **DCF** potencjał ≥ +15 % (etap 113, `dcf_wzgl`); **PEG 0–2** (reguła dokupu użytkownika) i **PEG < 1** (historyczny PEG, wzrost z przeszłości);
+  **P/E w dolnej 1/3 własnych 5 lat** (dodatnie P/E z miesięcy t−60…t−1, ≥ 24 obserwacji; jak pasma na karcie); dodatkowo **P/E < 0,8 × mediana 5 lat**.
+- Test: w puli — „tanio” vs reszta puli, nadwyżka nad medianą zbioru 12 / 36 / 60 mies., bootstrap po latach, połowy. Portfele (równe wagi, przegląd w styczniu,
+  koszt 0,1 %, 2012-01 → 2026-09): cała pula J, pula J ∩ sygnał (dla każdego sygnału), vs SPY; połowy 2012–18 / 2019–26.
+- Sygnał działa, gdy „tanio” vs reszta puli > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnie w obu połowach; portfel — gdy bije i SPY, i całą pulę J w obu połowach.
