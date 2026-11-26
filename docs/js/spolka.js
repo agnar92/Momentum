@@ -65,7 +65,7 @@
         const roz = (ROZ && ROZ.wszystkie) || {};
         Object.entries(WL).forEach(([p, v]) => { M[p] = v; K.pct[p] = W.percentyl(roz[p], v, p); });
         if (Object.keys(WL).length) {
-            K.oceny = W.ocenyZ(K.pct, GPW);
+            K.oceny = W.ocenyZ(K.pct, GPW ? K.grupy : null);
             const wsz = czytajWl();
             wsz[K.t] = { w: WL, o: K.oceny, d: K.generated_at };
             zapiszWl(wsz);
@@ -117,7 +117,7 @@
         const sp = m.spadek_2l ? `<div class="ostrzezenie">⬇ <b>Fundamenty słabną 2 lata z rzędu:</b> ${esc(m.spadek_2l.join(" i "))} ${m.spadek_2l.length > 1 ? "spadają" : "spada"} rok do roku teraz i rok wcześniej — wg Twojej reguły sygnał do sprzedaży (badanie, etap 77: takie spółki w 5 lat średnio −4 pp względem średniej).</div>` : "";
         const ow = (K.ostrzezenia || []).length ? `<div class="ostrzezenie">❗ <b>Ostrzeżenia (realność prognozy, jakość zysku, zdarzenia):</b><ul style="margin:4px 0 0 18px;padding:0">${K.ostrzezenia.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
         $("liczby").innerHTML = ostrz + sp + ow + wlasne() + `
-          <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle ${ZB2}</div><div style="font-size:11px;opacity:.7;margin-top:2px">= jakość: siła finansowa${GPW ? "" : " + reguły Buffetta (SG&A, capex)"}; wzrost i wycena osobno</div></div>${oc(o.ogolna)}</div>
+          <div class="wynik-glowny"><div><div style="font-size:12px;opacity:.7">OCENA OGÓLNA</div><div style="font-size:13px">na tle ${ZB2}</div><div style="font-size:11px;opacity:.7;margin-top:2px">= jakość: siła finansowa + reguły Buffetta (SG&A, capex); wzrost i wycena osobno</div></div>${oc(o.ogolna)}</div>
           ${[["Wzrost", o.wzrost, "wzrost"], ["Siła finansowa", o.sila, "sila"], ["Wycena (im wyżej, tym taniej)", o.wycena, "wycena"]].map(([n, v, k]) => `<div class="wiersz-oceny"><span>${n}${miejsceTxt(k)}</span>${oc(v)}</div>`).join("")}
           <div class="mut male" style="margin:6px 0">${miejsceTxt("ogolna").replace(" · ", "Ocena ogólna: ")} ${GPW ? "" : `· <a href="porownaj.html?t=${encodeURIComponent(K.t)}">porównaj z innymi spółkami →</a>`}</div>
           <div class="liczby" style="margin-top:12px">
@@ -175,7 +175,7 @@
               ${w("Gotówka − dług", W.fmtUsd(m.net_cash) + " " + WAL + " · " + pr(m.net_cash_mc) + " kapit.", "net_cash_mc", ["net_cash_mc", pr, "kapitalizacji"])}${w("Quick ratio", W.fmtNum(m.qr), "qr", ["qr", nm2])}${w("Liczba akcji, zmiana 3 lata", W.ok(m.akcje_3l) ? pz(m.akcje_3l) + (m.akcje_3l < -0.005 ? " (skup akcji)" : m.akcje_3l > 0.005 ? " (nowe akcje)" : "") : "–", "akcje_3l", ["akcje_3l", pz])}
               ${w("Capex / przychody (inwestycje w majątek)", pr(m.capex_przych), "capex_przych", ["capex_przych", pr])}${w("Wzrost kapitału własnego 3 lata (rocznie)", pz(m.kapital_3l), "kapital_3l", ["kapital_3l", pz])}
               ${w("Zysk dodatni (lata z 5)", W.ok(m.zysk_dodatni_lata) ? m.zysk_dodatni_lata + " z 5" : "–")}${w("Zmienność zysku 5 lat (mniej = stabilniej)", W.ok(m.zmiennosc_zysku) ? W.fmtNum(m.zmiennosc_zysku) : "–")}
-              <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}${GPW ? "" : sklad("ogolna", { ogolna: W.OGOLNA })}</div>
+              <div class="wiersz"><span>Ocena siły</span>${oc(K.oceny.sila)}</div>${sklad("sila")}${sklad("ogolna", GPW ? K.grupy : { ogolna: W.OGOLNA })}</div>
             <div class="kol k-wycena"><div class="naglowek-kol">🏷️ Wycena</div>
               ${w("P/E", W.fmtNum(m.pe), "pe", ["pe", nm2])}${w("Forward P/E", W.fmtNum(m.fpe), null, ["fpe", nm2])}${w("P/S", W.fmtNum(m.ps), "ps", ["ps", nm2])}${w("P/B", W.fmtNum(m.pb), null, ["pb", nm2])}
               ${w(GPW ? "PEG (P/E ÷ wzrost zysku 3 lata)" : "PEG (P/E ÷ prognoza EPS 5 lat)", W.ok(m.peg) ? W.fmtNum(m.peg) : "–", "peg", ["peg", nm2])}${w("P/FCF", W.fmtNum(m.pfcf), "pfcf", ["pfcf", nm2])}

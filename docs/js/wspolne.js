@@ -358,11 +358,11 @@
     }
     // ocena ogólna (jak ocena.OGOLNA, etap 118) = jakość: składniki Siły + SG&A ÷ zysk brutto i capex ÷ zysk netto (reguły Buffetta); wzrost i wycena osobno
     const OGOLNA = [...GRUPY.sila, ["bf_sga_gp", "SG&A ÷ zysk brutto (mniej = lepiej, Buffett)"], ["bf_capex_ni", "Capex ÷ zysk netto (mniej = lepiej, Buffett)"]];
-    // oceny z percentyli (jak ocena.oceny): grupy + ogólna = jakość (bez GPW: tam brak danych Buffetta → ogólna = Siła)
-    function ocenyZ(pct, gpw) {
+    // oceny z percentyli (jak ocena.oceny): grupy + ogólna = jakość; grupy = składniki z karty (GPW: K.grupy z własną listą „ogolna”)
+    function ocenyZ(pct, grupy) {
         const o = {};
         Object.keys(GRUPY).forEach((g) => { o[g] = skladOceny(pct, g).ocena; });
-        o.ogolna = gpw ? o.sila : skladOceny(pct, "ogolna", { ogolna: OGOLNA }).ocena;
+        o.ogolna = skladOceny(pct, "ogolna", grupy && grupy.ogolna ? grupy : { ogolna: OGOLNA }).ocena;
         return o;
     }
     // pola, które użytkownik może uzupełnić sam: [pole, nazwa, jednostka] („%” = wpisywane w procentach)

@@ -21,6 +21,7 @@ SEKTORY_WYKL = {"Financial Services", "Basic Materials", "Energy", "Utilities", 
 UA = {"User-Agent": "Mozilla/5.0 (Fundamenta research bot)"}
 
 # progi GPW (obniżone progi wzrostu względem USA; pozostałe jak w USA) — NIETESTOWANE
+BRAK_BF = 99   # jak ocena.BRAK_BF: strata / ujemny zysk brutto = najgorzej
 GPW_PROGI = dict(rev_cagr3=0.05, rev_3y=0.16, rok=0.03, lata_wzrostu=0.06)
 
 
@@ -55,7 +56,8 @@ def _wiersz(df, nazwy):
 
 
 MIES = {"sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6, "lip": 7, "sie": 8, "wrz": 9, "paź": 10, "lis": 11, "gru": 12}
-BR_STRONY = {"rachunek-zyskow-i-strat": ("IncomeRevenues", "IncomeEBIT", "IncomeNetProfit", "IncomeShareholderNetProfit", "IncomeGrossProfit"),
+BR_STRONY = {"rachunek-zyskow-i-strat": ("IncomeRevenues", "IncomeEBIT", "IncomeNetProfit", "IncomeShareholderNetProfit", "IncomeGrossProfit",
+                                         "IncomeCostOfSales", "IncomeDistributionExpenses", "IncomeAdministrativExpenses"),
              "przeplywy-pieniezne": ("CashflowOperatingCashflow", "CashflowCapex", "CashflowFCM", "CashflowDividend", "CashflowStockBuyback",
                                      "CashflowShareCapitalCash"),
              "bilans": ("BalanceCapital", "BalanceTotalAssets", "BalanceCurrentLiabilities", "BalanceCash", "BalanceNoncurrentBorrowings",
@@ -104,8 +106,10 @@ def pobierz_br(t, slug, cache=None):
     """Roczne sprawozdania z biznesradar.pl (rachunek zysków, przepływy, bilans) — dłuższa historia niż yfinance (od 2007)."""
     p = os.path.join(cache, f"{t}.br.json") if cache else None
     if p and os.path.exists(p) and time.time() - os.path.getmtime(p) < 6 * 86400:
-        return json.load(open(p))
-    out = {}
+        d = json.load(open(p))
+        if d.get("_v", 1) >= 2:                  # v2: koszty sprzedaży i zarządu, koszt wytworzenia (reguły Buffetta, etap 118)
+            return d
+    out = {"_v": 2}
     for strona, pola in BR_STRONY.items():
         try:
             h = requests.get(f"https://www.biznesradar.pl/raporty-finansowe-{strona}/{slug}", headers=UA, timeout=30).text
@@ -113,7 +117,7 @@ def pobierz_br(t, slug, cache=None):
         except requests.RequestException:
             pass
         time.sleep(1.0)
-    if p and out:
+    if p and len(out) > 1:
         json.dump(out, open(p, "w"))
     return out
 
@@ -178,6 +182,10 @@ def scal_br(d, br):
                 ls[e] = ls.get(e, 0.0) + v
         d["leasing"] = ls
         d["br"] = True
+    # koszty sprzedaży + ogólnego zarządu (SG&A) i koszt wytworzenia — tylko spółki raportujące w wariancie kalkulacyjnym
+    sp_, za_, ko_ = rok("IncomeDistributionExpenses"), rok("IncomeAdministrativExpenses"), rok("IncomeCostOfSales")
+    d["sga_r"] = {e: abs(sp_[e]) + abs(za_.get(e, 0.0)) for e in sp_ if e in za_}
+    d["koszt_r"] = {e: abs(v) for e, v in ko_.items()}
     d["dyw_r"] = {e: abs(v) for e, v in rok("CashflowDividend").items()}
     d["skup_r"] = {e: abs(v) for e, v in rok("CashflowStockBuyback").items()}
     d["emisja_r"] = {e: max(0.0, v) for e, v in rok("CashflowShareCapitalCash").items()}
@@ -317,6 +325,18 @@ def metryki(d):
         def zw_(n):
             return c[-1] / c[-1 - n] - 1 if len(c) > n else None
         m["zw"] = {"1t": zw_(1), "1m": zw_(4), "1r": zw_(52), "5l": zw_(len(c) - 1) if len(c) >= 250 else None}
+    # reguły Buffetta jak w USA (ocena.buffett): SG&A ÷ zysk brutto (ostatni rok) i capex ÷ zysk netto (suma 3 lat); strata / ujemny zysk brutto = 99 (najgorzej)
+    rv, sg, ko = d.get("rev") or {}, d.get("sga_r") or {}, d.get("koszt_r") or {}
+    lata_sg = sorted(e for e in sg if e in rv and e in ko)
+    if lata_sg:
+        e = lata_sg[-1]
+        gp = rv[e] - ko[e]
+        m["bf_sga_gp"] = BRAK_BF if gp <= 0 else sg[e] / gp
+    cx, nis = d.get("capex") or {}, d.get("ni") or {}
+    lata_cx = sorted(e for e in cx if e in nis)[-3:]
+    if len(lata_cx) == 3:
+        sn = sum(nis[e] for e in lata_cx)
+        m["bf_capex_ni"] = BRAK_BF if sn <= 0 else sum(abs(cx[e]) for e in lata_cx) / sn
     return m
 
 
@@ -352,11 +372,13 @@ GRUPY = {"wzrost": [("rev_1y", 1), ("rev_cagr3", 1), ("ni_1y", 1), ("ni_cagr3", 
          "sila": [("gm", 1), ("om", 1), ("nm", 1), ("roe", 1), ("roa", 1), ("roce", 1), ("fcf_margin", 1), ("de", -1), ("net_cash_mc", 1)],
          "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1)]}
 DOD = {"pe", "peg", "ps", "pfcf"}
+# ocena ogólna = jakość (etap 118, jak ocena.OGOLNA): Siła + SG&A ÷ zysk brutto i capex ÷ zysk netto (mniej = lepiej)
+OGOLNA = GRUPY["sila"] + [("bf_sga_gp", -1), ("bf_capex_ni", -1)]
 
 
 def oceny(rows):
     """Percentyl każdego wskaźnika wśród spółek GPW z listy; ocena grupy = średnia × 10 (brak = 0,5); ogólna 0,4 / 0,35 / 0,25 (jak w USA)."""
-    for gr, pola in GRUPY.items():
+    for gr, pola in list(GRUPY.items()) + [("ogolna", OGOLNA[-2:])]:
         for p, kier in pola:
             v = [(r, r["m"].get(p)) for r in rows]
             ok = [(r, x) for r, x in v if x is not None and (p not in DOD or x > 0) and (p != "de" or x >= 0)]
@@ -382,8 +404,9 @@ def oceny(rows):
             vals = [pc.get(p, 0.5) for p, _ in pola]
             n_ = sum(1 for p, _ in pola if p in pc)
             o[gr] = round(10 * sum(vals) / len(vals), 1) if n_ >= 2 else None
-        # ocena ogólna = jakość (etap 118: Siła + reguły Buffetta; GPW nie ma danych SG&A i capex ÷ zysk → sama Siła, też przeszła sprawdzenie)
-        o["ogolna"] = o["sila"]
+        # ocena ogólna = jakość (etap 118): Siła + reguły Buffetta (SG&A, capex); spółki bez wariantu kalkulacyjnego — SG&A brak = 0,5
+        v_ = [pc.get(p, 0.5) for p, _ in OGOLNA]
+        o["ogolna"] = round(10 * sum(v_) / len(v_), 1) if sum(1 for p, _ in OGOLNA if p in pc) >= 2 else None
         r["oceny"] = o
 
 
@@ -403,7 +426,7 @@ def _czysc(x):
     return x
 
 
-NAZWY = {"rev_1y": "Przychody 1 rok", "rev_cagr3": "Przychody 3 lata (rocznie)", "ni_1y": "Zysk netto 1 rok", "ni_cagr3": "Zysk netto 3 lata (rocznie)",
+NAZWY = {"bf_sga_gp": "SG&A ÷ zysk brutto (mniej = lepiej, Buffett)", "bf_capex_ni": "Capex ÷ zysk netto (mniej = lepiej, Buffett)", "rev_1y": "Przychody 1 rok", "rev_cagr3": "Przychody 3 lata (rocznie)", "ni_1y": "Zysk netto 1 rok", "ni_cagr3": "Zysk netto 3 lata (rocznie)",
          "lata_wzrostu": "Lata ze wzrostem przychodów > 6 % (z 3)", "gm": "Marża brutto", "om": "Marża operacyjna", "nm": "Marża netto", "roe": "ROE", "roa": "ROA",
          "roce": "ROCE", "fcf_margin": "Marża FCF", "de": "Dług / kapitał", "net_cash_mc": "Gotówka netto / kapitalizacja", "pe": "P/E", "peg": "PEG (z przeszłego wzrostu)",
          "ps": "P/S", "pfcf": "P/FCF"}
@@ -463,7 +486,7 @@ def karty(rows, katalog, dane):
                      zw=m.get("zw") or {}, kompletnosc=dict(liczone=n_, wszystkie=len(NAZWY), niepelne=n_ < 0.75 * len(NAZWY), kategorie=[]), med500=med,
                      ostrzezenia=([f"Fundamenty słabną 2 lata z rzędu: {' i '.join(m['spadek_2l'])}."] if m.get("spadek_2l") else []),
                      zdarzenia=None, lynch=ocena.lynch(m, typ, None), ceny={"d": [x[0] for x in ceny], "c": [x[1] for x in ceny]} if ceny else None,
-                     grupy={g: [[p, NAZWY[p]] for p, _ in pola] for g, pola in GRUPY.items()}, generated_at=dt.date.today().isoformat(), dcf_param=ocena.DCF, gpw=True)
+                     grupy={g: [[p, NAZWY[p]] for p, _ in pola] for g, pola in list(GRUPY.items()) + [("ogolna", OGOLNA)]}, generated_at=dt.date.today().isoformat(), dcf_param=ocena.DCF, gpw=True)
         r["typ"] = typ
         json.dump(_czysc(karta), open(os.path.join(katalog, f"{r['t']}.json"), "w"), ensure_ascii=False, separators=(",", ":"))
 
