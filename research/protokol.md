@@ -1775,3 +1775,9 @@ Użytkownik: „czyli po tych badaniach musimy zmienić scoring … źle pokazuj
   Odkrywanie: starty 2012–2017; sprawdzenie: 2018–2023 (36 mies.) / 2018–2021 (60 mies.).
 - Wybór: wariant z najwyższym IC 60 mies. w odkrywaniu; przyjęty, gdy w sprawdzeniu ma IC 36 i 60 mies. wyższe niż O0 i nadwyżkę górnych 20 % (36 mies.) z przedziałem bez 0.
   Jeśli nie — zostaje ten z wariantów, który spełnia warunek w sprawdzeniu i ma najwyższe IC w odkrywaniu; gdy żaden — scoring bez zmian.
+
+**Wynik etapu 118** (`r143_etap118.py`, `wyniki/r143_etap118.md`): IC 60 mies. odkrywanie / sprawdzenie — O0 obecny 0,090 / 0,112, O1 0,118 / 0,156, O2 sama Siła 0,150 / 0,178,
+**O3 Siła + Buffett 0,163 / 0,198**, O4 0,131 / 0,170, O5 0,122 / 0,148; sama ocena Wzrostu −0,053 / 0,034, Wyceny −0,005 / 0,011. Warunek w sprawdzeniu spełniają O1–O5;
+wybór wg protokołu: **O3** (górne 20 % 36 mies. w sprawdzeniu +12,0 pp [+7,0; +17,8] vs O0 +10,0). Portfele top 20 2012–2026: O3 18,8 %/rok (2012–18 13,6 %, 2019–26
+23,8 %, obsunięcie −26 %), O2 18,5 %, O4 17,9 %, O1 17,4 %, O5 17,1 %, O0 16,1 % (9,8 / 22,0 %, −33 %), SPY 14,7 %. **Wdrożone na stronie** (decyzja użytkownika przed testem):
+ocena ogólna = Siła + SG&A ÷ zysk brutto + capex ÷ zysk netto; GPW — sama Siła (brak danych SG&A).

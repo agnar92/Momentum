@@ -347,7 +347,7 @@
     }
     // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością
     // kierunek wskaźnika (jak GRUPY w ocena.py): 1 = więcej lepiej, -1 = mniej lepiej
-    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1, capex_przych: -1, kapital_3l: -1 };
+    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1, capex_przych: -1, kapital_3l: -1, bf_sga_gp: -1, bf_capex_ni: -1 };
     const DODATNIE = ["pe", "peg", "pfcf", "ps"];
     // percentyl wartości v wśród wartości wszystkich spółek (etap 77) (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
     function percentyl(lst, v, pole) {
@@ -356,12 +356,13 @@
         const p = (mn + 0.5 * rw) / lst.length;
         return (KIER[pole] || 1) > 0 ? p : 1 - p;
     }
-    // oceny z percentyli (jak ocena.oceny): grupy + ogólna 0,4 / 0,35 / 0,25
-    function ocenyZ(pct) {
+    // ocena ogólna (jak ocena.OGOLNA, etap 118) = jakość: składniki Siły + SG&A ÷ zysk brutto i capex ÷ zysk netto (reguły Buffetta); wzrost i wycena osobno
+    const OGOLNA = [...GRUPY.sila, ["bf_sga_gp", "SG&A ÷ zysk brutto (mniej = lepiej, Buffett)"], ["bf_capex_ni", "Capex ÷ zysk netto (mniej = lepiej, Buffett)"]];
+    // oceny z percentyli (jak ocena.oceny): grupy + ogólna = jakość (bez GPW: tam brak danych Buffetta → ogólna = Siła)
+    function ocenyZ(pct, gpw) {
         const o = {};
         Object.keys(GRUPY).forEach((g) => { o[g] = skladOceny(pct, g).ocena; });
-        const w = [["wzrost", 0.4], ["sila", 0.35], ["wycena", 0.25]].filter(([g]) => ok(o[g]));
-        o.ogolna = w.length === 3 || (w.length === 2 && ok(o.wzrost)) ? Math.round(10 * w.reduce((a, [g, x]) => a + o[g] * x, 0) / w.reduce((a, [, x]) => a + x, 0)) / 10 : null;
+        o.ogolna = gpw ? o.sila : skladOceny(pct, "ogolna", { ogolna: OGOLNA }).ocena;
         return o;
     }
     // pola, które użytkownik może uzupełnić sam: [pole, nazwa, jednostka] („%” = wpisywane w procentach)
@@ -399,7 +400,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", bardzoDobre, prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
+    const W = { WALUTA: "USD", OGOLNA, bardzoDobre, prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

@@ -369,3 +369,16 @@ def test_typy_cykl_na_pierwszym_miejscu():
     ty = [("Szybko rosnąca", 100.0, ""), ("Cykliczna", 90.0, "")]
     assert O.typy_cykl(ty, {"cykliczna": 90, "cykl_spadki": 3})[0][0] == "Cykliczna"
     assert O.typy_cykl(ty, {"cykliczna": 90, "cykl_spadki": 1})[0][0] == "Szybko rosnąca"
+
+
+def test_ogolna_to_jakosc():
+    """etap 118: ogólna = Siła + SG&A ÷ zysk brutto i capex ÷ zysk (mniej = lepiej); wycena i wzrost nie wpływają"""
+    rows = []
+    for k in range(30):
+        m = {"gm": 0.3 + k / 100, "nm": 0.1 + k / 200, "roe": 0.1, "bf_sga_gp": 1 - k / 40, "bf_capex_ni": 0.5, "pe": 10 + k, "rev_1y": 0.5 - k / 100,
+             "net_cash": 0, "mcap": 1e9, "fcf_ttm": 1e7}
+        rows.append({"m": m, "sector": "Technology"})
+    O.oceny(rows)
+    og = [r["oceny"]["ogolna"] for r in rows]
+    assert og == sorted(og) and og[-1] > og[0]        # lepsza jakość = wyższa ogólna, mimo drożej i wolniejszego wzrostu
+    assert rows[0]["pct"]["bf_sga_gp"] < rows[-1]["pct"]["bf_sga_gp"]

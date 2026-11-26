@@ -526,7 +526,7 @@ def zmiana_akcji(sh, splity=()):
 def rozklady(rows):
     """{"wszystkie": {pole: posortowane wartości}} — do przeliczenia oceny w przeglądarce, gdy użytkownik wpisze brakujące dane."""
     out = {}
-    for g, pola in GRUPY.items():
+    for g, pola in list(GRUPY.items()) + [("ogolna", OGOLNA[-2:])]:
         for p, _ in pola:
             for r in rows:
                 v = r["m"].get(p)
@@ -547,6 +547,10 @@ GRUPY = {
              ("akcje_3l", -1), ("capex_przych", -1), ("kapital_3l", -1), ("roic", 1)],
     "wycena": [("pe", -1), ("peg", -1), ("ps", -1), ("pfcf", -1), ("fcf_yield", 1), ("dcf_pot", 1)],
 }
+# ocena ogólna od etapu 118 = jakość: składniki Siły + dwie reguły Buffetta (SG&A ÷ zysk brutto, capex ÷ zysk netto; mniej = lepiej).
+# Wzrost i wycena dalej liczone i pokazywane osobno, ale nie wchodzą do ogólnej (etapy 76, 117, 118: wycena ≈ 0 lub ujemnie, Siła + Buffett najlepiej
+# w latach sprawdzających 2018–23, IC 60 mies. 0,20 vs 0,11 dla starej 0,4 / 0,35 / 0,25). Strata / ujemny kapitał (BRAK_BF 99) = najgorzej.
+OGOLNA = GRUPY["sila"] + [("bf_sga_gp", -1), ("bf_capex_ni", -1)]
 
 
 def percentyle(rows, pole, kier, grupa=None):
@@ -617,7 +621,7 @@ def oceny(rows):
         m["net_cash_mc"] = m["net_cash"] / m["mcap"] if m.get("net_cash") is not None and m.get("mcap") else None
         m["fcf_yield"] = m["fcf_ttm"] / m["mcap"] if m.get("fcf_ttm") is not None and m.get("mcap") else None
         r["pct"] = {}
-    for g, pola in GRUPY.items():
+    for g, pola in list(GRUPY.items()) + [("ogolna", OGOLNA[-2:])]:
         for pole, kier in pola:
             for r, p in zip(rows, percentyle(rows, pole, kier)):
                 r["pct"][pole] = p
@@ -632,8 +636,8 @@ def oceny(rows):
             v = [r["pct"][p] for p, _ in pola if r["pct"].get(p) is not None]
             # brak danych = neutralne 50 pkt (środek sektora): brakujące wskaźniki nie zawyżają ani nie zaniżają oceny
             o[g] = round(10 * (sum(v) + BRAK * (len(pola) - len(v))) / len(pola), 1) if len(v) >= 2 else None
-        w = [(o[g], wg) for g, wg in (("wzrost", 0.4), ("sila", 0.35), ("wycena", 0.25)) if o[g] is not None]
-        o["ogolna"] = round(sum(a * b for a, b in w) / sum(b for _, b in w), 1) if len(w) == 3 or (len(w) == 2 and o["wzrost"] is not None) else None
+        v = [r["pct"][p] for p, _ in OGOLNA if r["pct"].get(p) is not None]
+        o["ogolna"] = round(10 * (sum(v) + BRAK * (len(OGOLNA) - len(v))) / len(OGOLNA), 1) if len(v) >= 2 else None
         r["oceny"] = o
         # niepełne dane (młoda spółka, emitent zagraniczny bez raportów us-gaap): < 75 % wskaźników albo w którejś kategorii < 60 % jej wskaźników
         slabe = [g for g, pola in GRUPY.items() if sum(1 for p, _ in pola if r["pct"].get(p) is not None) < 0.6 * len(pola)]
