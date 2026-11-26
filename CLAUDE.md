@@ -101,6 +101,8 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   account value IN PLN (IKE; user: „waluta na IKE jest w PLN, więc tam też sizing”; `konto` input: shares + cash; fallback = value of shares; amounts in PLN,
   shares = PLN ÷ (USD price × USD/PLN), rate `usdpln` in lista.json from yfinance PLNUSD=X weekly, editable `kurs` input; prices / average cost stay in USD), first purchase 20 % of target, every next one 10 % of target, at most once per calendar
   month (`ost` = {c, d} saved by „Kupiłem”), only when PEG 0–2 and the price moved ≥ ±7 % since the last purchase (reference: `ost.c`, else average cost);
+  FIRST purchase without the PEG condition when fundamentals are very good (`W.bardzoDobre`: ✔ Jakość 7/7 or Siła ≥ 7; user, Nov 2026: „nie wymagaj PEG 0–2 do
+  pierwszego zakupu, jeżeli fundamenty są bardzo dobre, PEG 0–2 to dodatek, nie wymóg” — after stages 114–115; its budget priority then uses ocena + size only);
   otherwise wait; none for ⬇ `sp`; optional monthly budget — priority by `W.punkty` (10 × mean of tanio (2 − PEG) ÷ 2, overall ÷ 10, size 1 − (rank − 1) ÷ 500).
   The USER picks the stocks (user: „tylko ja wybieram spółki, nie automat”), no automatic additions or filters. Do not tune to backtests; do NOT suggest ETFs,
   more stocks or changing the rules (user: „rób to co mówię … ja decyduję co, gdzie i jak … muszę zarządzać emocjami”; retirement account, prefers
