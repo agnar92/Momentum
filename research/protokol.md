@@ -1753,3 +1753,12 @@ Ochrona przed przypadkiem (przy ~120 kombinacjach kilka „wygra” losowo): **o
 - **Do sprawdzenia** idą: 5 najlepszych kombinacji z odkrywania + z góry: górne 20 % Q, V, QV, QVM i modelu. Sposób „działa”, gdy w latach sprawdzających
   nadwyżka 36 mies. > 0 z przedziałem bootstrap (po latach) bez 0 i nadwyżka 60 mies. > 0.
 - Na końcu portfele top 20 (równe wagi, przegląd w styczniu, koszt 0,1 %) dla sposobów, które przeszły (albo najlepszych 3), 2012-01 → 2026-09 vs SPY, połowy.
+
+**Wynik etapu 117** (`r142_etap117.py`, `wyniki/r142_etap117.md`): **przewiduje jakość, nie wycena.** Cechy z IC 60 mies. dodatnim w obu okresach: Siła 0,15 / 0,18,
+SG&A ÷ zysk brutto (−) 0,24 / 0,15, marża FCF 0,15 / 0,13, marża netto 0,14 / 0,12, Q 0,13 / 0,18; wszystkie miary wyceny ≈ 0 lub ujemne w obu (V −0,06 / −0,05, B/P
+−0,03 / −0,17, 1/PEG −0,11 / −0,04); moment 12-1 ≈ 0; odwrócenie 3 lata zmienia znak. Sprawdzenie 2018–2023 (36 mies.) — **przeszły**: Siła ≥ 7 +44,7 pp [+21,3; +68,6]
+(60 mies. +40,4), Buffett 3 + 6 + 8 (= odznaka 🏰) +44,5 [+5,1; +96,4] (+30,9), górne 20 % Q +15,1 [+7,7; +22,7] (+24,8), górne 20 % modelu +7,1 [+4,3; +9,9] (+11,9);
+**nie przeszły**: najlepsze kombinacje „jakość + tanio + moment” z odkrywania (+67 pp → +6,5…+12,0, przedziały z 0 — dodatnie, ale słabsze, typowe kurczenie po
+wyborze), V −4,4, QV −1,2, QVM +1,8. Portfele top 20 2012–2026: model 22,6 %/rok (poza próbą uczenia 2019–26: 24,9 vs SPY 17,2 %), Siła ≥ 7 wg QV 17,7 % (2012–18
+8,3 %), Q 16,8 % (9,9 %), kombinacje #1–#3 15,2–15,8 % (12,9–14,2 % / 16,1–18,5 %), QV 12,4 %, V 11,0 %; SPY 14,7 %. Wagi modelu niestabilne (ROCE −, ROE −
+przy Sile +) — silne powiązania cech, trzeba ostrożnie. Tylko sprawdzenie — nic na stronę.
