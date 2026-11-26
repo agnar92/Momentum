@@ -170,8 +170,8 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   Other steps borrow data-computable parts of the user's screenshots (user: „wsiąść części z tych zdjęć”): Wzrost — revenue / net income lines with y/y % at each point
   (`liniaRr`); Rentowność — „Przewaga w liczbach”: gross / operating / net margin and ROIC vs median of 500 (`naTle`); Wycena — trailing vs forward multiples
   (P/S, P/E, P/FCF; forward only P/E from Finviz) and P/E history 5 years (`peHistoria`: weekly price ÷ (TTM net income known 45 days after quarter end ÷ current
-  shares), log scale, bands = own terciles tanio / normalnie / drogo, prices at those P/E with today's EPS; dashed 5-year median and dotted red 1.3 × median = Lynch
-  „drogo względem własnej historii” with price and distance in the sentence above — user: „ta część z medianą … do wykresu P/E”) plus the PEG bar; Podsumowanie — „verdict” layout:
+  shares), log scale, bands = own terciles tanio / normalnie / drogo, prices at those P/E with today's EPS; dashed 5-year median, sentence shows today vs median in % — a 1.3 × median line was added
+  and REMOVED, user: „1,3× to nasza, nie Lyncha, więc nie uznaję tego” — no own thresholds on the chart) plus the PEG bar; Podsumowanie — „verdict” layout:
   SPÓŁKA (phase, scores as 5 dots, 7/7) and WYCENA (PEG label, P/E vs own 5 years with price range). Moat / management / segments / geography are opinions or data
   we do not have — not built.
   Card LAYOUT (user: „krok po kroku daj jako główne, na dole szczegóły i resztę scoringu; panel PEG i DCF na koniec krok po kroku w podsumowaniu”): top card →

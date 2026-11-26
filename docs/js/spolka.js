@@ -582,8 +582,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
     }
     function wykresPe(h) {
         const S_ = Math.max(280, SZER - 4), H = SZER < 700 ? 280 : 240, L = 40, R = S_ - 70, gora = 12, dol = H - 24, n = h.pe.length;
-        const lyn = 1.3 * h.med;   // Lynch (rozdz. 17): P/E wyraźnie ponad własną normę = drogo względem historii; próg 1,3 × mediana jest nasz
-        const mx = Math.max(...h.pe, lyn) * 1.05, mn = Math.min(...h.pe) * 0.95;
+        const mx = Math.max(...h.pe) * 1.05, mn = Math.min(...h.pe) * 0.95;
         // skala logarytmiczna: skoki P/E (np. 250× przy chwilowo niskim zysku) nie spłaszczają reszty wykresu
         const t0 = Date.parse(h.d[0]), t1 = Date.parse(h.d[n - 1]) || t0 + 1, lg = Math.log, X = (i) => L + ((Date.parse(h.d[i]) - t0) / (t1 - t0)) * (R - L), Y = (v) => gora + (1 - (lg(v) - lg(mn)) / (lg(mx) - lg(mn))) * (dol - gora);
         const zaj = [], odsun = (y) => { let v = y; while (zaj.some((z) => Math.abs(z - v) < 13)) v -= 13; zaj.push(v); return v; };
@@ -593,13 +592,13 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         for (let r = +h.d[0].slice(0, 4) + 1; r <= +h.d[n - 1].slice(0, 4); r++) { const x = Xd(Date.parse(r + "-01-01")); if (x - L > 24 && R - x > 20) lata.push([String(r), x]); }
         return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="P/E z 5 lat">
           ${pas(mn, h.t1, "kr-pas-t")}${pas(h.t1, h.t2, "kr-pas-n")}${pas(h.t2, mx, "kr-pas-d")}
-          ${[[h.t1, "kr-zero"], [h.med, "kr-pe-med"], [h.t2, "kr-zero"], [lyn, "kr-pe-lyn"]].map(([v, kl]) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="${kl}"/><text x="${L - 4}" y="${ty}" class="kr-tx${kl === "kr-pe-lyn" ? " kr-tx-lyn" : ""}" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
-            <text x="${R + 6}" y="${ty}" class="kr-tx${kl === "kr-pe-lyn" ? " kr-tx-lyn" : ""}">${esc(cena(v))}</text>`; }).join("")}
+          ${[[h.t1, "kr-zero"], [h.med, "kr-pe-med"], [h.t2, "kr-zero"]].map(([v, kl]) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="${kl}"/><text x="${L - 4}" y="${ty}" class="kr-tx" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
+            <text x="${R + 6}" y="${ty}" class="kr-tx">${esc(cena(v))}</text>`; }).join("")}
           ${(() => { const odc = [[]]; h.pe.forEach((v, i) => { if (i > 0 && Date.parse(h.d[i]) - Date.parse(h.d[i - 1]) > 21 * 864e5) odc.push([]); odc[odc.length - 1].push(`${X(i).toFixed(1)},${Y(v).toFixed(1)}`); });
               return odc.filter((o) => o.length > 1).map((o) => `<polyline points="${o.join(" ")}" fill="none" stroke-width="2" style="stroke:var(--tekst)"/>`).join(""); })()}
           <circle cx="${X(n - 1)}" cy="${Y(h.teraz)}" r="5" style="fill:var(--zolty)"><title>dziś: P/E ${esc(W.fmtNum(h.teraz, 1))}</title></circle>
           ${lata.map(([r, x]) => `<line x1="${x}" x2="${x}" y1="${dol}" y2="${dol + 4}" class="kr-os"/><text x="${x}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`).join("")}</svg>
-          <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span><span><i class="kr-ln kr-ln-med"></i>mediana 5 lat</span><span><i class="kr-ln kr-ln-lyn"></i>1,3 × mediana — Lynch: drogo względem własnej historii</span>
+          <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span><span><i class="kr-ln kr-ln-med"></i>mediana 5 lat</span>
             <span class="mut">po prawej: cena przy tym P/E i dzisiejszym zysku</span></div>`;
     }
     const naTle = (n, v, med, fmt) => {
@@ -958,7 +957,7 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
               <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
               <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
-              ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×)${h.teraz >= 1.3 * h.med ? ` · <b class="kr-nie">⚠ ponad 1,3 × mediany (${W.fmtNum(1.3 * h.med, 1)}×) — Lynch: drogo względem własnej historii</b>` : ` · zapas: kurs może wzrosnąć o <b>${W.fmtPct(1.3 * h.med / h.teraz - 1, 0)}</b> (do ${W.fmtCena(1.3 * h.med * h.eps)}, przy dzisiejszym zysku), zanim P/E przekroczy 1,3 × medianę (${W.fmtNum(1.3 * h.med, 1)}×) — wg Lyncha „drogo względem własnej historii”`}</div>${wykresPe(h)}` : ""}
+              ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×, dziś ${W.fmtPct(h.teraz / h.med - 1, 0, true)} względem mediany)</div>${wykresPe(h)}` : ""}
               <div class="mut male" style="margin:14px 0 0">PEG — cena względem tempa wzrostu zysku</div>
               ${(() => { const g = GPW ? M.ni_cagr3 : M.eps_next5; if (!(W.ok(peg) && peg > 0 && W.ok(g) && g > W.LIMIT_LYNCH)) return "";
                 const p25 = W.peg25(peg * 100 * g, g);
