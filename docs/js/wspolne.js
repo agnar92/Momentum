@@ -298,6 +298,23 @@
         return out;
     }
 
+    // Ile zarobi akcjonariusz (rocznie, 5 lat) — rozkład prognozy wg typu na: wzrost zysku spółki, zmianę P/E (cena = zysk × P/E),
+    // skup akcji (mniej akcji = większy zysk na akcję; tempo z 3 lat, najwyżej ±5 % rocznie) i dywidendę (dzisiejsza stopa, bez wzrostu).
+    // razem = (1 + wzrost)(1 + zmiana P/E)(1 + skup) − 1 + dywidenda. Skup nie jest w prognozie wg typu (ta liczy zysk spółki), więc nie liczymy go podwójnie.
+    function zwrotAkcjonariusza(pr, d) {
+        if (!pr || !pr.war) return null;
+        const lata = d.lata || 5;
+        const skup = ok(d.akcje_3l) && d.akcje_3l > -1 ? Math.max(-0.05, Math.min(0.05, 1 - Math.pow(1 + d.akcje_3l, 1 / 3))) : 0;
+        const dyw = ok(d.div) && d.div > 0 ? d.div : 0;
+        const out = { skup, dyw, war: {} };
+        Object.entries(pr.war).forEach(([k, w]) => {
+            const pt = d.cena / w.eps, peZm = Math.pow(w.pe / pt, 1 / lata) - 1;
+            const razem = (1 + w.g) * (1 + peZm) * (1 + skup) - 1 + dyw;
+            out.war[k] = { zysk: w.g, pe: peZm, skup, dyw, razem, x10k: 10000 * Math.pow(1 + razem, lata) };
+        });
+        return out;
+    }
+
     // składniki ocen (jak GRUPY w momentum/ocena.py): [pole, nazwa]
     const GRUPY = {
         wzrost: [["rev_1y", "Przychody 1 rok"], ["rev_cagr3", "Przychody 3 lata (rocznie)"], ["rev_cagr5", "Przychody 5 lat (rocznie)"], ["ni_1y", "Zysk netto 1 rok"],
@@ -372,7 +389,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", prognozaTypu, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
+    const W = { WALUTA: "USD", prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

@@ -597,6 +597,13 @@ def cykl_spadki(y, lat=10):
     return n
 
 
+def typy_cykl(ty, m):
+    """Lynch: cykliczna „przebrana” za szybko rosnącą to dalej cykliczna — gdy spółka spełnia `cykliczna(m)`, typ „Cykliczna” idzie na pierwsze miejsce."""
+    if not cykliczna(m):
+        return ty
+    return [x for x in ty if x[0] == "Cykliczna"] + [x for x in ty if x[0] != "Cykliczna"]
+
+
 def cykliczna(m):
     """Lynch: spółka cykliczna — przychody wahają się mocno (dopasowanie „Cykliczna” ≥ 60) i co najmniej 2 razy w 10 latach spadły przychody
     razem z zyskiem (`cykl_spadki`); samo przyspieszenie wzrostu (np. NVDA) to nie cykl. Dla nich PEG i niskie P/E nie działają."""
