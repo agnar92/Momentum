@@ -1762,3 +1762,16 @@ SG&A ÷ zysk brutto (−) 0,24 / 0,15, marża FCF 0,15 / 0,13, marża netto 0,14
 wyborze), V −4,4, QV −1,2, QVM +1,8. Portfele top 20 2012–2026: model 22,6 %/rok (poza próbą uczenia 2019–26: 24,9 vs SPY 17,2 %), Siła ≥ 7 wg QV 17,7 % (2012–18
 8,3 %), Q 16,8 % (9,9 %), kombinacje #1–#3 15,2–15,8 % (12,9–14,2 % / 16,1–18,5 %), QV 12,4 %, V 11,0 %; SPY 14,7 %. Wagi modelu niestabilne (ROCE −, ROE −
 przy Sile +) — silne powiązania cech, trzeba ostrożnie. Tylko sprawdzenie — nic na stronę.
+
+## Etap 118 — wagi ogólnej oceny (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „czyli po tych badaniach musimy zmienić scoring … źle pokazuje ogólny score” → „tak” (test wariantów, potem zmiana na zwycięski).
+- Oceny grup odtworzone jak na stronie (`ocena.oceny`): percentyl każdej miary wśród zbioru, brak = 0,5, średnia × 10. Wzrost: przychody 1 / 3 / 5 lat, zysk 1 / 5 lat,
+  lata z przychodami > 10 %, lata ze wzrostem zysku, przyspieszenie przychodów (prognozy EPS historycznie brak → 0,5); Siła: marże brutto / operacyjna / netto / FCF, ROE,
+  ROA, ROCE, D/E (−), quick ratio, gotówka netto / kapitalizacja, zmiana liczby akcji, capex / przychody (−), wzrost kapitału 3 lata (−) (ROIC historycznie brak);
+  Wycena: P/E (−), PEG (−), P/S (−), P/FCF (−), stopa FCF, potencjał DCF. **SB** = Siła + SG&A ÷ zysk brutto (−) i capex ÷ zysk (−) (reguły Buffetta z etapu 117).
+- Warianty: **O0** obecny 0,4 W + 0,35 S + 0,25 Wy; **O1** 0,6 S + 0,4 W; **O2** sama S; **O3** sama SB; **O4** 0,6 SB + 0,4 W; **O5** 0,5 S + 0,3 W + 0,2 Wy.
+- Miary: IC (Spearman z zwrotem) 36 / 60 mies.; nadwyżka górnych 20 % nad medianą; portfel top 20 (przegląd w styczniu) 2012–2026 vs SPY.
+  Odkrywanie: starty 2012–2017; sprawdzenie: 2018–2023 (36 mies.) / 2018–2021 (60 mies.).
+- Wybór: wariant z najwyższym IC 60 mies. w odkrywaniu; przyjęty, gdy w sprawdzeniu ma IC 36 i 60 mies. wyższe niż O0 i nadwyżkę górnych 20 % (36 mies.) z przedziałem bez 0.
+  Jeśli nie — zostaje ten z wariantów, który spełnia warunek w sprawdzeniu i ma najwyższe IC w odkrywaniu; gdy żaden — scoring bez zmian.
