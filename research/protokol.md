@@ -1690,3 +1690,10 @@ Użytkownik: „który z modeli miał największą przewidywalność wycen w dł
   bootstrap po latach startu, połowy (12/36: 2012–17 / 2018–23; 60: 2012–16 / 2017–21). Portfele top 10 / top 30 (równe wagi, przegląd w styczniu, koszt 0,1 %,
   2012-01 → 2026-09) vs SPY i równe wagi zbioru; połowy 2012–18 / 2019–26.
 - Model „przewiduje”, gdy górne 10 % lub kwintyl 5 vs 1 ma nadwyżkę > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnią w obu połowach; portfel — gdy bije SPY w obu połowach.
+
+**Wynik etapu 114** (`r139_etap114.py`, `wyniki/r139_etap114.md`): **żaden model nie przewidywał zwrotów** w top 500 w latach 2012–2026. V/P (dochód rezydualny):
+górne 10 % vs reszta 36 mies. −2,7 pp [−17,5; +10,2], 60 mies. −11,2 [−35,1; +16,9] (pierwsza połowa dodatnia, druga ujemna); kwintyl 5 vs 1 też ujemny.
+EBIT/EV: górne 10 % 60 mies. −19,0 [−42,8; +0,4], wśród FCF > 0 i D/E < 1 −15,1. Greenblatt (EBIT/EV + ROCE): najbliżej zera (kwintyl 5 vs 1 36 mies. +1,7
+[−7,0; +11,8]). Portfele: top 10 Greenblatt 14,7 %/rok = SPY 14,7 % (2012–18 13,5 vs 12,0 %, 2019–26 15,7 vs 17,2 %), top 30 14,6 %; top 10 V/P 14,0 % (obsunięcie
+−38 %), top 10 EBIT/EV 12,6 % (−42 %). Wzorzec jak w literaturze po 2007: „tanie” spółki przegrywały w 2019–26; w 2012–18 V/P i Greenblatt lekko lepsze od SPY.
+Teza „model wyceny przewiduje zwroty” **niepotwierdzona** dla żadnego z trzech. Tylko sprawdzenie — nic na stronę.
