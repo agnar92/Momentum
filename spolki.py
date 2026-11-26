@@ -374,6 +374,11 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None, dod=None):
         rows.append(dict(t=t, cik=(dod or {}).get("mapa", {}).get(t), fv_data=r.get("fv_data"), n=r.get("company", t), sector=r.get("sector"), industry=r.get("industry"), country=r.get("country"), www=r.get("www"),
                          rank=rank, m=m, hist=hist, dcf=sc, ceny=px.get(t), zw=zwroty(px.get(t)), zdarzenia=(zd or {}).get(t)))
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
+    # Lynch: u spółek o wyraźnie cyklicznych przychodach PEG nie działa (niskie P/E przy rekordowym zysku = często szczyt cyklu) — dopasowanie do typu
+    for r in rows:
+        r["m"]["cykliczna"] = next((f for t_, f, _ in ocena.typy(r["m"], r["sector"]) if t_ == "Cykliczna"), 0)
+        r["m"]["cykl_spadki"] = ocena.cykl_spadki((r.get("hist") or {}).get("y"))
+        r["m"]["cykl_peg"] = ocena.cykliczna(r["m"]) or None
     ocena.oceny(rows)
     pes = sorted(r["m"]["pe"] for r in rows if r["m"].get("pe") and r["m"]["pe"] > 0)
     pe67 = pes[int(len(pes) * 2 / 3)] if pes else None
@@ -387,7 +392,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None, dod=None):
         r["typy"] = ocena.typy(r["m"], r["sector"])
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
-        r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), r["m"].get("peg"))
+        r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), None if ocena.cykliczna(r["m"]) else r["m"].get("peg"))   # cykliczne: etykieta z DCF
         r["ostrzezenia"] = ocena.ostrzezenia(r["m"], r["typy"][0][0] if r["typy"] else None, r["rank"]) + zdarzenia.ostrzezenia(r["zdarzenia"])
     # etap 93 (Lynch): marża netto w górnej 1/3 stabilnie rosnących
     stab = [r for r in rows if r["typy"] and r["typy"][0][0] == "Stabilnie rosnąca" and r["m"].get("nm") is not None]
@@ -455,7 +460,7 @@ def zapisz(rows, out=OUT, today=None, usdpln=None):
         lista.append(dict(t=r["t"], n=r["n"], s=r["sector"], i=r["industry"], rank=r["rank"], c=r["m"].get("price"), mc=r["m"].get("mcap"),
                           o=r["oceny"], typ=r["typy"][0][0] if r["typy"] else None, peg=r["m"].get("peg"), pe=r["m"].get("pe"),
                           dcf_pot=r["m"].get("dcf_pot"), et=r["etykieta"], st=st, zw=r["zw"], rev_1y=r["m"].get("rev_1y"), rev_cagr5=r["m"].get("rev_cagr5"),
-                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None, bf=1 if ocena.buffett3(r["m"]) else None, ik=r["m"].get("ins_kupujacy") or None,
+                          roe=r["m"].get("roe"), de=r["m"].get("de"), eps_next5=r["m"].get("eps_next5"), sp=r["m"].get("spadek_2l"), ow=len(r["ostrzezenia"]) or None, dw=r["m"].get("dywidenda_stabilna") or None, bf=1 if ocena.buffett3(r["m"]) else None, ik=r["m"].get("ins_kupujacy") or None, cy=1 if ocena.cykliczna(r["m"]) else None, csz=1 if r["m"].get("cykl_szczyt") else None,
                           zd=sum(1 for z in r["zdarzenia"] or [] if z["poz"] == 2) or None, om=r["m"].get("od_maks_12m"),
                           kp=[r["kompletnosc"]["liczone"], r["kompletnosc"]["wszystkie"], r["kompletnosc"]["niepelne"]]))
         karta = {k: r.get(k) for k in ("t", "cik", "n", "sector", "industry", "country", "www", "rank", "m", "pct", "oceny", "typy", "strategie", "peg", "dcf", "etykieta", "hist", "zw", "kompletnosc", "med500", "ostrzezenia", "zdarzenia", "lynch")}

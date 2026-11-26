@@ -27,7 +27,7 @@
               <td class="n"><input type="number" step="any" min="0" data-k="${k}" data-p="koszt" value="${W.ok(x.koszt) ? +x.koszt.toFixed(2) : ""}" style="width:90px"></td>
               <td class="n">${zl(x.cena)}</td><td class="n">${pln(x.wartosc)}</td><td class="n">${W.fmtPct(x.waga, 1)} <span class="mut">/ 10 %</span></td><td class="n">${pct(x.zysk)}</td>
               <td class="n">${x.ost && x.ost.d ? `${esc(x.ost.d)}<br><span class="mut">${zl(x.ost.c)} · ${pct(x.ruch)}</span>` : "–"}</td>
-              <td>${r && r.et ? `<span class="pill p-${slug(r.et)}">${esc(r.et)}</span> <span class="mut">PEG ${W.ok(r.peg) ? W.fmtNum(r.peg) : "–"}</span>` : "–"}</td>
+              <td>${r && r.cy ? `<span class="pill" title="Lynch: u cyklicznych niskie P/E przy rekordowych zyskach to często szczyt cyklu">⚠ cykliczna${r.csz ? " — szczyt?" : ""}</span> <span class="mut">PEG ${W.ok(r.peg) ? W.fmtNum(r.peg) : "–"} nie dotyczy</span>` : r && r.et ? `<span class="pill p-${slug(r.et)}">${esc(r.et)}</span> <span class="mut">PEG ${W.ok(r.peg) ? W.fmtNum(r.peg) : "–"}</span>` : "–"}</td>
               <td><button data-usun="${k}" title="Usuń">✕</button></td></tr>`; }).join("")}</tbody></table></div>
             <div class="liczby" style="margin-top:10px"><div><small>Wartość akcji</small><b>${pln(d.suma)}</b></div><div><small>Koszt zakupu (USD)</small><b>${zl(koszt)}</b></div>
               <div><small>Zysk (w USD)</small><b>${koszt > 0 ? pct(d.suma / kurs() / koszt - 1) : "–"}</b></div><div><small>Spółek</small><b>${S.pozycje.length}</b></div></div>`
