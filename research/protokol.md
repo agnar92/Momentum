@@ -1676,3 +1676,17 @@ Użytkownik: „sprawdź inwestowanie w spółki, które mają top 10 najwyższy
 B) wśród FCF > 0 i D/E < 1 12,5 % (8,1 / 16,7 %), C) wśród Jakość 7/7 12,0 % (5,0 / 18,6 %, −39 %); SPY 14,7 % (12,0 / 17,2 %), równe wagi zbioru 13,7 %. Górne 10 %
 potencjału DCF vs reszta: 12 mies. −1,6 pp, 36 mies. −3,5, 60 mies. +1,3 (wszystkie przedziały obejmują 0, pierwsza połowa zawsze ujemna). **Teza niepotwierdzona**:
 najwyższy potencjał DCF częściej oznacza tanią spółkę z problemami (LUMN, WBD, CNC, LUV, GM) niż okazję. W 2012 tylko 3 spółki z danymi. Tylko sprawdzenie.
+
+## Etap 114 — model dochodu rezydualnego (V/P) i EBIT/EV (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „który z modeli miał największą przewidywalność wycen w długim okresie? … przetestuj to”. Literatura: V/P z modelu dochodu rezydualnego
+(Frankel i Lee 1998; Lee, Myers, Swaminathan 1999) i EBIT/EV (Gray i Carlisle 2012; Loughran i Wellman 2011). Tylko sprawdzenie — nic na stronę bez decyzji użytkownika.
+- **V/P (dochód rezydualny)** w styczniu każdego roku: V/B = 1 + Σ_{t=1..10} (ROE_t − r) · B_{t−1}/B_0 ÷ (1 + r)^t + RI_10 ÷ (r · (1 + r)^10); r = 10 %;
+  ROE_1 = bieżące ROE (zysk TTM ÷ kapitał, przycięte do −30…60 %), dalej liniowo do mediany ROE zbioru w tym miesiącu w roku 10; B_t = B_{t−1} · (1 + ROE_t · 0,6)
+  (wypłata 40 % — brak historycznych prognoz analityków, więc bez nich); V/P = (kapitał ÷ kapitalizacja) · V/B. Kapitał ≤ 0 → brak (model nie działa).
+- **EBIT/EV** = marża operacyjna TTM ÷ (EV ÷ przychody); EV = kapitalizacja + dług − gotówka. EV ≤ 0 → brak.
+- **Łącznie z jakością**: Greenblatt — suma miejsc w rankingu EBIT/EV i ROCE; oraz oba wskaźniki wśród spółek z FCF > 0 i D/E < 1.
+- Testy (top 500 USA PIT bez wykluczonych sektorów, starty 2012–2023): górne 10 % vs reszta i górne 20 % vs dolne 20 %, nadwyżka nad medianą 12 / 36 / 60 mies.,
+  bootstrap po latach startu, połowy (12/36: 2012–17 / 2018–23; 60: 2012–16 / 2017–21). Portfele top 10 / top 30 (równe wagi, przegląd w styczniu, koszt 0,1 %,
+  2012-01 → 2026-09) vs SPY i równe wagi zbioru; połowy 2012–18 / 2019–26.
+- Model „przewiduje”, gdy górne 10 % lub kwintyl 5 vs 1 ma nadwyżkę > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnią w obu połowach; portfel — gdy bije SPY w obu połowach.
