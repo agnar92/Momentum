@@ -696,7 +696,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         }
         return n;
     }
-    const cykliczna = () => (M.cykl_peg !== undefined ? !!M.cykl_peg : cyklicznaFit() >= 60 && cyklSpadki() >= 2);
+    const cykliczna = () => (M.cykl_peg !== undefined ? !!M.cykl_peg : K.sector !== "Healthcare" && cyklicznaFit() >= 60 && cyklSpadki() >= 2);
     // jak ostrzeżenie w ocena.ostrzezenia: cykliczna z zyskiem +50 % r/r i P/E poniżej mediany 5 lat — wg Lyncha często szczyt cyklu
     const cyklSzczyt = () => cykliczna() && W.ok(M.pe) && M.pe > 0 && W.ok(M.ni_1y) && M.ni_1y >= 0.5 && (!W.ok(M.pe_med5) || M.pe < M.pe_med5);
     function typPrognozy() { const ty = K.typy || []; if (!ty[0]) return null; if (cykliczna()) return "Cykliczna"; return duz6() ? W.DUZY : ty[0][0]; }
@@ -717,6 +717,8 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const L = LYNCH[ty[0][0]] || null, tp = typPrognozy(), pr = prognozaKarty();
         const N = { ostrozny: "Ostrożny", bazowy: "Bazowy", lepszy: "Lepszy" };
         return `<div class="kr-typ"><span class="pill kr-typ-p">${esc(typ)}</span><span class="mut male">${ty.slice(duz6() ? 0 : 1, 3).map((x) => `${esc(x[0])} ${x[1]}`).join(" · ")}</span></div>
+          ${cykliczna() ? `<p class="mut male" style="margin:2px 0 6px">Cykliczna: w ostatnich 10 latach przychody i zysk spadały razem ${M.cykl_spadki || cyklSpadki()} razy${fitTypu("Szybko rosnąca") >= 60 ? " — dzisiejszy szybki wzrost to faza cyklu, nie trwała cecha (Lynch: cykliczne udają szybko rosnące)" : ""}.</p>` : ""}
+          <p class="mut male" style="margin:2px 0 6px">Typ (Lynch) mówi, jak oceniać spółkę; faza z kroku 1 (Damodaran) — na jakim etapie życia jest firma${cykliczna() ? " (dojrzała firma może być cykliczna)" : ""}.</p>
           ${L ? wiecejTxt("Co mówi Lynch: czego oczekiwać i kiedy sprzedać", `<p><b>Czego oczekiwać:</b> ${esc(L[0])}</p><p><b>Kiedy sprzedać:</b> ${esc(L[1])}</p>`) : ""}
           ${pr.brak ? `<p class="mut">Brak prognozy na 5 lat: ${esc(pr.brak)}.</p>` : `
           <div class="kr-scen">${Object.entries(pr.war).map(([k, w]) => `<div class="kr-scen-k kr-scen-${k}"><small>${N[k]}</small><b class="${w.cagr >= 0 ? "plus" : "minus"}">${W.fmtPct(w.cagr, 1, true)}</b><span>rocznie · ${W.fmtCena(w.ceny[5])}</span></div>`).join("")}</div>
@@ -741,7 +743,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         const baz = pr.war ? pr.war.bazowy.cagr : null;
         return `<div class="kr-przeglad">
           ${kaf(0, "Faza", f ? `${f.nr}/${W.FAZY.length}` : "–", f ? esc(f.nazwa) : "", f ? (f.nr <= 2 || f.nr === 6 ? "zle" : f.nr === 5 ? "sr" : "dob") : "")}
-          ${kaf(1, "Typ", esc(duz6() ? "Duży zwycięzca" : (K.typy && K.typy[0] ? K.typy[0][0] : "–")), (W.ok(baz) ? `prognoza ${W.fmtPct(baz, 0, true)} rocznie` : "bez prognozy") + (typPrognozy() === "Cykliczna" && (K.typy[0] || [])[0] !== "Cykliczna" ? " · cykliczna" : ""), W.ok(baz) ? (baz >= 0.1 ? "dob" : baz >= 0.04 ? "sr" : "zle") : "")}
+          ${kaf(1, "Typ", esc(duz6() ? "Duży zwycięzca" : (K.typy && K.typy[0] ? K.typy[0][0] : "–")), (W.ok(baz) ? `prognoza ${W.fmtPct(baz, 0, true)} rocznie` : "bez prognozy") + (cykliczna() && fitTypu("Szybko rosnąca") >= 60 ? " · teraz szybki wzrost" : ""), W.ok(baz) ? (baz >= 0.1 ? "dob" : baz >= 0.04 ? "sr" : "zle") : "")}
           ${kaf(2, "Wzrost", W.ok(M.rev_cagr3) ? `${W.fmtPct(M.rev_cagr3, 0, true)}` : "–", `przychody 3 lata · ${wz}`, wzk)}
           ${kaf(3, "Przewaga", W.ok(M.nm) ? W.fmtPct(M.nm, 0) : "–", `marża netto · ${pw}`, pwk)}
           ${kaf(4, "Bezpieczeństwo", W.ok(M.net_cash) ? (M.net_cash >= 0 ? "gotówka > dług" : "dług > gotówka") : "–", bz, bzk)}
@@ -989,7 +991,10 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
 
     szukaj();
     fetch(`data/${GPW ? "gpw/" : ""}spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((k) => {
-        K = k; M = k.m; document.title = `${k.n} (${k.t}) · Fundamenta`;
+        K = k; M = k.m;
+        // jak ocena.typy_cykl: spółka cykliczna (≥ 2 lata spadku przychodów i zysku w 10 latach) ma typ „Cykliczna” na pierwszym miejscu, nawet gdy teraz szybko rośnie
+        if (cykliczna() && K.typy && K.typy[0] && K.typy[0][0] !== "Cykliczna") K.typy = [...K.typy.filter((x) => x[0] === "Cykliczna"), ...K.typy.filter((x) => x[0] !== "Cykliczna")];
+        document.title = `${k.n} (${k.t}) · Fundamenta`;
         ORIG = { pct: { ...k.pct }, oceny: { ...k.oceny }, m: { ...k.m } };
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();

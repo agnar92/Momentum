@@ -363,3 +363,9 @@ def test_cykliczna_peg_nie_dotyczy():
     st = O.strategie(dict(m, rev_5y=1, rev_1y=0.2, ni_1y=0.2, roe=0.3, de=0.1, fcf=1), "Technology")
     peg = [k for k in next(v for n, v in st.items() if n.startswith("7/7")) if k[0].startswith("PEG")][0]
     assert "nie dotyczy" in peg[0] and peg[2] is False
+
+
+def test_typy_cykl_na_pierwszym_miejscu():
+    ty = [("Szybko rosnąca", 100.0, ""), ("Cykliczna", 90.0, "")]
+    assert O.typy_cykl(ty, {"cykliczna": 90, "cykl_spadki": 3})[0][0] == "Cykliczna"
+    assert O.typy_cykl(ty, {"cykliczna": 90, "cykl_spadki": 1})[0][0] == "Szybko rosnąca"

@@ -129,7 +129,9 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   (user: „estymaty się popsuły, MU pokazuje stratę” — average-only was one-sided): ostrożny = EPS back to the 5-year average, bazowy = halfway, lepszy = today's EPS
   (`eps_teraz`, `pr.cykl`); each path's end P/E = min(price ÷ its EPS, 5-year median P/E).
   Cyclical = `ocena.cykliczna(m)`: fit ≥ 60 AND `cykl_spadki` ≥ 2 (of last 10 FY: revenue ≤ −5 % with net income ≤ −30 % or a loss; fit alone flagged 139 stocks
-  incl. NVDA / ORCL — acceleration is not a cycle); JS `cykliczna()` = `M.cykl_peg` or the same rule from `hist.y`. Fit ≥ 60 to „Szybko rosnąca” too → `lepszy`
+  incl. NVDA / ORCL — acceleration is not a cycle; Healthcare never — milestones / vaccines, `m.cykliczna` = 0); such a stock gets type „Cykliczna” FIRST
+  (`ocena.typy_cykl`, JS reorders K.typy on load; user: MU showed phase „Dojrzała stabilizacja”, type „Szybko rosnąca” and „cykliczna” at once — „to w końcu jaka?”;
+  Typ tile then says „teraz szybki wzrost”, step 2 explains type = how to value (Lynch) vs phase = life stage (Damodaran)); JS `cykliczna()` = `M.cykl_peg` or the same rule from `hist.y`. Fit ≥ 60 to „Szybko rosnąca” too → `lepszy`
   = today's EPS growing like a fast grower (0.8 × min growth, 8–25 %, ≤ 20 %; `szybka`; user: „Tak”). Lynch PEG rule (user agreed): for cyclicals PEG „nie dotyczy” —
   `pct.peg` None in `oceny` (neutral), label from DCF, 7/7 „PEG 0–2 (nie dotyczy cyklicznych)” = not met, Wycena tile / step warning, ❗ `cykl_szczyt` when net
   income ≥ +50 % y/y and P/E < 5-year median; lista `cy` / `csz` → portfel shows ⚠ and a dokup note (the user's PEG 0–2 rule itself unchanged).

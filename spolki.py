@@ -376,7 +376,8 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None, dod=None):
     log(f"Pominięte (krócej niż 5 lat na rynku): {len(pominiete)} — {', '.join(pominiete[:40])}")
     # Lynch: u spółek o wyraźnie cyklicznych przychodach PEG nie działa (niskie P/E przy rekordowym zysku = często szczyt cyklu) — dopasowanie do typu
     for r in rows:
-        r["m"]["cykliczna"] = next((f for t_, f, _ in ocena.typy(r["m"], r["sector"]) if t_ == "Cykliczna"), 0)
+        # ochrona zdrowia: skoki przychodów to kamienie milowe / jednorazowe (szczepionki), nie cykl koniunktury — nie traktujemy jako cyklicznej
+        r["m"]["cykliczna"] = 0 if r["sector"] == "Healthcare" else next((f for t_, f, _ in ocena.typy(r["m"], r["sector"]) if t_ == "Cykliczna"), 0)
         r["m"]["cykl_spadki"] = ocena.cykl_spadki((r.get("hist") or {}).get("y"))
         r["m"]["cykl_peg"] = ocena.cykliczna(r["m"]) or None
     ocena.oceny(rows)
@@ -389,7 +390,7 @@ def buduj(fv, ex, px, top=500, kandydaci=None, log=print, zd=None, dod=None):
         r["m"]["pe_gorna_tercyla"] = bool(pe67 and r["m"].get("pe") and r["m"]["pe"] >= pe67)
     for r in rows:
         r["m"]["pe_med5"] = ocena.pe_mediana(r["hist"], r["ceny"], r["m"].get("shares"))
-        r["typy"] = ocena.typy(r["m"], r["sector"])
+        r["typy"] = ocena.typy_cykl(ocena.typy(r["m"], r["sector"]), r["m"])
         r["strategie"] = ocena.strategie(r["m"], r["sector"])
         r["peg"] = ocena.peg_scenariusze(r["m"].get("pe"), r["m"].get("eps_next5"))
         r["etykieta"] = ocena.etykieta(r["m"].get("dcf_pot"), None if ocena.cykliczna(r["m"]) else r["m"].get("peg"))   # cykliczne: etykieta z DCF
