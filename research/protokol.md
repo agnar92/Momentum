@@ -1707,3 +1707,10 @@ Użytkownik: „jak się ma kupowanie po DCF, do PEG i do historycznego P/E (5 l
 - Test: w puli — „tanio” vs reszta puli, nadwyżka nad medianą zbioru 12 / 36 / 60 mies., bootstrap po latach, połowy. Portfele (równe wagi, przegląd w styczniu,
   koszt 0,1 %, 2012-01 → 2026-09): cała pula J, pula J ∩ sygnał (dla każdego sygnału), vs SPY; połowy 2012–18 / 2019–26.
 - Sygnał działa, gdy „tanio” vs reszta puli > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnie w obu połowach; portfel — gdy bije i SPY, i całą pulę J w obu połowach.
+
+**Wynik etapu 115** (`r140_etap115.py`, `wyniki/r140_etap115.md`): **żaden sygnał „tanio” nie działa** w pulach jakości (mało spółek: pula J średnio 26, J77 7; PEG
+historyczny dopiero od ~2015, więc pierwsza połowa często pusta). Pula J, 36 mies.: DCF ≥ +15 % −2,5 pp [−33,5; +27,2] (połowy −27,9 / +15,4), PEG 0–2 −3,4, PEG < 1 +2,1,
+**P/E w dolnej 1/3 własnych 5 lat −13,6 [−34,7; +7,1], obie połowy ujemne (−13,2 / −15,0)**, P/E < 0,8 × mediana −3,8. Portfele: cała pula J 13,6 %/rok (2012–18 9,1,
+2019–26 17,9 %), J + DCF 12,3 %, J + PEG 0–2 12,7 %, J + P/E nisko 11,8 %; SPY 14,7 %. J77 + PEG < 1 15,7 % (3 spółki; 2012–18 8,1 vs SPY 12,0 %). Żaden portfel nie bije
+SPY i całej puli w obu połowach. Wniosek: wśród dobrych spółek czekanie na „tanio” nie dodało zwrotu; niskie P/E względem własnej historii wręcz gorzej (dobre spółki
+tanieją zwykle z powodu, a drożeją, gdy rosną). Zgodne z etapem 89 (czekanie na tanie ceny nie lepsze) i 97. Tylko sprawdzenie — nic na stronę.
