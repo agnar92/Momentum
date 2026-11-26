@@ -180,3 +180,13 @@ test("zwrotAkcjonariusza: wzrost × zmiana P/E × skup + dywidenda; cena z progn
     assert.ok(Math.abs(b.razem - ((1 + w.cagr) * (1 + b.skup) - 1 + 0.02)) < 1e-9);
     assert.strictEqual(W.zwrotAkcjonariusza(pr, { cena: 125, akcje_3l: 0.5, div: 0 }).skup, -0.05);
 });
+
+test("dokup: pierwszy zakup bez PEG 0–2, gdy fundamenty bardzo dobre (Jakość 7/7 albo Siła ≥ 7); dokup dalej tylko przy PEG 0–2", () => {
+    const w = { H: { t: "H", c: 100, peg: 3, o: { sila: 7.5, ogolna: 7 }, rank: 10 }, I: { t: "I", c: 100, peg: 3, st: { "Jakość (7 kryteriów)": [7, 7] } },
+        J: { t: "J", c: 100, peg: 3, o: { sila: 6 } }, K: { t: "K", c: 120, peg: 3, o: { sila: 9 } }, L: { t: "L", c: 100, peg: 3, o: { sila: 9 }, sp: ["zysk"] } };
+    const p = [{ t: "H", akcje: 0 }, { t: "I", akcje: 0 }, { t: "J", akcje: 0 }, { t: "K", akcje: 1, koszt: 100 }, { t: "L", akcje: 0 }];
+    const d = W.dokup(p, w, { konto: 10000, dzis: "2026-12-05" });
+    const k = Object.fromEntries(d.pozycje.map((x) => [x.t, x.kwota]));
+    assert.deepStrictEqual(k, { H: 200, I: 200, J: 0, K: 0, L: 0 });     // J — zwykłe fundamenty, PEG 3; K — posiadana, PEG 3 → czeka; L — ⬇
+    assert.ok(d.pozycje.find((x) => x.t === "K").powod.includes("dokup przy 0–2"));
+});

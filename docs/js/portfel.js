@@ -1,4 +1,4 @@
-/* Portfel: pozycje użytkownika (localStorage), budowanie pozycji wg reguły użytkownika (W.dokup): 10 % konta na spółkę, 20 % celu na start, potem 10 % przy PEG 0–2 i ruchu ±7 %. */
+/* Portfel: pozycje użytkownika (localStorage), budowanie pozycji wg reguły użytkownika (W.dokup): 10 % konta na spółkę, 20 % celu na start (od razu przy bardzo dobrych fundamentach, inaczej przy PEG 0–2), potem 10 % przy PEG 0–2 i ruchu ±7 %. */
 (function () {
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);

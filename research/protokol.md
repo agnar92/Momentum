@@ -1676,3 +1676,108 @@ Użytkownik: „sprawdź inwestowanie w spółki, które mają top 10 najwyższy
 B) wśród FCF > 0 i D/E < 1 12,5 % (8,1 / 16,7 %), C) wśród Jakość 7/7 12,0 % (5,0 / 18,6 %, −39 %); SPY 14,7 % (12,0 / 17,2 %), równe wagi zbioru 13,7 %. Górne 10 %
 potencjału DCF vs reszta: 12 mies. −1,6 pp, 36 mies. −3,5, 60 mies. +1,3 (wszystkie przedziały obejmują 0, pierwsza połowa zawsze ujemna). **Teza niepotwierdzona**:
 najwyższy potencjał DCF częściej oznacza tanią spółkę z problemami (LUMN, WBD, CNC, LUV, GM) niż okazję. W 2012 tylko 3 spółki z danymi. Tylko sprawdzenie.
+
+## Etap 114 — model dochodu rezydualnego (V/P) i EBIT/EV (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „który z modeli miał największą przewidywalność wycen w długim okresie? … przetestuj to”. Literatura: V/P z modelu dochodu rezydualnego
+(Frankel i Lee 1998; Lee, Myers, Swaminathan 1999) i EBIT/EV (Gray i Carlisle 2012; Loughran i Wellman 2011). Tylko sprawdzenie — nic na stronę bez decyzji użytkownika.
+- **V/P (dochód rezydualny)** w styczniu każdego roku: V/B = 1 + Σ_{t=1..10} (ROE_t − r) · B_{t−1}/B_0 ÷ (1 + r)^t + RI_10 ÷ (r · (1 + r)^10); r = 10 %;
+  ROE_1 = bieżące ROE (zysk TTM ÷ kapitał, przycięte do −30…60 %), dalej liniowo do mediany ROE zbioru w tym miesiącu w roku 10; B_t = B_{t−1} · (1 + ROE_t · 0,6)
+  (wypłata 40 % — brak historycznych prognoz analityków, więc bez nich); V/P = (kapitał ÷ kapitalizacja) · V/B. Kapitał ≤ 0 → brak (model nie działa).
+- **EBIT/EV** = marża operacyjna TTM ÷ (EV ÷ przychody); EV = kapitalizacja + dług − gotówka. EV ≤ 0 → brak.
+- **Łącznie z jakością**: Greenblatt — suma miejsc w rankingu EBIT/EV i ROCE; oraz oba wskaźniki wśród spółek z FCF > 0 i D/E < 1.
+- Testy (top 500 USA PIT bez wykluczonych sektorów, starty 2012–2023): górne 10 % vs reszta i górne 20 % vs dolne 20 %, nadwyżka nad medianą 12 / 36 / 60 mies.,
+  bootstrap po latach startu, połowy (12/36: 2012–17 / 2018–23; 60: 2012–16 / 2017–21). Portfele top 10 / top 30 (równe wagi, przegląd w styczniu, koszt 0,1 %,
+  2012-01 → 2026-09) vs SPY i równe wagi zbioru; połowy 2012–18 / 2019–26.
+- Model „przewiduje”, gdy górne 10 % lub kwintyl 5 vs 1 ma nadwyżkę > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnią w obu połowach; portfel — gdy bije SPY w obu połowach.
+
+**Wynik etapu 114** (`r139_etap114.py`, `wyniki/r139_etap114.md`): **żaden model nie przewidywał zwrotów** w top 500 w latach 2012–2026. V/P (dochód rezydualny):
+górne 10 % vs reszta 36 mies. −2,7 pp [−17,5; +10,2], 60 mies. −11,2 [−35,1; +16,9] (pierwsza połowa dodatnia, druga ujemna); kwintyl 5 vs 1 też ujemny.
+EBIT/EV: górne 10 % 60 mies. −19,0 [−42,8; +0,4], wśród FCF > 0 i D/E < 1 −15,1. Greenblatt (EBIT/EV + ROCE): najbliżej zera (kwintyl 5 vs 1 36 mies. +1,7
+[−7,0; +11,8]). Portfele: top 10 Greenblatt 14,7 %/rok = SPY 14,7 % (2012–18 13,5 vs 12,0 %, 2019–26 15,7 vs 17,2 %), top 30 14,6 %; top 10 V/P 14,0 % (obsunięcie
+−38 %), top 10 EBIT/EV 12,6 % (−42 %). Wzorzec jak w literaturze po 2007: „tanie” spółki przegrywały w 2019–26; w 2012–18 V/P i Greenblatt lekko lepsze od SPY.
+Teza „model wyceny przewiduje zwroty” **niepotwierdzona** dla żadnego z trzech. Tylko sprawdzenie — nic na stronę.
+
+## Etap 115 — kupno „tanio” wśród dobrych spółek: DCF vs PEG vs P/E na tle własnych 5 lat (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „jak się ma kupowanie po DCF, do PEG i do historycznego P/E (5 lat, jeżeli jest nisko — kupować); oczywiście fundamenty muszą być dobre”. Tylko sprawdzenie.
+- Pule jakości (styczeń, PIT): **J** = przychody 5 lat > 8 %/rok, ROE > 15 %, FCF > 0, D/E 0–1 (rdzeń „Jakość 7”); **J77** = pula B z etapu 107 (Jakość 7/7 + 7/7 bez PEG + bez ⬇).
+- Sygnały „tanio” (jak na stronie): **DCF** potencjał ≥ +15 % (etap 113, `dcf_wzgl`); **PEG 0–2** (reguła dokupu użytkownika) i **PEG < 1** (historyczny PEG, wzrost z przeszłości);
+  **P/E w dolnej 1/3 własnych 5 lat** (dodatnie P/E z miesięcy t−60…t−1, ≥ 24 obserwacji; jak pasma na karcie); dodatkowo **P/E < 0,8 × mediana 5 lat**.
+- Test: w puli — „tanio” vs reszta puli, nadwyżka nad medianą zbioru 12 / 36 / 60 mies., bootstrap po latach, połowy. Portfele (równe wagi, przegląd w styczniu,
+  koszt 0,1 %, 2012-01 → 2026-09): cała pula J, pula J ∩ sygnał (dla każdego sygnału), vs SPY; połowy 2012–18 / 2019–26.
+- Sygnał działa, gdy „tanio” vs reszta puli > 0 po 36 lub 60 mies. z przedziałem bez 0 i dodatnie w obu połowach; portfel — gdy bije i SPY, i całą pulę J w obu połowach.
+
+**Wynik etapu 115** (`r140_etap115.py`, `wyniki/r140_etap115.md`): **żaden sygnał „tanio” nie działa** w pulach jakości (mało spółek: pula J średnio 26, J77 7; PEG
+historyczny dopiero od ~2015, więc pierwsza połowa często pusta). Pula J, 36 mies.: DCF ≥ +15 % −2,5 pp [−33,5; +27,2] (połowy −27,9 / +15,4), PEG 0–2 −3,4, PEG < 1 +2,1,
+**P/E w dolnej 1/3 własnych 5 lat −13,6 [−34,7; +7,1], obie połowy ujemne (−13,2 / −15,0)**, P/E < 0,8 × mediana −3,8. Portfele: cała pula J 13,6 %/rok (2012–18 9,1,
+2019–26 17,9 %), J + DCF 12,3 %, J + PEG 0–2 12,7 %, J + P/E nisko 11,8 %; SPY 14,7 %. J77 + PEG < 1 15,7 % (3 spółki; 2012–18 8,1 vs SPY 12,0 %). Żaden portfel nie bije
+SPY i całej puli w obu połowach. Wniosek: wśród dobrych spółek czekanie na „tanio” nie dodało zwrotu; niskie P/E względem własnej historii wręcz gorzej (dobre spółki
+tanieją zwykle z powodu, a drożeją, gdy rosną). Zgodne z etapem 89 (czekanie na tanie ceny nie lepsze) i 97. Tylko sprawdzenie — nic na stronę.
+
+## Etap 116 — reguła budowania pozycji użytkownika: start od razu przy bardzo dobrych fundamentach, dokup przy PEG 0–2 (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „przetestuj to: kupuj spółki początkowo za część kapitału, nie całość, dokupuj, kiedy PEG zejdzie poniżej 2, jeżeli nadal jakość i siła”. Tylko sprawdzenie.
+Symulacja miesięczna, wpłata 1 jednostki na początku każdego miesiąca, koszt 0,1 %, bez sprzedaży (spółka znikająca z danych → gotówka).
+- Bardzo dobre fundamenty (BD): Jakość 7/7 (7 kryteriów jak etap 95) albo Siła ≥ 7 (etap 95), wartości z ostatniego stycznia (przegląd raz w roku), w zbiorze top 500.
+- Najwyżej 10 spółek naraz (cel = 10 % wartości konta na spółkę). Wolne miejsce → nowa spółka BD o najwyższej Sile (u użytkownika wybiera on sam).
+- **A (nowa reguła)**: pierwszy zakup 20 % celu od razu; dokup 10 % celu najwyżej raz w miesiącu, gdy PEG 0–2, kurs ±7 % od ostatniego zakupu i spółka nadal BD.
+- **B (stara reguła)**: jak A, ale także pierwszy zakup tylko przy PEG 0–2. **C (bez PEG)**: jak A, dokup bez warunku PEG (±7 % i raz w miesiącu zostają).
+  **D (uśrednianie)**: cała wpłata co miesiąc równo do posiadanych spółek BD poniżej celu (pierwszy zakup od razu, bez PEG i ±7 %). **E**: wpłaty do SPY.
+- Gotówka czekająca: wariant 0 % i wariant „w SPY”. Okresy: 2013-01 → 2026-09 oraz osobno 2013-01 → 2019-12 i 2019-01 → 2026-09.
+- Miary: roczna stopa wpłat (IRR), wartość ÷ wpłaty, obsunięcie (TWR), średni udział gotówki.
+- Reguła A „lepsza”, gdy IRR A ≥ B i A ≥ C w obu podokresach; „PEG przy dokupie pomaga”, gdy A > C w obu podokresach.
+
+**Wynik etapu 116** (`r141_etap116.py`, `wyniki/r141_etap116.md`): reguła z protokołu **niespełniona** (A < B w 2013–19, A < C w obu podokresach). 2013–2026, gotówka
+0 %: A 3,2 %/rok (średnio 81 % gotówki), B 5,4 %, C 8,2 %, D uśrednianie 15,3 % (4 % gotówki, obsunięcie −21 %), SPY 14,8 %; gotówka w SPY: A 14,1 %, B 14,0, C 15,0,
+D 16,1, SPY 14,8. 2019–26: D 33–34 % (−37 %), A 18–25 %, SPY 16,5 %; 2013–19: D 12,6–13,2 % ≈ SPY 13,3 %. Główna przyczyna: warunki dokupu (PEG 0–2, ±7 %, raz
+w miesiącu, krok 10 % celu) zostawiają większość wpłat w gotówce; PEG przy dokupie obniża wynik o ~1 pp (A vs C, gotówka w SPY). Ograniczenia: historyczny PEG
+wśród BD brak w 2013–15 (0–1 spółek), mało spółek BD (7–32), dane PEG z przeszłego wzrostu. Tylko sprawdzenie — nic na stronę.
+
+## Etap 117 — szukanie sposobu wyboru „dobra spółka w dobrej cenie” z podziałem na lata odkrywania i lata sprawdzające (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „przeprowadź badania, które wyłonią sposób wyceny spółki, który z dużym prawdopodobieństwem pokaże przyszły wzrost na podstawie fundamentów z lat
+wcześniejszych; przetestuj wszystko, wszystkie kombinacje; zachowuj się jak inwestor na 10–20 lat”. Tylko sprawdzenie — nic na stronę bez decyzji użytkownika.
+Ochrona przed przypadkiem (przy ~120 kombinacjach kilka „wygra” losowo): **odkrywanie** na startach 2012–2017, **sprawdzenie** tylko wybranych na startach
+2018–2023 (36 mies.) / 2018–2021 (60 mies.), których przy wyborze nie oglądamy. Cel: nadwyżka zwrotu nad medianą zbioru (top 500 USA PIT bez wykluczonych sektorów).
+- **Cechy** (styczeń, percentyl w zbiorze, kierunek ustalony z góry z teorii, brak = 0,5):
+  jakość — Siła (etap 95), liczba kryteriów Jakość 7, ROE, ROA, ROCE, marże brutto / operacyjna / netto / FCF, D/E (−), zmiana liczby akcji (jak w Sile), przychody
+  3 i 5 lat, lata z przychodami > 10 %, lata ze wzrostem zysku, lata z wysokim ROIC, zmiana ROE 3 lata, zmienność zysku (−), reguły Buffetta (marża brutto > 40 %,
+  netto > 20 %, EPS 4/5, skoryg. D/E < 0,8, dług ≤ 4 × zysk, capex ÷ zysk (−), SG&A ÷ zysk brutto (−));
+  wycena (wyżej = taniej) — V/P dochodu rezydualnego (etap 114), EBIT/EV, potencjał DCF (etap 113), 1/PEG, E/P, FCF/kapitalizacja, B/P, S/P, sprzedaż/EV,
+  P/E względem własnej mediany 5 lat (−); moment — zwrot 12-1 mies. (+), zwrot 3 lata (−, odwrócenie długoterminowe).
+- **Złożone z góry (teoria):** Q = średnia percentyli jakości, V = średnia percentyli wyceny, QV = (Q + V) / 2, QVM = (Q + V + zwrot 12-1) / 3;
+  model liniowy (grzbietowy, λ = 10) na percentylach wszystkich cech, uczony tylko na latach odkrywania, cel = percentyl zwrotu 60 mies.
+- **Kombinacje:** filtr jakości {wszystkie, Siła ≥ 7, Jakość 7/7, górne 30 % Q, Buffett 3 + 6 + 8} × wybór ceny {bez, górne 30 % każdej miary wyceny w filtrze, górne
+  30 % V} × moment {bez, zwrot 12-1 w górnej połowie} = 120; miara w odkrywaniu: średnia po latach mediany nadwyżki 60 mies. (min. średnio 5 spółek).
+- **Do sprawdzenia** idą: 5 najlepszych kombinacji z odkrywania + z góry: górne 20 % Q, V, QV, QVM i modelu. Sposób „działa”, gdy w latach sprawdzających
+  nadwyżka 36 mies. > 0 z przedziałem bootstrap (po latach) bez 0 i nadwyżka 60 mies. > 0.
+- Na końcu portfele top 20 (równe wagi, przegląd w styczniu, koszt 0,1 %) dla sposobów, które przeszły (albo najlepszych 3), 2012-01 → 2026-09 vs SPY, połowy.
+
+**Wynik etapu 117** (`r142_etap117.py`, `wyniki/r142_etap117.md`): **przewiduje jakość, nie wycena.** Cechy z IC 60 mies. dodatnim w obu okresach: Siła 0,15 / 0,18,
+SG&A ÷ zysk brutto (−) 0,24 / 0,15, marża FCF 0,15 / 0,13, marża netto 0,14 / 0,12, Q 0,13 / 0,18; wszystkie miary wyceny ≈ 0 lub ujemne w obu (V −0,06 / −0,05, B/P
+−0,03 / −0,17, 1/PEG −0,11 / −0,04); moment 12-1 ≈ 0; odwrócenie 3 lata zmienia znak. Sprawdzenie 2018–2023 (36 mies.) — **przeszły**: Siła ≥ 7 +44,7 pp [+21,3; +68,6]
+(60 mies. +40,4), Buffett 3 + 6 + 8 (= odznaka 🏰) +44,5 [+5,1; +96,4] (+30,9), górne 20 % Q +15,1 [+7,7; +22,7] (+24,8), górne 20 % modelu +7,1 [+4,3; +9,9] (+11,9);
+**nie przeszły**: najlepsze kombinacje „jakość + tanio + moment” z odkrywania (+67 pp → +6,5…+12,0, przedziały z 0 — dodatnie, ale słabsze, typowe kurczenie po
+wyborze), V −4,4, QV −1,2, QVM +1,8. Portfele top 20 2012–2026: model 22,6 %/rok (poza próbą uczenia 2019–26: 24,9 vs SPY 17,2 %), Siła ≥ 7 wg QV 17,7 % (2012–18
+8,3 %), Q 16,8 % (9,9 %), kombinacje #1–#3 15,2–15,8 % (12,9–14,2 % / 16,1–18,5 %), QV 12,4 %, V 11,0 %; SPY 14,7 %. Wagi modelu niestabilne (ROCE −, ROE −
+przy Sile +) — silne powiązania cech, trzeba ostrożnie. Tylko sprawdzenie — nic na stronę.
+
+## Etap 118 — wagi ogólnej oceny (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „czyli po tych badaniach musimy zmienić scoring … źle pokazuje ogólny score” → „tak” (test wariantów, potem zmiana na zwycięski).
+- Oceny grup odtworzone jak na stronie (`ocena.oceny`): percentyl każdej miary wśród zbioru, brak = 0,5, średnia × 10. Wzrost: przychody 1 / 3 / 5 lat, zysk 1 / 5 lat,
+  lata z przychodami > 10 %, lata ze wzrostem zysku, przyspieszenie przychodów (prognozy EPS historycznie brak → 0,5); Siła: marże brutto / operacyjna / netto / FCF, ROE,
+  ROA, ROCE, D/E (−), quick ratio, gotówka netto / kapitalizacja, zmiana liczby akcji, capex / przychody (−), wzrost kapitału 3 lata (−) (ROIC historycznie brak);
+  Wycena: P/E (−), PEG (−), P/S (−), P/FCF (−), stopa FCF, potencjał DCF. **SB** = Siła + SG&A ÷ zysk brutto (−) i capex ÷ zysk (−) (reguły Buffetta z etapu 117).
+- Warianty: **O0** obecny 0,4 W + 0,35 S + 0,25 Wy; **O1** 0,6 S + 0,4 W; **O2** sama S; **O3** sama SB; **O4** 0,6 SB + 0,4 W; **O5** 0,5 S + 0,3 W + 0,2 Wy.
+- Miary: IC (Spearman z zwrotem) 36 / 60 mies.; nadwyżka górnych 20 % nad medianą; portfel top 20 (przegląd w styczniu) 2012–2026 vs SPY.
+  Odkrywanie: starty 2012–2017; sprawdzenie: 2018–2023 (36 mies.) / 2018–2021 (60 mies.).
+- Wybór: wariant z najwyższym IC 60 mies. w odkrywaniu; przyjęty, gdy w sprawdzeniu ma IC 36 i 60 mies. wyższe niż O0 i nadwyżkę górnych 20 % (36 mies.) z przedziałem bez 0.
+  Jeśli nie — zostaje ten z wariantów, który spełnia warunek w sprawdzeniu i ma najwyższe IC w odkrywaniu; gdy żaden — scoring bez zmian.
+
+**Wynik etapu 118** (`r143_etap118.py`, `wyniki/r143_etap118.md`): IC 60 mies. odkrywanie / sprawdzenie — O0 obecny 0,090 / 0,112, O1 0,118 / 0,156, O2 sama Siła 0,150 / 0,178,
+**O3 Siła + Buffett 0,163 / 0,198**, O4 0,131 / 0,170, O5 0,122 / 0,148; sama ocena Wzrostu −0,053 / 0,034, Wyceny −0,005 / 0,011. Warunek w sprawdzeniu spełniają O1–O5;
+wybór wg protokołu: **O3** (górne 20 % 36 mies. w sprawdzeniu +12,0 pp [+7,0; +17,8] vs O0 +10,0). Portfele top 20 2012–2026: O3 18,8 %/rok (2012–18 13,6 %, 2019–26
+23,8 %, obsunięcie −26 %), O2 18,5 %, O4 17,9 %, O1 17,4 %, O5 17,1 %, O0 16,1 % (9,8 / 22,0 %, −33 %), SPY 14,7 %. **Wdrożone na stronie** (decyzja użytkownika przed testem):
+ocena ogólna = Siła + SG&A ÷ zysk brutto + capex ÷ zysk netto; GPW — sama Siła (brak danych SG&A).

@@ -124,8 +124,9 @@
         return !!(s && s[0] === s[1] && s[1] > 0);
     }
     // --- portfel: budowanie pozycji wg reguły użytkownika ---------------------------------------------------------------
-    // na spółkę najwyżej 10 % konta (cel); pierwszy zakup = 20 % celu, każdy kolejny = 10 % celu — najwyżej raz w miesiącu, tylko gdy spółka jest tania
-    // (PEG 0–2) i kurs zmienił się o co najmniej ±7 % od ostatniego zakupu; drogo albo za mały ruch kursu → czekamy. Bez dokupu przy ⬇.
+    // na spółkę najwyżej 10 % konta (cel); pierwszy zakup = 20 % celu — od razu, gdy fundamenty są bardzo dobre (✔ Jakość 7/7 albo Siła finansowa ≥ 7;
+    // użytkownik: „nie wymagaj PEG 0–2 do pierwszego zakupu, jeżeli fundamenty są bardzo dobre, PEG to dodatek, nie wymóg”), inaczej przy PEG 0–2;
+    // każdy kolejny = 10 % celu — najwyżej raz w miesiącu, tylko gdy PEG 0–2 i kurs zmienił się o co najmniej ±7 % od ostatniego zakupu. Bez zakupu przy ⬇.
     // Punkty 0–10 (tanio, ocena, wielkość) ustalają kolejność, gdy budżet miesiąca nie wystarcza na wszystko.
     const DOKUP = { limit: 0.10, pierwszy: 0.20, kolejny: 0.10, ruch: 0.07, pegMax: 2, n: 500 };
     function punkty(r) {
@@ -135,6 +136,8 @@
         const wielkosc = ok(r.rank) ? Math.max(0, 1 - (r.rank - 1) / DOKUP.n) : 0.5;
         return { tanio, ocena, wielkosc, punkty: 10 * (tanio + ocena + wielkosc) / 3 };
     }
+    // bardzo dobre fundamenty (pierwszy zakup bez warunku PEG): ✔ Jakość 7/7 albo Siła finansowa ≥ 7 (etap 95: jedyna potwierdzona przewaga)
+    const bardzoDobre = (r) => !!r && (jakosc77(r) || (!!r.o && ok(r.o.sila) && r.o.sila >= 7));
     function dokup(pozycje, wiersze, opcje) {
         const o = { konto: null, budzet: null, kurs: 1, dzis: new Date().toISOString().slice(0, 10), ...(opcje || {}) };
         const kurs = ok(o.kurs) && o.kurs > 0 ? o.kurs : 1;            // waluta konta za 1 USD (IKE: PLN); konto, cel i kwoty w walucie konta, ceny akcji w USD
@@ -149,10 +152,17 @@
             if (r && r.ow) x.uwagi.push(`❗ ostrzeżenia: ${r.ow} — sprawdź kartę`);
             if (!r || x.cena === null) { x.powod = "brak danych (spółka spoza listy 500)"; return; }
             if (r.sp) { x.powod = "⬇ fundamenty słabną 2 lata z rzędu — nie dokupuj"; return; }
-            if (!x.czynniki) { x.powod = `drogo (PEG ${ok(r.peg) ? fmtNum(r.peg) : "brak"}, dokup przy 0–2) — czekam`; return; }
+            const pierwszy = !(x.akcje > 0), bezPeg = pierwszy && bardzoDobre(r);
+            if (!x.czynniki && !bezPeg) {
+                x.powod = `drogo (PEG ${ok(r.peg) ? fmtNum(r.peg) : "brak"}, ${pierwszy ? "pierwszy zakup przy 0–2 albo przy bardzo dobrych fundamentach (Jakość 7/7 lub Siła ≥ 7)" : "dokup przy 0–2"}) — czekam`; return;
+            }
+            if (!x.czynniki) {   // pierwszy zakup bez warunku PEG — kolejność przy budżecie: ocena i wielkość, „tanio” = 0
+                const ocena = r.o && ok(r.o.ogolna) ? Math.min(1, Math.max(0, r.o.ogolna / 10)) : 0.5, wielkosc = ok(r.rank) ? Math.max(0, 1 - (r.rank - 1) / DOKUP.n) : 0.5;
+                x.czynniki = { tanio: 0, ocena, wielkosc, punkty: 10 * (ocena + wielkosc) / 3 }; x.mn = x.czynniki.punkty;
+                x.uwagi.push(`bardzo dobre fundamenty — pierwszy zakup bez warunku PEG (PEG ${ok(r.peg) && r.peg > 0 ? fmtNum(r.peg) : "brak"})`);
+            }
             if (cel <= 0) { x.powod = "podaj wartość konta"; return; }
             if (x.wartosc >= cel - 0.005) { x.powod = "pozycja pełna (10 % konta)"; return; }
-            const pierwszy = !(x.akcje > 0);
             if (!pierwszy && x.ost && x.ost.d && x.ost.d.slice(0, 7) === o.dzis.slice(0, 7)) { x.powod = `już kupione w tym miesiącu (${x.ost.d})`; return; }
             if (!pierwszy && x.ruch !== null && Math.abs(x.ruch) < DOKUP.ruch) { x.powod = `kurs ${fmtPct(x.ruch, 1, true)} od ostatniego zakupu — czekam na ruch ±${Math.round(100 * DOKUP.ruch)} %`; return; }
             x.pierwszy = pierwszy;
@@ -337,7 +347,7 @@
     }
     // miejsce w rankingu (1 = najlepsza) wg funkcji klucza wśród wierszy z wartością
     // kierunek wskaźnika (jak GRUPY w ocena.py): 1 = więcej lepiej, -1 = mniej lepiej
-    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1, capex_przych: -1, kapital_3l: -1 };
+    const KIER = { de: -1, pe: -1, peg: -1, ps: -1, pfcf: -1, akcje_3l: -1, capex_przych: -1, kapital_3l: -1, bf_sga_gp: -1, bf_capex_ni: -1 };
     const DODATNIE = ["pe", "peg", "pfcf", "ps"];
     // percentyl wartości v wśród wartości wszystkich spółek (etap 77) (jak ocena.percentyle): (mniejsze + ½ równych) / n, odwrócony dla „mniej lepiej”
     function percentyl(lst, v, pole) {
@@ -346,12 +356,13 @@
         const p = (mn + 0.5 * rw) / lst.length;
         return (KIER[pole] || 1) > 0 ? p : 1 - p;
     }
-    // oceny z percentyli (jak ocena.oceny): grupy + ogólna 0,4 / 0,35 / 0,25
-    function ocenyZ(pct) {
+    // ocena ogólna (jak ocena.OGOLNA, etap 118) = jakość: składniki Siły + SG&A ÷ zysk brutto i capex ÷ zysk netto (reguły Buffetta); wzrost i wycena osobno
+    const OGOLNA = [...GRUPY.sila, ["bf_sga_gp", "SG&A ÷ zysk brutto (mniej = lepiej, Buffett)"], ["bf_capex_ni", "Capex ÷ zysk netto (mniej = lepiej, Buffett)"]];
+    // oceny z percentyli (jak ocena.oceny): grupy + ogólna = jakość (bez GPW: tam brak danych Buffetta → ogólna = Siła)
+    function ocenyZ(pct, gpw) {
         const o = {};
         Object.keys(GRUPY).forEach((g) => { o[g] = skladOceny(pct, g).ocena; });
-        const w = [["wzrost", 0.4], ["sila", 0.35], ["wycena", 0.25]].filter(([g]) => ok(o[g]));
-        o.ogolna = w.length === 3 || (w.length === 2 && ok(o.wzrost)) ? Math.round(10 * w.reduce((a, [g, x]) => a + o[g] * x, 0) / w.reduce((a, [, x]) => a + x, 0)) / 10 : null;
+        o.ogolna = gpw ? o.sila : skladOceny(pct, "ogolna", { ogolna: OGOLNA }).ocena;
         return o;
     }
     // pola, które użytkownik może uzupełnić sam: [pole, nazwa, jednostka] („%” = wpisywane w procentach)
@@ -389,7 +400,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
+    const W = { WALUTA: "USD", OGOLNA, bardzoDobre, prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

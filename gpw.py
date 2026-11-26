@@ -382,11 +382,8 @@ def oceny(rows):
             vals = [pc.get(p, 0.5) for p, _ in pola]
             n_ = sum(1 for p, _ in pola if p in pc)
             o[gr] = round(10 * sum(vals) / len(vals), 1) if n_ >= 2 else None
-        if o["wzrost"] is not None and (o["sila"] is not None or o["wycena"] is not None):
-            w = [(o[k], wg) for k, wg in (("wzrost", 0.4), ("sila", 0.35), ("wycena", 0.25)) if o[k] is not None]
-            o["ogolna"] = round(sum(a * b for a, b in w) / sum(b for _, b in w), 1)
-        else:
-            o["ogolna"] = None
+        # ocena ogólna = jakość (etap 118: Siła + reguły Buffetta; GPW nie ma danych SG&A i capex ÷ zysk → sama Siła, też przeszła sprawdzenie)
+        o["ogolna"] = o["sila"]
         r["oceny"] = o
 
 
