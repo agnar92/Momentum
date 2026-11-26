@@ -1714,3 +1714,16 @@ historyczny dopiero od ~2015, więc pierwsza połowa często pusta). Pula J, 36 
 2019–26 17,9 %), J + DCF 12,3 %, J + PEG 0–2 12,7 %, J + P/E nisko 11,8 %; SPY 14,7 %. J77 + PEG < 1 15,7 % (3 spółki; 2012–18 8,1 vs SPY 12,0 %). Żaden portfel nie bije
 SPY i całej puli w obu połowach. Wniosek: wśród dobrych spółek czekanie na „tanio” nie dodało zwrotu; niskie P/E względem własnej historii wręcz gorzej (dobre spółki
 tanieją zwykle z powodu, a drożeją, gdy rosną). Zgodne z etapem 89 (czekanie na tanie ceny nie lepsze) i 97. Tylko sprawdzenie — nic na stronę.
+
+## Etap 116 — reguła budowania pozycji użytkownika: start od razu przy bardzo dobrych fundamentach, dokup przy PEG 0–2 (protokół przed uruchomieniem, 2026-11-26)
+
+Użytkownik: „przetestuj to: kupuj spółki początkowo za część kapitału, nie całość, dokupuj, kiedy PEG zejdzie poniżej 2, jeżeli nadal jakość i siła”. Tylko sprawdzenie.
+Symulacja miesięczna, wpłata 1 jednostki na początku każdego miesiąca, koszt 0,1 %, bez sprzedaży (spółka znikająca z danych → gotówka).
+- Bardzo dobre fundamenty (BD): Jakość 7/7 (7 kryteriów jak etap 95) albo Siła ≥ 7 (etap 95), wartości z ostatniego stycznia (przegląd raz w roku), w zbiorze top 500.
+- Najwyżej 10 spółek naraz (cel = 10 % wartości konta na spółkę). Wolne miejsce → nowa spółka BD o najwyższej Sile (u użytkownika wybiera on sam).
+- **A (nowa reguła)**: pierwszy zakup 20 % celu od razu; dokup 10 % celu najwyżej raz w miesiącu, gdy PEG 0–2, kurs ±7 % od ostatniego zakupu i spółka nadal BD.
+- **B (stara reguła)**: jak A, ale także pierwszy zakup tylko przy PEG 0–2. **C (bez PEG)**: jak A, dokup bez warunku PEG (±7 % i raz w miesiącu zostają).
+  **D (uśrednianie)**: cała wpłata co miesiąc równo do posiadanych spółek BD poniżej celu (pierwszy zakup od razu, bez PEG i ±7 %). **E**: wpłaty do SPY.
+- Gotówka czekająca: wariant 0 % i wariant „w SPY”. Okresy: 2013-01 → 2026-09 oraz osobno 2013-01 → 2019-12 i 2019-01 → 2026-09.
+- Miary: roczna stopa wpłat (IRR), wartość ÷ wpłaty, obsunięcie (TWR), średni udział gotówki.
+- Reguła A „lepsza”, gdy IRR A ≥ B i A ≥ C w obu podokresach; „PEG przy dokupie pomaga”, gdy A > C w obu podokresach.
