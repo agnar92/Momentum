@@ -592,13 +592,13 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         for (let r = +h.d[0].slice(0, 4) + 1; r <= +h.d[n - 1].slice(0, 4); r++) { const x = Xd(Date.parse(r + "-01-01")); if (x - L > 24 && R - x > 20) lata.push([String(r), x]); }
         return `<svg viewBox="0 0 ${S_} ${H}" width="${S_}" height="${H}" class="kr-tempo" role="img" aria-label="P/E z 5 lat">
           ${pas(mn, h.t1, "kr-pas-t")}${pas(h.t1, h.t2, "kr-pas-n")}${pas(h.t2, mx, "kr-pas-d")}
-          ${[h.t1, h.med, h.t2].map((v) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="kr-zero"/><text x="${L - 4}" y="${ty}" class="kr-tx" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
+          ${[[h.t1, "kr-zero"], [h.med, "kr-pe-med"], [h.t2, "kr-zero"]].map(([v, kl]) => { const ty = odsun(Y(v) + 4); return `<line x1="${L}" x2="${R}" y1="${Y(v)}" y2="${Y(v)}" class="${kl}"/><text x="${L - 4}" y="${ty}" class="kr-tx" text-anchor="end">${esc(W.fmtNum(v, 1))}×</text>
             <text x="${R + 6}" y="${ty}" class="kr-tx">${esc(cena(v))}</text>`; }).join("")}
           ${(() => { const odc = [[]]; h.pe.forEach((v, i) => { if (i > 0 && Date.parse(h.d[i]) - Date.parse(h.d[i - 1]) > 21 * 864e5) odc.push([]); odc[odc.length - 1].push(`${X(i).toFixed(1)},${Y(v).toFixed(1)}`); });
               return odc.filter((o) => o.length > 1).map((o) => `<polyline points="${o.join(" ")}" fill="none" stroke-width="2" style="stroke:var(--tekst)"/>`).join(""); })()}
           <circle cx="${X(n - 1)}" cy="${Y(h.teraz)}" r="5" style="fill:var(--zolty)"><title>dziś: P/E ${esc(W.fmtNum(h.teraz, 1))}</title></circle>
           ${lata.map(([r, x]) => `<line x1="${x}" x2="${x}" y1="${dol}" y2="${dol + 4}" class="kr-os"/><text x="${x}" y="${H - 6}" class="kr-tx kr-tx-os" text-anchor="middle">${r}</text>`).join("")}</svg>
-          <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span>
+          <div class="kr-leg male"><span><i class="kr-sw kr-pas-t"></i>tanio (dolna 1/3 P/E z 5 lat)</span><span><i class="kr-sw kr-pas-n"></i>normalnie</span><span><i class="kr-sw kr-pas-d"></i>drogo (górna 1/3)</span><span><i class="kr-ln kr-ln-med"></i>mediana 5 lat</span>
             <span class="mut">po prawej: cena przy tym P/E i dzisiejszym zysku</span></div>`;
     }
     const naTle = (n, v, med, fmt) => {
@@ -846,6 +846,53 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
             return `<div class="ly-w"><span>${v === true ? ikona3(true) : v === false ? ikona3(false) : '<span class="mut">?</span>'}</span><span>${esc(co.replace(" (ocena własna)", ""))}</span>
               <span class="ly-wart ly-moje"><button data-ly="${esc(k)}" data-v="1" class="${v === true ? "akt" : ""}">tak</button><button data-ly="${esc(k)}" data-v="0" class="${v === false ? "akt" : ""}">nie</button></span></div>`; }).join("")}</div>`;
     }
+    // notatka użytkownika w „Werdykcie” (użytkownik: „za czym firma zarabia i czy jest firmą jednego produktu … początkowy tekst, co mam sprawdzić sam”);
+    // localStorage `fundamenta_notatki` {T: {t, d}}; pusty = szablon z pytaniami (tekst stały, nie generowany)
+    const NT_KLUCZ = "fundamenta_notatki";
+    const SZABLON = `NA CZYM FIRMA ZARABIA
+Główne produkty / usługi i ich udział w przychodach (%):
+- 
+
+FIRMA JEDNEGO PRODUKTU?
+Największy produkt = ...% przychodów. Największy klient = ...% przychodów. (Ponad 50 % z jednego źródła = ryzyko jak przy jednym produkcie.)
+- 
+
+JAK DŁUGO POTRWA PRZEWAGA
+Skąd przewaga: patent (do kiedy?), marka, sieć / skala, wysokie koszty zmiany dostawcy dla klienta, licencja / regulacje?
+- 
+
+CO MOŻE ZEPSUĆ BIZNES
+Konkurencja, tańsze zamienniki, zmiana technologii, regulacje, utrata kluczowego klienta, zadłużenie.
+- 
+
+DLACZEGO TERAZ I KIEDY SPRZEDAM
+Co musi się wydarzyć, żeby spółka zarobiła? Po czym poznam, że historia się zepsuła?
+- 
+
+GDZIE SPRAWDZIŁEM
+Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka („Item 1A. Risk Factors”), przychody wg segmentów; prezentacja dla inwestorów.
+- `;
+    const czytajNt = () => { try { return (JSON.parse(localStorage.getItem(NT_KLUCZ)) || {})[K.t] || null; } catch (e) { return null; } };
+    function zapiszNt(t) {
+        try { const w = JSON.parse(localStorage.getItem(NT_KLUCZ)) || {}; if (t && t.trim() && t !== SZABLON) w[K.t] = { t, d: new Date().toISOString().slice(0, 10) }; else delete w[K.t]; localStorage.setItem(NT_KLUCZ, JSON.stringify(w)); return true; } catch (e) { return false; }
+    }
+    function notatka() {
+        const n = czytajNt();
+        const zrodlo = !GPW && K.cik ? ` · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(K.cik)}&type=10-K" target="_blank" rel="noopener">raport roczny 10-K w SEC</a>` : "";
+        return `<div class="mut male" style="margin:14px 0 4px"><b>Twoja notatka</b> — tego nie ma w danych: za czym firma zarabia i czy to firma jednego produktu${zrodlo}</div>
+          <textarea id="notatka" class="notatka" rows="14" spellcheck="true">${esc(n ? n.t : SZABLON)}</textarea>
+          <div class="mut male"><span id="notatka-st">${n ? `zapisana ${esc(n.d)} (w tej przeglądarce)` : "szablon — uzupełnij, zapisze się sama (w tej przeglądarce)"}</span> · <button id="notatka-szablon" class="maly">wstaw szablon od nowa</button></div>`;
+    }
+    function podlaczNotatke(root) {
+        const t = root.querySelector("#notatka"), st = root.querySelector("#notatka-st");
+        if (!t) return;
+        let czas = null;
+        const zapisz = () => { const ok = zapiszNt(t.value); st.textContent = ok ? (t.value === SZABLON ? "szablon — uzupełnij, zapisze się sama (w tej przeglądarce)" : `zapisana ${new Date().toISOString().slice(0, 10)} (w tej przeglądarce)`) : "nie udało się zapisać (tryb prywatny?)"; };
+        t.addEventListener("input", () => { window.clearTimeout(czas); czas = window.setTimeout(zapisz, 600); });
+        t.addEventListener("change", zapisz);
+        const b = root.querySelector("#notatka-szablon");
+        if (b) b.addEventListener("click", () => { if (t.value === SZABLON || window.confirm("Zastąpić Twoją notatkę pustym szablonem?")) { t.value = SZABLON; zapisz(); } });
+    }
     function krokTresc(i) {
         const SF = seriaFazy(), f = fazaTeraz(SF);
         const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
@@ -910,7 +957,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
               <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
               <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
-              ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×)</div>${wykresPe(h)}` : ""}
+              ${h ? `<div class="mut male" style="margin:14px 0 4px">Gdzie jest P/E dziś na tle własnych 5 lat? Dziś <b>${W.fmtNum(h.teraz, 1)}×</b> — <b class="${poPe[1]}">${poPe[0]}</b> (mediana 5 lat ${W.fmtNum(h.med, 1)}×, dziś ${W.fmtPct(h.teraz / h.med - 1, 0, true)} względem mediany)</div>${wykresPe(h)}` : ""}
               <div class="mut male" style="margin:14px 0 0">PEG — cena względem tempa wzrostu zysku</div>
               ${(() => { const g = GPW ? M.ni_cagr3 : M.eps_next5; if (!(W.ok(peg) && peg > 0 && W.ok(g) && g > W.LIMIT_LYNCH)) return "";
                 const p25 = W.peg25(peg * 100 * g, g);
@@ -943,6 +990,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
           ${zaPrzeciw()}
           ${ocenaWlasna()}
+          ${notatka()}
           <p class="mut male">Zestawienie faktów z danych i reguł z książek — decyzję podejmujesz sam. Swoją „dwuminutową historię” spółki zapisz w <a href="portfel.html">portfelu</a>.</p>
           <div id="wycena" class="kr-wycena"></div>`;
     }
@@ -992,7 +1040,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
         el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => { krok(+b.dataset.kr); przewinDo(el); }));
-        if (k === KROKI.length - 1) { wycena(); podlaczOcenyLynch(el); }  // panel PEG / DCF (edytowalny) i ocena własna na końcu
+        if (k === KROKI.length - 1) { wycena(); podlaczOcenyLynch(el); podlaczNotatke(el); }  // panel PEG / DCF (edytowalny) i ocena własna na końcu
     }
 
     function sprawozdania(tryb) {

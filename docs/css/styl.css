@@ -366,3 +366,11 @@ td.zawin { white-space: normal; min-width: 180px; }
 .zw-odw small { color: var(--tekst2); font-size: 12px; }
 .zw-odw b { font-size: 20px; margin: 2px 0 4px; }
 .zw-odw b.kr-tak { color: var(--zielony); } .zw-odw b.kr-nie { color: var(--czerwony); }
+
+/* notatka użytkownika w „Werdykcie” */
+.notatka { width: 100%; box-sizing: border-box; font: 13px/1.45 inherit; font-family: inherit; padding: 10px 12px; border: 1px solid var(--siatka); border-radius: 10px; background: var(--pole, var(--tlo2)); color: inherit; resize: vertical; }
+button.maly { font-size: 11px; padding: 2px 8px; }
+
+/* wykres P/E: mediana 5 lat */
+.kr-pe-med { stroke: var(--tekst2); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.kr-ln { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--tekst2); vertical-align: middle; margin-right: 4px; }
