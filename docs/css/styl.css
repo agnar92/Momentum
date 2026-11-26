@@ -347,3 +347,22 @@ td.zawin { white-space: normal; min-width: 180px; }
 .kr-scen-k small { display: block; color: var(--tekst2); font-size: 12px; } .kr-scen-k b { font-size: 22px; } .kr-scen-k span { display: block; font-size: 12px; color: var(--tekst2); }
 .kr-scen-ostrozny { border-top-color: var(--czerwony); } .kr-scen-bazowy { border-top-color: var(--niebieski); } .kr-scen-lepszy { border-top-color: var(--zielony); }
 @media (max-width: 700px) { .kr-przeglad { grid-template-columns: repeat(2, 1fr); } .kr-kafel b { font-size: 17px; } .kr-scen-k b { font-size: 18px; } .kr-p-q, .kr-p-a { font-size: 13px; } .kr-p-a { white-space: normal; } }
+
+/* ile zarobi akcjonariusz — rozkład rocznego zwrotu */
+.zw { margin: 4px 0 14px; }
+.zw-sklad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
+@media (max-width: 700px) { .zw-sklad { grid-template-columns: 1fr; } }
+.zw-w { display: grid; grid-template-columns: 88px 1fr 52px; align-items: center; gap: 6px; font-size: 12px; margin: 3px 0; }
+.zw-w b { text-align: right; }
+.zw-n { color: var(--mut, #6b7280); }
+.zw-p { position: relative; height: 10px; background: var(--tlo2, #f3f4f6); border-radius: 5px; }
+.zw-p::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--siatka, #d1d5db); }
+.zw-p i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+.zw-10k { display: block; font-size: 11px; }
+.zw .kr-scen-k { min-width: 0; }
+.zw-odw { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.zw-odw > div { background: var(--tlo2); border-radius: 10px; padding: 10px 12px; }
+.zw-odw small, .zw-odw b, .zw-odw span { display: block; }
+.zw-odw small { color: var(--tekst2); font-size: 12px; }
+.zw-odw b { font-size: 20px; margin: 2px 0 4px; }
+.zw-odw b.kr-tak { color: var(--zielony); } .zw-odw b.kr-nie { color: var(--czerwony); }

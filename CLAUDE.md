@@ -135,6 +135,11 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   = today's EPS growing like a fast grower (0.8 × min growth, 8–25 %, ≤ 20 %; `szybka`; user: „Tak”). Lynch PEG rule (user agreed): for cyclicals PEG „nie dotyczy” —
   `pct.peg` None in `oceny` (neutral), label from DCF, 7/7 „PEG 0–2 (nie dotyczy cyklicznych)” = not met, Wycena tile / step warning, ❗ `cykl_szczyt` when net
   income ≥ +50 % y/y and P/E < 5-year median; lista `cy` / `csz` → portfel shows ⚠ and a dokup note (the user's PEG 0–2 rule itself unchanged).
+  Step „Wycena” opens with „Ile może zarobić akcjonariusz” (user, Nov 2026, after app.stocksimplifier.com screenshots: „ile zarobię jako akcjonariusz … jaki zwrot
+  roczny … plus ten DCF”; `zwrotBlok` → `W.zwrotAkcjonariusza(pr, {cena, akcje_3l, div})`: annual return = (1 + EPS growth)(1 + P/E change)(1 + net buyback,
+  3-year share count, ±5 % cap) − 1 + today's dividend yield, per projection scenario, bars per component, 10 000 after 5 years) and „Odwrotny DCF” (`odwrotnyDcf`:
+  `W.implikowane` growth / FCF margin that make DCF = price, vs 3-year revenue growth). Projection: `medNaBazie` rescales the GAAP 5-year median P/E to the
+  normalized-EPS basis (KO showed false P/E compression). `kr77` marks „PEG 0–2” as not met for cyclicals in JS too.
   The old 6-step description below still applies to the reused parts.
 - Card section `#krok` „Ocena krok po kroku” (user: screenshots of another site's stock walkthrough, „mini ocena … krok po kroku” from 7/7): steps Faza / Wzrost /
   Rentowność / Bezpieczeństwo / Wycena (5-zone PEG bar, prices at PEG 0.5 / 1 / 2 / 3) / Podsumowanie (7/7 criteria by index from `strategie` key starting „7/7”, so GPW

@@ -170,3 +170,13 @@ test("prognozaTypu: cykliczna i szybko rosnąca — wariant lepszy od dzisiejsze
     assert.strictEqual(b.war.ostrozny.cagr, a.war.ostrozny.cagr);
     assert.ok(b.war.lepszy.pe <= 10);
 });
+
+test("zwrotAkcjonariusza: wzrost × zmiana P/E × skup + dywidenda; cena z prognozy zgadza się z rozkładem", () => {
+    const pr = W.prognozaTypu({ typ: "Stabilnie rosnąca", eps_baza: 5, pe: 25, cena: 125, pe_med5: 20, rev_cagr3: 0.1, rev_cagr5: 0.1, eps_next5: 0.1 });
+    const z = W.zwrotAkcjonariusza(pr, { cena: 125, akcje_3l: -0.06, div: 0.02 });
+    const b = z.war.bazowy, w = pr.war.bazowy;
+    assert.ok(Math.abs((1 + b.zysk) * (1 + b.pe) - 1 - w.cagr) < 1e-9);
+    assert.ok(b.skup > 0.019 && b.skup < 0.021);
+    assert.ok(Math.abs(b.razem - ((1 + w.cagr) * (1 + b.skup) - 1 + 0.02)) < 1e-9);
+    assert.strictEqual(W.zwrotAkcjonariusza(pr, { cena: 125, akcje_3l: 0.5, div: 0 }).skup, -0.05);
+});
