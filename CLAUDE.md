@@ -124,7 +124,9 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   5-year average EPS, scenarios ostrożny ×0.5 / P/E ×0.8, bazowy, lepszy ×1.25 capped) / Wzrost (`pytWzrost`) / **Przewaga** (`pytPrzewaga` Buffett margins, SG&A, capex,
   pretax vs industry + `marzeWykres`) / Bezpieczeństwo (`pytBezp`, 2020 crash bars) / **Zarząd** (`krokZarzad`: insiders, buybacks, dividend, funds / analysts, 8-K 5.02
   + payout charts) / Wycena / **Werdykt** (`zaPrzeciw`: every checked rule from 7/7, Buffett, Lynch zakup / sell list / unikaj, ⬇, ❗ warnings in „Za” / „Przeciw”
-  columns; `ocenaWlasna`: Lynch qualitative tick boxes shared with the Lynch section, localStorage `fundamenta_lynch`; PEG / DCF panel). Questions via `pytania()`.
+  columns; `ocenaWlasna`: Lynch qualitative tick boxes shared with the Lynch section, localStorage `fundamenta_lynch`; `notatka`: user's own note (user: „za czym firma
+  zarabia i czy jest firmą jednego produktu … początkowy tekst, co mam sprawdzić sam”) prefilled with a fixed question template `SZABLON`, autosaved to localStorage
+  `fundamenta_notatki` {T: {t, d}}, link to the 10-K; PEG / DCF panel). Questions via `pytania()`.
   VISUAL FIRST (user, Nov 2026: „strasznie dużo tekstu … bardziej obrazowo, na pierwszy rzut oka, max 1 minuta”): `przeglad()` = 8 clickable tiles above the
   step tabs (colour = share of ✓ among answered checks: ≥ 70 % green, ≥ 40 % yellow, else red; one key number each); every check is ONE line ✓/✗ · short
   question · value (`pytania()`, lists `lWzrost` / `lPrzewaga` / `lBezp` / `lZarzad` incl. the 7/7 criteria via `kr77`); long texts only in `<details>`

@@ -846,6 +846,53 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
             return `<div class="ly-w"><span>${v === true ? ikona3(true) : v === false ? ikona3(false) : '<span class="mut">?</span>'}</span><span>${esc(co.replace(" (ocena własna)", ""))}</span>
               <span class="ly-wart ly-moje"><button data-ly="${esc(k)}" data-v="1" class="${v === true ? "akt" : ""}">tak</button><button data-ly="${esc(k)}" data-v="0" class="${v === false ? "akt" : ""}">nie</button></span></div>`; }).join("")}</div>`;
     }
+    // notatka użytkownika w „Werdykcie” (użytkownik: „za czym firma zarabia i czy jest firmą jednego produktu … początkowy tekst, co mam sprawdzić sam”);
+    // localStorage `fundamenta_notatki` {T: {t, d}}; pusty = szablon z pytaniami (tekst stały, nie generowany)
+    const NT_KLUCZ = "fundamenta_notatki";
+    const SZABLON = `NA CZYM FIRMA ZARABIA
+Główne produkty / usługi i ich udział w przychodach (%):
+- 
+
+FIRMA JEDNEGO PRODUKTU?
+Największy produkt = ...% przychodów. Największy klient = ...% przychodów. (Ponad 50 % z jednego źródła = ryzyko jak przy jednym produkcie.)
+- 
+
+JAK DŁUGO POTRWA PRZEWAGA
+Skąd przewaga: patent (do kiedy?), marka, sieć / skala, wysokie koszty zmiany dostawcy dla klienta, licencja / regulacje?
+- 
+
+CO MOŻE ZEPSUĆ BIZNES
+Konkurencja, tańsze zamienniki, zmiana technologii, regulacje, utrata kluczowego klienta, zadłużenie.
+- 
+
+DLACZEGO TERAZ I KIEDY SPRZEDAM
+Co musi się wydarzyć, żeby spółka zarobiła? Po czym poznam, że historia się zepsuła?
+- 
+
+GDZIE SPRAWDZIŁEM
+Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka („Item 1A. Risk Factors”), przychody wg segmentów; prezentacja dla inwestorów.
+- `;
+    const czytajNt = () => { try { return (JSON.parse(localStorage.getItem(NT_KLUCZ)) || {})[K.t] || null; } catch (e) { return null; } };
+    function zapiszNt(t) {
+        try { const w = JSON.parse(localStorage.getItem(NT_KLUCZ)) || {}; if (t && t.trim() && t !== SZABLON) w[K.t] = { t, d: new Date().toISOString().slice(0, 10) }; else delete w[K.t]; localStorage.setItem(NT_KLUCZ, JSON.stringify(w)); return true; } catch (e) { return false; }
+    }
+    function notatka() {
+        const n = czytajNt();
+        const zrodlo = !GPW && K.cik ? ` · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(K.cik)}&type=10-K" target="_blank" rel="noopener">raport roczny 10-K w SEC</a>` : "";
+        return `<div class="mut male" style="margin:14px 0 4px"><b>Twoja notatka</b> — tego nie ma w danych: za czym firma zarabia i czy to firma jednego produktu${zrodlo}</div>
+          <textarea id="notatka" class="notatka" rows="14" spellcheck="true">${esc(n ? n.t : SZABLON)}</textarea>
+          <div class="mut male"><span id="notatka-st">${n ? `zapisana ${esc(n.d)} (w tej przeglądarce)` : "szablon — uzupełnij, zapisze się sama (w tej przeglądarce)"}</span> · <button id="notatka-szablon" class="maly">wstaw szablon od nowa</button></div>`;
+    }
+    function podlaczNotatke(root) {
+        const t = root.querySelector("#notatka"), st = root.querySelector("#notatka-st");
+        if (!t) return;
+        let czas = null;
+        const zapisz = () => { const ok = zapiszNt(t.value); st.textContent = ok ? (t.value === SZABLON ? "szablon — uzupełnij, zapisze się sama (w tej przeglądarce)" : `zapisana ${new Date().toISOString().slice(0, 10)} (w tej przeglądarce)`) : "nie udało się zapisać (tryb prywatny?)"; };
+        t.addEventListener("input", () => { window.clearTimeout(czas); czas = window.setTimeout(zapisz, 600); });
+        t.addEventListener("change", zapisz);
+        const b = root.querySelector("#notatka-szablon");
+        if (b) b.addEventListener("click", () => { if (t.value === SZABLON || window.confirm("Zastąpić Twoją notatkę pustym szablonem?")) { t.value = SZABLON; zapisz(); } });
+    }
     function krokTresc(i) {
         const SF = seriaFazy(), f = fazaTeraz(SF);
         const cagr = (x, n) => (W.ok(x) && x > -1 ? Math.pow(1 + x, 1 / n) - 1 : null);
@@ -943,6 +990,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           ${M.spadek_2l || ow ? `<p class="male" style="color:var(--czerwony-t)">${M.spadek_2l ? "⬇ Przychody lub zysk spadają 2 lata z rzędu. " : ""}${ow ? `❗ Ostrzeżenia: ${ow} (zob. „Kluczowe liczby”).` : ""}</p>` : ""}
           ${zaPrzeciw()}
           ${ocenaWlasna()}
+          ${notatka()}
           <p class="mut male">Zestawienie faktów z danych i reguł z książek — decyzję podejmujesz sam. Swoją „dwuminutową historię” spółki zapisz w <a href="portfel.html">portfelu</a>.</p>
           <div id="wycena" class="kr-wycena"></div>`;
     }
@@ -992,7 +1040,7 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
           <div class="kr-tresc"><h3>${k + 1}. ${KROKI[k]}</h3>${krokTresc(k)}</div>
           <div class="kr-nawig">${k > 0 ? `<button data-kr="${k - 1}">← ${KROKI[k - 1]}</button>` : "<span></span>"}${k < KROKI.length - 1 ? `<button data-kr="${k + 1}" class="dalej">${KROKI[k + 1]} →</button>` : ""}</div>`;
         el.querySelectorAll("button[data-kr]").forEach((b) => b.addEventListener("click", () => { krok(+b.dataset.kr); przewinDo(el); }));
-        if (k === KROKI.length - 1) { wycena(); podlaczOcenyLynch(el); }  // panel PEG / DCF (edytowalny) i ocena własna na końcu
+        if (k === KROKI.length - 1) { wycena(); podlaczOcenyLynch(el); podlaczNotatke(el); }  // panel PEG / DCF (edytowalny) i ocena własna na końcu
     }
 
     function sprawozdania(tryb) {
