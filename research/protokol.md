@@ -1727,3 +1727,9 @@ Symulacja miesięczna, wpłata 1 jednostki na początku każdego miesiąca, kosz
 - Gotówka czekająca: wariant 0 % i wariant „w SPY”. Okresy: 2013-01 → 2026-09 oraz osobno 2013-01 → 2019-12 i 2019-01 → 2026-09.
 - Miary: roczna stopa wpłat (IRR), wartość ÷ wpłaty, obsunięcie (TWR), średni udział gotówki.
 - Reguła A „lepsza”, gdy IRR A ≥ B i A ≥ C w obu podokresach; „PEG przy dokupie pomaga”, gdy A > C w obu podokresach.
+
+**Wynik etapu 116** (`r141_etap116.py`, `wyniki/r141_etap116.md`): reguła z protokołu **niespełniona** (A < B w 2013–19, A < C w obu podokresach). 2013–2026, gotówka
+0 %: A 3,2 %/rok (średnio 81 % gotówki), B 5,4 %, C 8,2 %, D uśrednianie 15,3 % (4 % gotówki, obsunięcie −21 %), SPY 14,8 %; gotówka w SPY: A 14,1 %, B 14,0, C 15,0,
+D 16,1, SPY 14,8. 2019–26: D 33–34 % (−37 %), A 18–25 %, SPY 16,5 %; 2013–19: D 12,6–13,2 % ≈ SPY 13,3 %. Główna przyczyna: warunki dokupu (PEG 0–2, ±7 %, raz
+w miesiącu, krok 10 % celu) zostawiają większość wpłat w gotówce; PEG przy dokupie obniża wynik o ~1 pp (A vs C, gotówka w SPY). Ograniczenia: historyczny PEG
+wśród BD brak w 2013–15 (0–1 spółek), mało spółek BD (7–32), dane PEG z przeszłego wzrostu. Tylko sprawdzenie — nic na stronę.
