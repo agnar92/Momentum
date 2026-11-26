@@ -184,7 +184,8 @@ def scal_br(d, br):
         d["br"] = True
     # koszty sprzedaży + ogólnego zarządu (SG&A) i koszt wytworzenia — tylko spółki raportujące w wariancie kalkulacyjnym
     sp_, za_, ko_ = rok("IncomeDistributionExpenses"), rok("IncomeAdministrativExpenses"), rok("IncomeCostOfSales")
-    d["sga_r"] = {e: abs(sp_[e]) + abs(za_.get(e, 0.0)) for e in sp_ if e in za_}
+    # wariant porównawczy: biznesradar pokazuje tam koszty sprzedaży i zarządu jako 0 → to brak danych, nie zerowe koszty
+    d["sga_r"] = {e: abs(sp_[e]) + abs(za_[e]) for e in sp_ if e in za_ and abs(sp_[e]) + abs(za_[e]) > 0}
     d["koszt_r"] = {e: abs(v) for e, v in ko_.items()}
     d["dyw_r"] = {e: abs(v) for e, v in rok("CashflowDividend").items()}
     d["skup_r"] = {e: abs(v) for e, v in rok("CashflowStockBuyback").items()}
