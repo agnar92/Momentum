@@ -374,3 +374,7 @@ button.maly { font-size: 11px; padding: 2px 8px; }
 /* wykres P/E: mediana 5 lat */
 .kr-pe-med { stroke: var(--tekst2); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .kr-ln { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--tekst2); vertical-align: middle; margin-right: 4px; }
+
+/* strategia Lyncha: kafelki typów */
+.ly-typy { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ly-typ { background: var(--tlo2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
