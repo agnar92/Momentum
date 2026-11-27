@@ -398,3 +398,8 @@ button.maly { font-size: 11px; padding: 2px 8px; }
 .ly-kand .male:first-child { min-width: 150px; }
 .ly-kand button { padding: 4px 10px; border-radius: 14px; }
 @media (max-width: 700px) { .ly-p-g { grid-template-columns: 24px 1fr auto; } .ly-p-g .ly-a { grid-column: 2 / 4; white-space: normal; } .ly-mini, .ly-dwa, .ly-pas, .ly-pas-op, .ly-pod { margin-left: 0; } }
+.ly-prog { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.ly-prog button.akt { background: var(--tekst); color: var(--tlo); }
+.ly-tab tr[data-t] { cursor: pointer; } .ly-tab tr[data-t]:hover { background: var(--tlo2); }
+.ly-s { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--tlo2); }
+.ly-s-t { background: #bbf7d0; color: #14532d; } .ly-s-u { background: #fef08a; color: #713f12; } .ly-s-d { background: #fecaca; color: #7f1d1d; }

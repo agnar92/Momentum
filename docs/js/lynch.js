@@ -87,23 +87,23 @@
             try { window.history.replaceState(null, "", "?t=" + encodeURIComponent(t)); } catch (e) { /* bez historii */ }
         }).catch(() => { $("ly-wynik").innerHTML = '<p class="mut">Nie udało się wczytać danych spółki.</p>'; });
     }
-    // kandydaci: sito jak wcześniej, przyciski po typach
-    const pegOk = (r, max) => W.ok(r.peg) && r.peg > 0 && r.peg <= max;
-    const SITA = [
-        ["🏛 Duży zwycięzca", (r) => W.duzy(r) && pegOk(r, 2)],
-        ["Stabilnie rosnące", (r) => r.typ === "Stabilnie rosnąca" && !W.duzy(r) && pegOk(r, 1.5)],
-        ["Szybko rosnące", (r) => r.typ === "Szybko rosnąca" && !r.cy && !W.duzy(r) && pegOk(r, 1.6)],
-        ["Wolno rosnące 💰", (r) => r.typ === "Wolno rosnąca" && !W.duzy(r) && !!r.dw && W.ok(r.div) && r.div > 0],
-        ["Cykliczne", (r) => !!r.cy && !r.csz],
-        ["Wychodzące z kłopotów", (r) => r.typ === "Wychodząca z kłopotów" && !W.duzy(r) && W.ok(r.de) && r.de >= 0 && r.de < 1],
-    ];
+    // lista Buffetta (8 reguł z książki Mary Buffett) → sprawdzian Lyncha (lista kontrolna, sygnały sprzedaży, „czego unikać”, ⬇) → cena (PEG w strefach)
+    const BF = "Buffett (8 reguł)";
+    let PROG = 7;
+    const strefa = (r) => (r.cy ? ["nie dotyczy (cykliczna)", ""] : !W.ok(r.peg) || r.peg <= 0 ? ["–", ""] : r.peg < 1 ? ["tanio", "ly-s-t"] : r.peg <= 2 ? ["uczciwie", "ly-s-u"] : ["drogo", "ly-s-d"]);
     function kandydaci() {
-        const baza = ROWS.filter((r) => !r.sp && !r.ls && !r.lu && r.lz);
-        $("kandydaci").innerHTML = SITA.map(([n, f]) => {
-            const l = baza.filter(f).sort((a, b) => (b.lz[0] / b.lz[1]) - (a.lz[0] / a.lz[1]) || ((b.o && b.o.ogolna) || 0) - ((a.o && a.o.ogolna) || 0)).slice(0, 8);
-            return `<div class="ly-kand"><span class="mut male">${esc(n)}</span>${l.length ? l.map((r) => `<button data-t="${esc(r.t)}" title="${esc(r.n)}">${esc(r.t)}${r.bf ? " 🏰" : ""}</button>`).join("") : '<span class="mut male">dziś brak</span>'}</div>`;
-        }).join("");
-        document.querySelectorAll("#kandydaci [data-t]").forEach((b) => b.addEventListener("click", () => { pokaz(b.dataset.t); $("ly-t").scrollIntoView({ behavior: "smooth", block: "start" }); }));
+        const l = ROWS.filter((r) => r.st && r.st[BF] && r.st[BF][0] >= PROG)
+            .map((r) => ({ r, fl: (r.ls || 0) + (r.lu || 0) + (r.sp ? 1 : 0), lz: r.lz ? r.lz[0] / r.lz[1] : 0 }))
+            .sort((a, b) => b.r.st[BF][0] - a.r.st[BF][0] || a.fl - b.fl || b.lz - a.lz);
+        $("ly-prog").innerHTML = `<span class="mut male">Reguły Buffetta spełnione:</span> ${[8, 7, 6].map((n) => `<button data-p="${n}" class="${n === PROG ? "akt" : ""}">${n === 8 ? "8 z 8" : `≥ ${n} z 8`}</button>`).join("")}`;
+        document.querySelectorAll("#ly-prog [data-p]").forEach((b) => b.addEventListener("click", () => { PROG = +b.dataset.p; kandydaci(); }));
+        $("kandydaci").innerHTML = l.length ? `<div class="przewin"><table class="male ly-tab"><thead><tr><th>Spółka</th><th class="n">Buffett</th><th class="n">Lynch</th><th class="n">Flagi</th><th>Cena (PEG)</th></tr></thead><tbody>
+          ${l.map(({ r, fl }) => { const [sn, sk] = strefa(r); return `<tr data-t="${esc(r.t)}"><td><b>${esc(r.t)}</b>${r.bf ? " 🏰" : ""}${r.dw ? " 💰" : ""}<br><span class="mut">${esc(r.n)}</span></td>
+            <td class="n">${r.st[BF][0]} z 8</td><td class="n">${r.lz ? `${r.lz[0]} z ${r.lz[1]}` : "–"}</td><td class="n">${fl ? `<b class="kr-nie">${fl} ✗</b>` : '<b class="kr-tak">✓</b>'}</td>
+            <td><span class="ly-s ${sk}">${esc(sn)}</span> ${W.ok(r.peg) && r.peg > 0 && !r.cy ? `<span class="mut">${W.fmtNum(r.peg)}</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div>
+          <p class="mut male">Lynch = punkty jego listy kontrolnej przed zakupem (z tych, które da się policzyć). Flagi = sygnały sprzedaży Lyncha, „czego unikać” i ⬇. Cena: PEG &lt; 1 tanio · 1–2 uczciwie · &gt; 2 drogo.</p>`
+            : '<p class="mut">Dziś żadna spółka nie spełnia tylu reguł.</p>';
+        document.querySelectorAll("#kandydaci tr[data-t]").forEach((tr) => tr.addEventListener("click", () => { pokaz(tr.dataset.t); $("ocena").scrollIntoView({ behavior: "smooth", block: "start" }); }));
     }
     $("ly-ok").addEventListener("click", () => pokaz($("ly-t").value));
     $("ly-t").addEventListener("keydown", (e) => { if (e.key === "Enter") pokaz($("ly-t").value); });
