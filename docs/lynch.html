@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Strategia Lyncha · Fundamenta</title>
+<title>Lynch · Fundamenta</title>
 <script>try{var m=localStorage.getItem("fundamenta_motyw");if(m)document.documentElement.dataset.motyw=m}catch(e){}</script>
 <link rel="stylesheet" href="css/styl.css">
 <link rel="icon" href="icons/icon-192.png">
@@ -14,17 +14,17 @@
 </div></header>
 <main class="main">
   <section class="karta">
-    <h2>Strategia Petera Lyncha krok po kroku</h2>
-    <div class="pod">Jak Lynch wybierał spółki, budował portfel i decydował o sprzedaży — na podstawie „One Up on Wall Street”, „Beating the Street” i „Learn to Earn”.
-      Każdy krok mówi, co sprawdzić i gdzie to znaleźć na stronie. Na końcu: kandydaci z listy 500, którzy dziś przechodzą sprawdzalne punkty jego metody. Dane z <span id="asof">–</span>.</div>
-    <div id="kroki"></div>
+    <h2>Lynch: szybka ocena spółki</h2>
+    <div class="pod">Wpisz ticker — 7 pytań Petera Lyncha, odpowiedź z danych i wykres. Dane z <span id="asof">–</span>.</div>
+    <div class="ly-szukaj"><input id="ly-t" list="ly-lista" placeholder="Ticker, np. MSFT" autocomplete="off"><datalist id="ly-lista"></datalist><button id="ly-ok">Oceń</button></div>
+    <div id="ly-wynik"></div>
   </section>
-  <section class="karta" id="kandydaci-sekcja">
-    <h2>Kandydaci wg Lyncha — z danych</h2>
-    <div class="pod" id="kandydaci-pod"></div>
+  <section class="karta">
+    <h2>Kandydaci wg Lyncha</h2>
+    <div class="pod">Spółki, które dziś przechodzą sito Lyncha dla swojego typu (bez ⬇, bez sygnałów sprzedaży i ostrzeżeń „czego unikać”, cena odpowiednia dla typu). Kliknij, żeby ocenić.</div>
     <div id="kandydaci"></div>
   </section>
-  <div class="stopka">Informacyjnie, nie rekomendacja. Lista kandydatów to tylko sito z liczb — Lynch kupował dopiero wtedy, gdy znał historię spółki (krok 3). Spółki wybierasz sam.</div>
+  <div class="stopka">Informacyjnie, nie rekomendacja. Spółki wybierasz sam — Lynch kupował dopiero wtedy, gdy znał historię firmy.</div>
 </main>
 <script src="js/wspolne.js"></script>
 <script src="js/lynch.js"></script>

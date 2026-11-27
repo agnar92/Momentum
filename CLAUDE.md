@@ -182,12 +182,12 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   scoring dodatkowy”; `#szczegoly-tresc` hidden, `szczegoly(otworz)` draws charts on first open because they size from the element width, state in localStorage
   `fundamenta_szczegoly`, `a[href="#szczegoly"]` opens it). Clicking any step / Dalej / Wstecz scrolls to the top of `#krok` (`przewinDo`, minus the sticky header;
   user: „jeżeli klikam następny, daj stronę na początek tego kroku”).
-- `lynch.html` + `js/lynch.js` (user, Nov 2026: „wprowadź krok po kroku pełną strategię Petera Lyncha … budowanie portfela … sugestie potencjalnych inwestycji”):
-  8 steps (where to look, 6 types as tiles with expectations / price / when to sell, two-minute story → card note, famous numbers, price incl. PEG and
-  (growth + yield) ÷ P/E, what to avoid, portfolio building, monitoring) as static summaries of his books + candidate tables per type from lista.json:
-  no ⬇, no Lynch sell signal (`ls`), no „avoid” flag (`lu`), not at cycle peak; price by type as `W.CENA_TYPU` (fast ≤ 1.6, stalwart ≤ 1.5, 🏛 ≤ 2), slow growers =
-  💰, cyclicals = strict `cy`, turnarounds D/E < 1; sorted by Lynch buy-checklist share `lz`, then Ogólna; ≤ 8 per type. lista fields from `ocena.lynch_skrot`
-  (lz, ls, lu, lw) + `div`. Nav link „Lynch” on every page.
+- `lynch.html` + `js/lynch.js` (user, Nov 2026: „pełna strategia Petera Lyncha … sugestie potencjalnych inwestycji”, then „to jest blok tekstu … proste lekkie
+  narzędzie … pytanie za pytaniem … potencjał wzrostowy i wycena, czy nie przepłacamy” — NO long texts): ticker input (?t=) → 3 tiles (potential 5 y from
+  `W.prognozaTypu` + `W.zwrotAkcjonariusza` like the card; price = PEG vs type limit `W.CENA_TYPU`, cyclicals „nie dotyczy”; Lynch x of y ✓) + 7 one-line questions
+  with ✓/✗, answer and a mini chart (type, profit up, revenue up — mini bars from hist.y; safety cash vs debt; PEG zone bar; P/E vs 5-year median; red flags = Lynch
+  „unikaj” + sell signals + ⬇) + link to the full card; candidates per type as ticker buttons (no ⬇, no `ls`, no `lu`, price by type, slow growers 💰, cyclicals strict
+  `cy`, turnarounds D/E < 1; sorted by `lz` then Ogólna; ≤ 8). lista fields from `ocena.lynch_skrot` (lz, ls, lu, lw) + `div`. Nav link „Lynch” on every page.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in

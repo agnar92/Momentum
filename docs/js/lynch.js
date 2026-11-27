@@ -1,79 +1,118 @@
-/* Strategia Petera Lyncha krok po kroku + kandydaci wg typów (z lista.json: lz / ls / lu / lw z ocena.lynch_skrot).
-   Teksty: streszczenia zasad z jego książek (stałe, nie generowane). Progi cen dla typów jak W.CENA_TYPU. */
+/* Lynch: szybka ocena spółki — 7 pytań z odpowiedzią z danych i małym wykresem, na górze potencjał / cena / wynik; kandydaci wg typów jako przyciski.
+   Użytkownik: „proste lekkie narzędzie … pytanie za pytaniem … potencjał wzrostowy i wycena, czy nie przepłacamy”. */
 (function () {
     const W = window.W;
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    const TYPY = [
-        ["Szybko rosnąca", "Małe i średnie firmy rosnące 20–25 % rocznie. Tu są „dziesięciokrotne” spółki — i największe straty, gdy wzrost się kończy.",
-            "PEG ok. 1 lub mniej; uważaj na P/E wyraźnie ponad tempo wzrostu.", "Gdy kończy się miejsce na ekspansję (sprzedaż w tych samych sklepach / produktach hamuje), P/E skacze do absurdalnych poziomów, odchodzą kluczowi ludzie."],
-        ["Stabilnie rosnąca", "Duże, solidne firmy rosnące 10–12 % rocznie. Nie zrobią fortuny, ale chronią portfel w recesji.",
-            "Kupuj przy rozsądnym P/E (PEG ≤ ok. 1,5); zysk 30–50 % w rok lub dwa to dobry wynik.", "Po wzroście 30–50 %, gdy historia się nie zmieniła — rozważ zamianę na inną, tańszą stabilnie rosnącą; gdy sprzedaż hamuje lub P/E odbiega wysoko od normy."],
-        ["Wolno rosnąca", "Duże, dojrzałe firmy rosnące niewiele szybciej niż gospodarka. Kupuje się je dla dywidendy.",
-            "Liczy się wysoka i bezpieczna dywidenda, wypłacana i podnoszona od lat.", "Gdy dywidenda jest zagrożona (wypłata przekracza zysk), firma traci udział w rynku albo „dyworsyfikuje” przejęciami."],
-        ["Cykliczna", "Zyski rosną i spadają razem z gospodarką (auta, linie lotnicze, chemia, półprzewodniki).",
-            "Niskie P/E to pułapka — przy szczycie zysków P/E jest najniższe. Kupuj, gdy zyski są w dołku, a widać pierwsze oznaki poprawy.", "Pod koniec cyklu: rosną zapasy, spadają ceny, firma buduje nowe moce, popyt słabnie."],
-        ["Wychodząca z kłopotów", "Firma po stratach lub kryzysie, która może wrócić do zysków.",
-            "Kluczowe: czy przetrwa (gotówka vs dług, jaki to dług) i czy plan naprawy już działa.", "Gdy naprawa się udała i spółka stała się „normalna” — oceń ją od nowa jak zwykłą spółkę."],
-        ["Ukryte aktywa", "Wartość w aktywach, których rynek nie widzi (gotówka, ziemia, marki, udziały w innych firmach).",
-            "Porównaj wartość aktywów z kapitalizacją; ważne, by nie było dużego długu, który je „zje”.", "Gdy rynek uzna wartość aktywów albo pojawi się nowe zadłużenie lub emisje akcji."],
-    ];
-    const KROKI = [
-        ["Szukaj tam, gdzie masz przewagę", `<p>„Inwestuj w to, co znasz”: produkty, z których korzystasz, branża, w której pracujesz, sklepy, które są zawsze pełne. To dopiero <b>początek</b>, nie powód do zakupu — dalej trzeba sprawdzić firmę.</p>
-            <p class="mut male">Na stronie: <a href="index.html">lista 500 spółek</a> z filtrami (sektor, typ, 🏰, Siła ≥ 7, 💰). Szukaj firm, których działalność umiesz wyjaśnić w kilku zdaniach.</p>`],
-        ["Przypisz spółkę do jednego z sześciu typów", null],
-        ["Opowiedz historię w dwie minuty", `<p>Zanim kupisz, powiedz sobie na głos: <b>dlaczego ta spółka mnie interesuje, co musi się wydarzyć, żeby zarobiła, i co może pójść źle</b>. Jeśli nie potrafisz — nie kupuj.</p>
-            <p class="mut male">Na karcie spółki: krok „Werdykt” → „Twoja notatka” (szablon pytań: na czym firma zarabia, czy to firma jednego produktu, jak długo potrwa przewaga, co może zepsuć biznes).</p>`],
-        ["Sprawdź liczby, które się liczą", `<p>Udział głównego produktu w sprzedaży · P/E na tle wzrostu i własnej historii · gotówka netto na akcję · dług i jego rodzaj · dywidendy · wartość księgowa i ukryte aktywa · przepływy pieniężne · zapasy względem sprzedaży · tempo wzrostu zysku · marża przed opodatkowaniem na tle branży.</p>
-            <p class="mut male">Na karcie spółki: „Więcej: pełny scoring i szczegóły” → sekcja Lyncha („Liczby, które się liczą”, lista kontrolna przed zakupem, 13 cech idealnej spółki).</p>`],
-        ["Sprawdź cenę", `<p><b>PEG</b> (P/E ÷ wzrost zysku): ok. 1 = cena uczciwa, ok. 0,5 = okazja, 2 i więcej = drogo. <b>Wskaźnik Lyncha z dywidendą</b> = (wzrost zysku % + stopa dywidendy %) ÷ P/E: poniżej 1 słabo, 1,5 przyzwoicie, 2 i więcej bardzo dobrze. Unikaj spółek z P/E skrajnie wysokim — nawet świetna firma kupiona za drogo daje lata czekania.</p>
-            <p class="mut male">PEG nie dotyczy spółek cyklicznych. Lynch traktował cenę jako sprawdzian „czy nie przepłacam”, a nie jako powód do zakupu. Na karcie: krok „Wycena” (PEG, P/E na tle 5 lat, ile może zarobić akcjonariusz).</p>`],
-        ["Czego unikać", `<p>Najgorętszej spółki w najgorętszej branży · „następnego Microsoftu / IBM” · „dyworsyfikacji” (przejęć poza głównym biznesem) · spółek-szeptów bez zysku z wielką historią · firm zależnych od jednego klienta · spółek kupowanych tylko dlatego, że spadły.</p>
-            <p class="mut male">Na karcie: lista „Czego unikać” (✗ = ostrzeżenie) i kolumna „Przeciw” w „Werdykcie”.</p>`],
-        ["Zbuduj portfel", `<p>Mały inwestor nie potrzebuje wielu spółek — lepiej kilka, które naprawdę znasz (Lynch: kilka do kilkunastu). Każda musi mieć swoją historię.
-              <b>Mieszaj typy</b>: stabilnie rosnące dają spokój w gorszych latach, szybko rosnące — szansę na duży zysk, cykliczne i wychodzące z kłopotów — okazje w odpowiednim momencie; wolno rosnące — głównie dywidendę.
-              Dokładaj do spółek, których historia się poprawia, a nie do tych, które tylko spadły („nie wyrywaj kwiatów, żeby podlewać chwasty”). Inwestuj regularnie, nie zgaduj ruchów rynku.</p>
-            <p class="mut male">Na stronie: <a href="portfel.html">Portfel</a> — Twój skład wg typów Lyncha, cel 10 % konta na spółkę i Twoje zasady dokupu (ustalasz je sam).</p>`],
-        ["Pilnuj historii i sprzedawaj z powodu, nie z nerwów", `<p>Co kilka miesięcy (Lynch: mniej więcej co pół roku) sprawdź, czy historia jest aktualna. Sprzedawaj, gdy <b>historia się psuje</b> — nie dlatego, że kurs spadł albo „już dość urósł”. Sygnały sprzedaży są inne dla każdego typu (krok 2).</p>
-            <p class="mut male">Na karcie: lista „Kiedy sprzedać” dla typu spółki (⚠); znacznik ⬇ = przychody lub zysk spadają 2 lata z rzędu. W portfelu: przypomnienie o przeglądzie po 6 miesiącach i ostrzeżenie, gdy typ spółki zmienił się od zakupu.</p>`],
-    ];
-    function typyTab() {
-        return `<div class="ly-typy">${TYPY.map(([t, a, b, c]) => `<div class="ly-typ"><b>${esc(t)}</b><div class="male">${esc(a)}</div>
-            <div class="male"><span class="mut">Cena:</span> ${esc(b)}</div><div class="male"><span class="mut">Kiedy sprzedać:</span> ${esc(c)}</div></div>`).join("")}</div>
-          <p class="mut male">Typ każdej spółki jest na jej karcie (krok „Typ”, z dopasowaniem do pozostałych typów) i w kolumnie „Typ” na liście. Oprócz tego: 🏛 „Duży zwycięzca” — Twoja kategoria spółek rosnących od 10 lat.</p>`;
+    let ROWS = [], IDX = {};
+    const ik = (s) => (s === true ? '<b class="kr-tak">✓</b>' : s === false ? '<b class="kr-nie">✗</b>' : '<span class="mut">–</span>');
+    // mini słupki SVG: wartości po latach, ujemne na czerwono
+    function slupki(et, w, fmt) {
+        const z = w.filter(W.ok); if (z.length < 2) return "";
+        const S = 260, H = 70, mx = Math.max(0, ...z), mn = Math.min(0, ...z), r = mx - mn || 1, b = S / w.length;
+        const Y = (v) => 4 + (H - 18) * (mx - v) / r, y0 = Y(0);
+        return `<svg viewBox="0 0 ${S} ${H}" class="ly-mini" role="img">${w.map((v, i) => !W.ok(v) ? "" : `<rect x="${i * b + 3}" width="${b - 6}" y="${Math.min(Y(v), y0)}" height="${Math.max(1, Math.abs(Y(v) - y0))}" class="${v < 0 ? "ly-minus" : "ly-plus"}"><title>${esc(et[i])}: ${esc(fmt(v))}</title></rect>`).join("")}
+          ${et.map((e, i) => `<text x="${i * b + b / 2}" y="${H - 2}" text-anchor="middle" class="kr-tx">${esc(e)}</text>`).join("")}</svg>`;
     }
-    function kroki() {
-        $("kroki").innerHTML = KROKI.map(([t, h], i) => `<details class="objasnienie" ${i < 2 ? "open" : ""}><summary><b>${i + 1}. ${esc(t)}</b></summary><div style="margin-top:6px">${h || typyTab()}</div></details>`).join("");
+    // poziomy pasek ze strefami (PEG: tanio / uczciwie / drogo)
+    function strefy(v, progi, nazwy, max) {
+        if (!W.ok(v)) return "";
+        const poz = Math.max(1, Math.min(99, 100 * Math.min(v, max) / max));
+        return `<div class="ly-pas">${progi.map((p, i) => `<i style="width:${100 * ((p - (progi[i - 1] || 0)) / max)}%" class="ly-z${i}"></i>`).join("")}<span style="left:${poz}%"></span></div>
+          <div class="ly-pas-op mut">${nazwy.map((n) => `<span>${esc(n)}</span>`).join("")}</div>`;
     }
-    // sito kandydatów: bez ⬇, bez sygnałów sprzedaży Lyncha (ls), bez ostrzeżeń „czego unikać” (lu), nie na szczycie cyklu; cena wg typu jak W.CENA_TYPU
+    const dwa = (a, an, b, bn, fmt) => {
+        const mx = Math.max(Math.abs(a || 0), Math.abs(b || 0)) || 1, sz = (x) => Math.max(2, 100 * Math.abs(x || 0) / mx);
+        return `<div class="ly-dwa"><span>${esc(an)}</span><i style="width:${sz(a)}%" class="ly-plus"></i><b>${esc(fmt(a))}</b><span>${esc(bn)}</span><i style="width:${sz(b)}%" class="ly-szary"></i><b>${esc(fmt(b))}</b></div>`;
+    };
+    const mld = (v) => (W.ok(v) ? W.fmtUsd(v) : "–");
+    function typSpolki(K) {
+        const m = K.m || {}, ty = K.typy || [];
+        if (W.duzy({ st: Object.fromEntries(Object.entries(K.strategie || {}).map(([k, l]) => [k, [l.filter((x) => x[2]).length, l.length]])) })) return W.DUZY;
+        if (m.cykl_peg) return "Cykliczna";
+        return ty[0] ? ty[0][0] : null;
+    }
+    function prognoza(K, typ) {
+        const m = K.m || {}, y = ((K.hist && K.hist.y) || []).filter((r) => W.ok(r[2])).slice(-5);
+        const epsN = m.peg_norm_uzyte && W.ok(m.eps_norm) ? m.eps_norm : m.eps;
+        const cykl = typ === "Cykliczna";
+        const eps = cykl && y.length >= 3 && W.ok(m.shares) && m.shares > 0 ? y.reduce((a, r) => a + r[2], 0) / y.length / m.shares : epsN;
+        const med = W.ok(m.pe_med5) && !cykl && m.peg_norm_uzyte && W.ok(m.eps_norm) && m.eps_norm > 0 && W.ok(m.eps) && m.eps > 0 ? m.pe_med5 * m.eps / m.eps_norm : m.pe_med5;
+        const fit = (n) => { const c = (K.typy || []).find((x) => x[0] === n); return c ? c[1] : 0; };
+        const pr = W.prognozaTypu({ typ, eps_baza: eps, eps_teraz: cykl ? epsN : null, szybka: fit("Szybko rosnąca") >= 60, pe: m.pe, cena: m.price, pe_med5: med,
+            rev_cagr3: m.rev_cagr3, rev_cagr5: m.rev_cagr5, eps_next5: m.eps_next5 });
+        return { pr, z: pr.war ? W.zwrotAkcjonariusza(pr, { cena: m.price, akcje_3l: m.akcje_3l, div: m.div }) : null };
+    }
+    function ocen(K) {
+        const m = K.m || {}, hy = ((K.hist && K.hist.y) || []).slice(-6), lat = hy.map((r) => "'" + String(r[0]).slice(2, 4));
+        const typ = typSpolki(K), cykl = !!m.cykl_peg, L = K.lynch || {};
+        const zak = W.ZAKRES_TYPU[typ] || null, limit = (W.CENA_TYPU[typ] || [])[0] || 2;
+        const ni = hy.map((r) => r[2]), rv = hy.map((r) => r[1]);
+        const wzr = (w) => { let n = 0, k = 0; for (let i = 1; i < w.length; i++) if (W.ok(w[i]) && W.ok(w[i - 1])) { k++; if (w[i] > w[i - 1]) n++; } return [n, k]; };
+        const [zn, zk] = wzr(ni), [rn, rk] = wzr(rv);
+        const flagi = [...(L.unikaj || []).filter((x) => x[2] === false).map((x) => x[0]), ...(L.lista || []).filter((x) => x[2] === false).map((x) => "Sprzedaż: " + x[0]), ...(m.spadek_2l ? ["⬇ przychody lub zysk spadają 2 lata z rzędu"] : [])];
+        const pe = m.pe, med = m.pe_med5;
+        const P = [
+            ["Jaki to typ spółki?", null, `<span class="pill">${esc(typ || "–")}</span>`, zak ? `Lynch: oczekuj ok. ${W.fmtPct(zak[0], 0)}–${W.fmtPct(zak[1], 0)} wzrostu zysku rocznie` : "", ""],
+            ["Czy zysk rośnie?", zk ? zn >= Math.max(1, zk - 1) : null, `${zn} z ${zk} lat w górę`, "zysk netto, lata obrotowe", slupki(lat, ni, mld)],
+            ["Czy sprzedaż rośnie równo?", rk ? rn >= Math.max(1, rk - 1) : null, `${rn} z ${rk} lat w górę`, W.ok(m.rev_cagr5) ? `przychody ${W.fmtPct(m.rev_cagr5, 0, true)} rocznie przez 5 lat` : "", slupki(lat, rv, mld)],
+            ["Czy firma jest bezpieczna?", W.ok(m.net_cash) ? m.net_cash >= 0 || (W.ok(m.de) && m.de >= 0 && m.de < 0.5) : null, W.ok(m.net_cash) ? (m.net_cash >= 0 ? "gotówka > dług" : W.ok(m.de) && m.de >= 0 && m.de < 0.5 ? `dług niski (D/E ${W.fmtNum(m.de)})` : "dług > gotówka") : "–", "Lynch: mocny bilans przetrwa kryzys", dwa(m.cash, "gotówka", m.debt, "dług", mld)],
+            ["Czy nie przepłacam? (PEG)", cykl ? null : W.ok(m.peg) && m.peg > 0 ? m.peg <= limit : null, cykl ? "nie dotyczy" : W.ok(m.peg) && m.peg > 0 ? `PEG ${W.fmtNum(m.peg)}` : "–",
+                cykl ? "spółka cykliczna — Lynch nie ocenia jej po PEG" : `dla typu „${typ}” rozsądnie do ok. ${W.fmtNum(limit, 1)}`, cykl ? "" : strefy(m.peg, [0.5, 1, 2, 3], ["okazja", "tanio", "uczciwie", "drogo"], 3)],
+            ["P/E niżej niż zwykle?", W.ok(pe) && pe > 0 && W.ok(med) ? pe <= med : null, W.ok(pe) && pe > 0 ? `P/E ${W.fmtNum(pe, 1)}` : "strata", W.ok(med) ? `mediana z 5 lat ${W.fmtNum(med, 1)}` : "", W.ok(pe) && pe > 0 && W.ok(med) ? dwa(pe, "dziś", med, "zwykle", (v) => W.fmtNum(v, 1) + "×") : ""],
+            ["Czy są czerwone flagi?", !flagi.length, flagi.length ? `${flagi.length} ✗` : "brak", "czego unikać i sygnały sprzedaży Lyncha", flagi.length ? `<ul class="ly-flagi">${flagi.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""],
+        ];
+        const tak = P.filter((x) => x[1] === true).length, spr = P.filter((x) => x[1] === true || x[1] === false).length;
+        const { pr, z } = prognoza(K, typ);
+        const baz = z && z.war.bazowy ? z.war.bazowy.razem : null;
+        const cena = cykl ? ["nie dotyczy (cykliczna)", ""] : !W.ok(m.peg) || m.peg <= 0 ? ["–", ""] : m.peg <= limit ? [m.peg < 1 ? "tanio" : "uczciwie", "dob"] : ["drogo", "zle"];
+        return `<div class="ly-naglowek"><a href="spolka.html?t=${encodeURIComponent(K.t)}"><b>${esc(K.t)}</b></a> ${esc(K.n || "")} <span class="mut">· ${W.fmtCena(m.price)}</span></div>
+          <div class="kr-scen">
+            <div class="kr-scen-k ${W.ok(baz) ? (baz >= 0.1 ? "kr-scen-lepszy" : baz >= 0.04 ? "kr-scen-bazowy" : "kr-scen-ostrozny") : ""}"><small>Potencjał (5 lat, bazowo)</small><b>${W.ok(baz) ? W.fmtPct(baz, 1, true) : "–"}</b><span>${z ? `rocznie · od ${W.fmtPct(z.war.ostrozny.razem, 0, true)} do ${W.fmtPct(z.war.lepszy.razem, 0, true)}` : esc(pr.brak || "")}</span></div>
+            <div class="kr-scen-k ${cena[1] === "dob" ? "kr-scen-lepszy" : cena[1] === "zle" ? "kr-scen-ostrozny" : ""}"><small>Cena</small><b>${esc(cena[0])}</b><span>${cykl ? "" : W.ok(m.peg) && m.peg > 0 ? `PEG ${W.fmtNum(m.peg)} · limit ${W.fmtNum(limit, 1)}` : ""}</span></div>
+            <div class="kr-scen-k ${tak / (spr || 1) >= 0.7 ? "kr-scen-lepszy" : tak / (spr || 1) >= 0.4 ? "kr-scen-bazowy" : "kr-scen-ostrozny"}"><small>Lynch</small><b>${tak} z ${spr} ✓</b><span>pytań na „tak”</span></div>
+          </div>
+          <div class="ly-pyt">${P.map(([q, st, odp, pod, wiz], i) => `<div class="ly-p"><div class="ly-p-g"><span class="ly-nr">${i + 1}</span><span class="ly-q">${esc(q)}</span><span class="ly-i">${ik(st)}</span><b class="ly-a">${odp}</b></div>
+            ${pod ? `<div class="mut male ly-pod">${esc(pod)}</div>` : ""}${wiz || ""}</div>`).join("")}</div>
+          <p class="male"><a href="spolka.html?t=${encodeURIComponent(K.t)}">Pełna karta spółki →</a> <span class="mut">(historia spółki, notatka, DCF)</span></p>`;
+    }
+    function pokaz(t) {
+        t = String(t || "").trim().toUpperCase();
+        if (!t) return;
+        if (!IDX[t]) { $("ly-wynik").innerHTML = `<p class="mut">Nie ma ${esc(t)} na liście 500 spółek.</p>`; return; }
+        $("ly-t").value = t;
+        $("ly-wynik").innerHTML = '<p class="mut">Wczytuję…</p>';
+        fetch(`data/spolki/${encodeURIComponent(t)}.json`, { cache: "no-cache" }).then((r) => r.json()).then((K) => {
+            $("ly-wynik").innerHTML = ocen(K);
+            try { window.history.replaceState(null, "", "?t=" + encodeURIComponent(t)); } catch (e) { /* bez historii */ }
+        }).catch(() => { $("ly-wynik").innerHTML = '<p class="mut">Nie udało się wczytać danych spółki.</p>'; });
+    }
+    // kandydaci: sito jak wcześniej, przyciski po typach
     const pegOk = (r, max) => W.ok(r.peg) && r.peg > 0 && r.peg <= max;
     const SITA = [
-        ["Szybko rosnąca", (r) => r.typ === "Szybko rosnąca" && !r.cy && !W.duzy(r) && pegOk(r, 1.6), "PEG ≤ 1,6"],
-        ["Stabilnie rosnąca", (r) => r.typ === "Stabilnie rosnąca" && !W.duzy(r) && pegOk(r, 1.5), "PEG ≤ 1,5"],
-        ["Duży zwycięzca (10+ lat)", (r) => W.duzy(r) && pegOk(r, 2), "PEG ≤ 2"],
-        ["Wolno rosnąca", (r) => r.typ === "Wolno rosnąca" && !W.duzy(r) && !!r.dw && W.ok(r.div) && r.div > 0, "stabilna dywidenda 💰"],
-        ["Cykliczna", (r) => !!r.cy && !r.csz, "spółka naprawdę cykliczna (≥ 2 spadki przychodów i zysku w 10 latach), bez ostrzeżenia o szczycie cyklu — fazę cyklu sprawdź sam"],
-        ["Wychodząca z kłopotów", (r) => r.typ === "Wychodząca z kłopotów" && W.ok(r.de) && r.de >= 0 && r.de < 1, "dług / kapitał < 1 (przetrwa)"],
-        ["Ukryte aktywa", (r) => r.typ === "Ukryte aktywa", "—"],
+        ["🏛 Duży zwycięzca", (r) => W.duzy(r) && pegOk(r, 2)],
+        ["Stabilnie rosnące", (r) => r.typ === "Stabilnie rosnąca" && !W.duzy(r) && pegOk(r, 1.5)],
+        ["Szybko rosnące", (r) => r.typ === "Szybko rosnąca" && !r.cy && !W.duzy(r) && pegOk(r, 1.6)],
+        ["Wolno rosnące 💰", (r) => r.typ === "Wolno rosnąca" && !W.duzy(r) && !!r.dw && W.ok(r.div) && r.div > 0],
+        ["Cykliczne", (r) => !!r.cy && !r.csz],
+        ["Wychodzące z kłopotów", (r) => r.typ === "Wychodząca z kłopotów" && !W.duzy(r) && W.ok(r.de) && r.de >= 0 && r.de < 1],
     ];
-    const odznaki = (r) => (W.jakosc77(r) ? ' <span class="jakosc" title="Jakość 7/7">✔</span>' : "") + (r.bf ? ' <span title="Przewaga Buffetta">🏰</span>' : "")
-        + (r.dw ? ' <span title="Stabilna dywidenda">💰</span>' : "") + (r.ik ? ' <span title="Zarząd kupuje akcje">👤</span>' : "") + (r.ow ? ` <span title="Ostrzeżenia na karcie">❗${r.ow}</span>` : "");
-    function kandydaci(rows) {
-        const baza = rows.filter((r) => !r.sp && !r.ls && !r.lu && r.lz);
-        $("kandydaci-pod").innerHTML = `Sito z liczb: spółki bez znacznika ⬇, bez sygnałów sprzedaży Lyncha dla swojego typu i bez ostrzeżeń „czego unikać”, z ceną odpowiednią dla typu.
-          Kolejność: najwięcej spełnionych punktów listy kontrolnej Lyncha przed zakupem, potem ocena ogólna (jakość). Do ${8} spółek na typ. Punkty „oceń sam” (znasz produkt? główny produkt?) sprawdzasz na karcie.`;
-        $("kandydaci").innerHTML = SITA.map(([typ, f, cena]) => {
+    function kandydaci() {
+        const baza = ROWS.filter((r) => !r.sp && !r.ls && !r.lu && r.lz);
+        $("kandydaci").innerHTML = SITA.map(([n, f]) => {
             const l = baza.filter(f).sort((a, b) => (b.lz[0] / b.lz[1]) - (a.lz[0] / a.lz[1]) || ((b.o && b.o.ogolna) || 0) - ((a.o && a.o.ogolna) || 0)).slice(0, 8);
-            return `<h3 style="margin:16px 0 4px">${esc(typ)} <span class="mut male">· cena: ${esc(cena)} · ${l.length ? `${l.length} spółek` : "dziś brak"}</span></h3>
-              ${l.length ? `<div class="przewin"><table class="male"><thead><tr><th>Spółka</th><th class="n">Lista Lyncha</th><th class="n">PEG</th><th class="n">P/E</th><th class="n">Wskaźnik Lyncha</th><th class="n">Dywidenda</th><th class="n">Ocena ogólna</th></tr></thead><tbody>
-              ${l.map((r) => `<tr><td><a href="spolka.html?t=${encodeURIComponent(r.t)}"><b>${esc(r.t)}</b></a>${odznaki(r)}<br><span class="mut">${esc(r.n)}</span></td>
-                <td class="n">${r.lz[0]} z ${r.lz[1]}</td><td class="n">${W.ok(r.peg) && r.peg > 0 ? W.fmtNum(r.peg) : "–"}</td><td class="n">${W.ok(r.pe) && r.pe > 0 ? W.fmtNum(r.pe, 1) : "–"}</td>
-                <td class="n">${W.ok(r.lw) ? W.fmtNum(r.lw, 2) : "–"}</td><td class="n">${W.ok(r.div) && r.div > 0 ? W.fmtPct(r.div, 1) : "–"}</td><td class="n">${r.o && W.ok(r.o.ogolna) ? W.fmtNum(r.o.ogolna, 1) : "–"}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+            return `<div class="ly-kand"><span class="mut male">${esc(n)}</span>${l.length ? l.map((r) => `<button data-t="${esc(r.t)}" title="${esc(r.n)}">${esc(r.t)}${r.bf ? " 🏰" : ""}</button>`).join("") : '<span class="mut male">dziś brak</span>'}</div>`;
         }).join("");
+        document.querySelectorAll("#kandydaci [data-t]").forEach((b) => b.addEventListener("click", () => { pokaz(b.dataset.t); $("ly-t").scrollIntoView({ behavior: "smooth", block: "start" }); }));
     }
-    kroki();
+    $("ly-ok").addEventListener("click", () => pokaz($("ly-t").value));
+    $("ly-t").addEventListener("keydown", (e) => { if (e.key === "Enter") pokaz($("ly-t").value); });
     fetch("data/lista.json", { cache: "no-cache" }).then((r) => r.json()).then((d) => {
+        ROWS = d.rows || []; ROWS.forEach((r) => { IDX[r.t] = r; });
         $("asof").textContent = d.generated_at || "–";
-        kandydaci(d.rows || []);
+        $("ly-lista").innerHTML = ROWS.map((r) => `<option value="${esc(r.t)}">${esc(r.n)}</option>`).join("");
+        kandydaci();
+        const t = new URLSearchParams(window.location.search).get("t");
+        if (t) pokaz(t);
     }).catch(() => { $("kandydaci").innerHTML = '<p class="mut">Nie udało się wczytać danych.</p>'; });
 })();
