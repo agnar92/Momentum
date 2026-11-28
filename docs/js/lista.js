@@ -14,13 +14,15 @@
     let MIEJSCA = {};
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
-        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, buffett: $("buf").checked, insiderzy: $("ins").checked, sila: $("sila").checked };
-        const rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
+        const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, buffett: $("buf").checked, insiderzy: $("ins").checked, sila: $("sila").checked, przewaga: $("prz").checked };
+        let rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
+        if (f.przewaga) rows = rows.map((r, i) => [r, i]).sort((a, b) => W.przewaga(b[0]).n - W.przewaga(a[0]).n || a[1] - b[1]).map((x) => x[0]);
+        $("prz-btn").setAttribute("aria-pressed", f.przewaga ? "true" : "false");
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
             <td class="n mut">${MIEJSCA[r.t] || "–"}</td>
-            <td class="firma"><b>${esc(r.n)}</b>${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}${W.duzy(r) ? ' <span class="jakosc duzy-z" title="Duża spółka rosnąca od 10+ lat z dobrymi fundamentami — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${r.dw ? ' <span class="dyw" title="Dywidenda wypłacana co roku przez 5 lat, bez cięcia">💰</span>' : ""}${r.bf ? ' <span class="dyw" title="Przewaga Buffetta: marża netto > 20 %, dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto">🏰</span>' : ""}${r.ik ? ` <span class="dyw" title="Zarząd lub rada kupili akcje na rynku w ostatnich 12 mies. (${r.ik} os.) — wg Lyncha dobry znak">👤</span>` : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
+            <td class="firma"><b>${esc(r.n)}</b>${W.przewaga(r).n >= 2 ? ` <span class="przew" title="${W.PRZEWAGA.filter((p) => W.przewaga(r)[p.k]).map((p) => p.nazwa).join(", ")}">⭐ ${W.przewaga(r).n}/3</span>` : ""}${W.jakosc77(r) ? ' <span class="jakosc" title="Spełnia wszystkie 7 kryteriów jakości">✔ Jakość 7/7</span>' : ""}${W.duzy(r) ? ' <span class="jakosc duzy-z" title="Duża spółka rosnąca od 10+ lat z dobrymi fundamentami — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${r.dw ? ' <span class="dyw" title="Dywidenda wypłacana co roku przez 5 lat, bez cięcia">💰</span>' : ""}${r.bf ? ' <span class="dyw" title="Przewaga Buffetta: marża netto > 20 %, dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto">🏰</span>' : ""}${r.ik ? ` <span class="dyw" title="Zarząd lub rada kupili akcje na rynku w ostatnich 12 mies. (${r.ik} os.) — wg Lyncha dobry znak">👤</span>` : ""}<small>${esc(r.t)} · ${esc(r.s || "")} · ${esc(r.i || "")}</small></td>
             <td class="n ogolna">${r.sp ? `<span class="spadek" title="Fundamenty słabną 2 lata z rzędu: ${esc(r.sp.join(" i "))}">⬇</span> ` : ""}${r.moje ? `<span class="moje" title="Ocena z Twoimi danymi (${r.moje})">✎</span> ` : ""}${r.kp && r.kp[2] && !r.moje ? `<span class="uwaga" title="Niepełne dane: ${r.kp[0]} z ${r.kp[1]} wskaźników — ocena może być zaburzona">⚠</span> ` : ""}${oc(r.o.ogolna)}</td>
             <td class="n" data-l="Wzrost">${oc(r.o.wzrost)}</td><td class="n" data-l="Siła">${oc(r.o.sila)}</td><td class="n" data-l="Wycena">${oc(r.o.wycena)}</td>
             <td class="typ">${esc(r.typ || "–")}</td>
@@ -38,6 +40,8 @@
         document.querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
             const k = th.dataset.k; st = { sort: k, kier: st.sort === k ? -st.kier : (k === "peg" || k === "nazwa" ? 1 : -1) }; zapisz(KLUCZ, st); rysuj();
         }));
+        $("prz-btn").addEventListener("click", () => { $("prz").checked = !$("prz").checked; try { localStorage.setItem("fundamenta_prz", $("prz").checked ? "1" : ""); } catch (e) { /* brak pamięci */ } rysuj(); });
+        try { $("prz").checked = localStorage.getItem("fundamenta_prz") === "1"; } catch (e) { /* brak pamięci */ }
         $("lista").addEventListener("click", (e) => {
             const g = e.target.closest("[data-gw]");
             if (g) { const t = g.dataset.gw; obs = obs.includes(t) ? obs.filter((x) => x !== t) : [...obs, t]; zapisz(OBS, obs); rysuj(); return; }

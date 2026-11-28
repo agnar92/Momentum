@@ -24,8 +24,9 @@
         if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} ${WAL})` : `dług netto ${W.fmtUsd(-m.net_cash)} ${WAL}`);
         const typ = K.typy && K.typy[0];
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">PEG / DCF w podsumowaniu ↓</a></div>` : "";
+        const pr = GPW ? null : W.przewaga({ o: { sila: K.oceny && K.oceny.sila }, fm: m.fcf_margin, nc: m.net_cash_mc, bf: W.buffettM(m) ? 1 : 0 });
         $("top").innerHTML = `
-          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
+          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${pr && pr.n >= 2 ? ` <span class="przew duzy" title="Spełnia ${pr.n} z 3 cech z potwierdzoną przewagą">⭐ ${pr.n}/3</span>` : ""}${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}${K.cik ? ` · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(K.cik)}&type=10-K" target="_blank" rel="noopener">raporty w SEC</a>` : ""}</div>
             <div id="do-portfela" style="margin-top:10px"></div></div>
           <div class="siatka2">
@@ -816,10 +817,24 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         </svg>`;
     }
     // werdykt: co przemawia za, a co przeciw — zebrane z kryteriów 7/7, Buffetta i list Lyncha (bez ocen własnych) oraz ostrzeżeń
+    // momentum 12 mies. (użytkownik: „czy cena w ogóle rośnie, żeby nie wpaść w pułapkę samych fundamentów”; skala z jego platformy: 5 % = najgorzej, 20 % = najlepiej).
+    // Etap 119: nie jest sprawdzonym filtrem (przedziały z 0, druga połowa ujemna) — tylko fakt, bez wpływu na oceny i na regułę dokupu.
+    const MOM = { min: 0.05, max: 0.20 };
+    const mom12 = () => { const r = (K.zw || {})["1r"]; return W.ok(r) ? r : null; };
+    function momentumPyt() {
+        const r = mom12();
+        return ["Kurs rośnie? (12 mies., min. +5 %)", r === null ? null : r >= MOM.min, r === null ? "–" : W.fmtPct(r, 0, true), "fakt, nie ocena"];
+    }
+    function momentumPasek() {
+        const r = mom12(); if (r === null) return "";
+        return `<div class="kr-mom"><i class="kr-mom-d"></i><i class="kr-mom-g" style="width:${100 * (MOM.max - MOM.min) / (MOM.max + 0.2)}%"></i><span style="left:${Math.max(2, Math.min(98, 100 * (r + 0.2) / (MOM.max + 0.2)))}%" title="12 mies.: ${esc(W.fmtPct(r, 0, true))}"></span></div>
+          <div class="kr-mom-op mut male"><span>−20 %</span><span>+5 % (min.)</span><span>+20 % i więcej</span></div>`;
+    }
     function zaPrzeciwListy() {
         const za = [], przeciw = [], byl = new Set();
         const dodaj = (co, ok, zr) => { if (ok === null || ok === undefined || byl.has(co)) return; byl.add(co); (ok ? za : przeciw).push([co, zr]); };
         (lista77() || []).forEach(([co, , ok]) => dodaj(co, ok, "7/7"));
+        { const ok = momentumPyt()[1]; dodaj("Kurs rośnie (12 mies. ≥ +5 %)", ok, "momentum"); }
         const bf = K.strategie && Object.entries(K.strategie).find(([n]) => n.startsWith("Buffett"));
         (bf ? bf[1] : []).forEach(([co, , ok]) => dodaj(co, ok, "Buffett"));
         const L = K.lynch || {};
@@ -953,7 +968,7 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
             const h = peHistoria(), poPe = h ? (h.teraz <= h.t1 ? ["tanio", "kr-tak"] : h.teraz >= h.t2 ? ["drogo", "kr-nie"] : ["normalnie", ""]) : null;
             const wsk = [["P/S (cena / sprzedaż)", M.ps, null], ["P/E (cena / zysk)", M.pe, M.fpe], ["P/FCF (cena / wolne przepływy)", M.pfcf, null]];
             const cyOstr = cykliczna() ? `<div class="ostrzezenie">⚠ <b>Spółka cykliczna — PEG nie dotyczy.</b> Lynch: u cyklicznych niskie P/E przy rekordowych zyskach to często szczyt cyklu, a nie okazja; lepszy moment bywa przy niskich zyskach i wysokim P/E.${cyklSzczyt() ? ` <b>Teraz:</b> zysk ${W.fmtPct(M.ni_1y, 0, true)} r/r, P/E ${W.fmtNum(M.pe, 1)}×${W.ok(M.pe_med5) ? ` (mediana 5 lat ${W.fmtNum(M.pe_med5, 1)}×)` : ""}.` : ""} Ocena wyceny liczona bez PEG, etykieta z DCF.</div>` : "";
-            return `${cyOstr}${zwrotBlok()}${odwrotnyDcf()}${pytania(kr77("Wycena"))}
+            return `${cyOstr}${zwrotBlok()}${odwrotnyDcf()}${pytania([momentumPyt(), ...kr77("Wycena")])}${momentumPasek()}
               <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
               <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>
@@ -997,7 +1012,7 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
     document.addEventListener("click", (e) => {
         const a = e.target.closest && e.target.closest('a[href="#wycena"]');
         if (!a || !K) return;
-        e.preventDefault(); krok(KROKI.length - 1);
+        e.preventDefault(); if ($("krok").hidden) pelna(true, false); krok(KROKI.length - 1);
         przewinDo($("wycena"));
     });
     // „Więcej”: pełny scoring i szczegóły pod oceną krok po kroku (domyślnie zwinięte; stan w localStorage)
@@ -1029,7 +1044,61 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
         e.preventDefault(); szczegoly(true, true);
     });
     let krokRozmiar = null;
-    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K) krok(); }, 200); });
+    window.addEventListener("resize", () => { window.clearTimeout(krokRozmiar); krokRozmiar = window.setTimeout(() => { if (K) { if (!$("krok").hidden) krok(); proste(); } }, 200); });
+    // --- Prosty widok (user, Nov 2026: „chcę czystą informację i wizualizację stanu spółki: czy zarabia, czy oddaje pieniądze akcjonariuszom”) ---
+    // 3 pytania: zarabia? bezpieczna? akcjonariusz zarabia? — sami fakty z danych, światło = zielone / żółte / czerwone; pełna analiza zwinięta pod przyciskiem
+    const PELNA_KLUCZ = "fundamenta_pelna";
+    const SW = { z: ["#16a34a", "✓"], o: ["#d97706", "•"], c: ["#dc2626", "✗"], b: ["#94a3b8", "–"] };
+    function proste() {
+        const m = K.m, y = K.hist.y || [], q = K.hist.q || [], ltm = K.hist.ltm || null, ok = W.ok;
+        const num = (v) => (ok(v) ? v : null);
+        // 1. Zarabia?
+        const nm = num(m.nm), fm = num(m.fcf_margin);
+        const s1 = nm === null && fm === null ? "b" : (nm !== null && nm <= 0) || (fm !== null && fm <= 0) ? "c" : (nm !== null && nm > 0 && fm !== null && fm >= 0.10) ? "z" : "o";
+        // 2. Bezpieczna? (gotówka vs dług)
+        const nc = num(m.net_cash_mc), de = num(m.de);
+        const s2 = nc !== null && nc > 0 ? "z" : de === null ? "b" : de <= 0.5 ? "z" : de < 1 ? "o" : "c";
+        // 3. Akcjonariusz zarabia? (wypłaty, liczba akcji, cena)
+        const ost = y.length ? y[y.length - 1] : null;
+        const wyp12 = ltm && (num(ltm[3]) !== null || num(ltm[4]) !== null) ? (num(ltm[3]) || 0) + (num(ltm[4]) || 0) : ost && (num(ost[6]) !== null || num(ost[7]) !== null) ? (num(ost[6]) || 0) + (num(ost[7]) || 0) : null;
+        const akcje = num(m.akcje_3l), c5 = K.zw && ok(K.zw["5l"]) ? K.zw["5l"] : null;
+        const testy = [wyp12 === null ? null : wyp12 > 0, akcje === null ? null : akcje <= 0.01, c5 === null ? null : c5 > 0].filter((v) => v !== null);
+        const udz = testy.length ? testy.filter(Boolean).length / testy.length : null;
+        const s3 = testy.length < 2 ? "b" : udz >= 0.99 ? "z" : udz >= 0.6 ? "o" : "c";
+        const sw = [s1, s2, s3], g = sw.filter((x) => x === "z").length, r = sw.filter((x) => x === "c").length;
+        const werdykt = g === 3 ? "Zdrowa firma, a akcjonariusz zarabia" : g >= 2 && r === 0 ? "Raczej dobra kondycja — sprawdź żółte" : r >= 2 || g === 0 ? "Słaba kondycja albo braki w danych — ostrożnie" : "Obraz mieszany — sprawdź czerwone";
+        const kl = g === 3 ? "z" : r >= 2 || g === 0 ? "c" : "o";
+        const pr = GPW ? null : W.przewaga({ o: { sila: K.oceny && K.oceny.sila }, fm: m.fcf_margin, nc: m.net_cash_mc, bf: W.buffettM(m) ? 1 : 0 });
+        const lin = (stan, tekst, wart) => `<div class="pr-linia"><span class="pr-kropka" style="background:${SW[stan][0]}">${SW[stan][1]}</span><span>${tekst}</span><b>${wart}</b></div>`;
+        const pct = (v, d = 0) => (v === null ? "brak" : W.fmtPct(v, d, true));
+        const kafel = (stan, nr, tytul, pyt, wykres, linie) => `<div class="pr-kafel" style="border-top-color:${SW[stan][0]}"><div class="pr-gl"><span class="pr-kropka duza" style="background:${SW[stan][0]}">${SW[stan][1]}</span><div><b>${tytul}</b><div class="mut male">${pyt}</div></div></div><div id="${wykres}" class="pr-wykres"></div>${linie}</div>`;
+        $("prosto").innerHTML = `<div class="pr-werdykt" style="border-left-color:${SW[kl][0]}"><div><div class="mut male">Stan spółki jednym spojrzeniem</div><h2 style="margin:2px 0">${esc(werdykt)}</h2></div>${pr ? `<a class="przew${pr.n >= 2 ? " duzy" : ""}" href="dziala.html" title="Cechy z potwierdzoną przewagą w badaniach">⭐ ${pr.n}/3 cech z potwierdzoną przewagą</a>` : ""}</div>
+          <div class="pr-siatka">
+            ${kafel(s1, 1, "1. Czy zarabia?", "zysk i wolna gotówka z działalności", "pr-w1", lin(nm === null ? "b" : nm > 0 ? "z" : "c", "Marża netto (zysk z każdego 1 $ sprzedaży)", pct(nm)) + lin(fm === null ? "b" : fm >= 0.10 ? "z" : fm > 0 ? "o" : "c", "Wolna gotówka (FCF) z przychodów", pct(fm)))}
+            ${kafel(s2, 2, "2. Czy jest bezpieczna?", "gotówka a dług", "pr-w2", lin(nc === null ? "b" : nc > 0 ? "z" : "o", "Gotówka netto (gotówka − dług)", nc === null ? "brak" : (nc > 0 ? "+" : "") + W.fmtPct(nc, 0) + " kapitalizacji") + lin(de === null ? "b" : de <= 0.5 ? "z" : de < 1 ? "o" : "c", "Dług ÷ kapitał własny", de === null ? "brak" : W.fmtNum(de, 2)))}
+            ${kafel(s3, 3, "3. Czy akcjonariusz zarabia?", "wypłaty, liczba akcji i cena", "pr-w3", lin(wyp12 === null ? "b" : wyp12 > 0 ? "z" : "c", "Dywidendy + skup akcji (12 mies.)", wyp12 === null ? "brak" : W.fmtUsd(wyp12, 0) + " " + WAL) + lin(akcje === null ? "b" : akcje <= 0.01 ? "z" : "c", "Liczba akcji w 3 lata (mniej = lepiej)", pct(akcje, 1)) + lin(c5 === null ? "b" : c5 > 0 ? "z" : "c", "Cena akcji w 5 lat", pct(c5)))}
+          </div>
+          <p class="mut male" style="margin:10px 0 0">To opis stanu z raportów, nie prognoza ceny. Zielone = spełnione, żółte = pośrednio, czerwone = słabo. <a href="dziala.html">Co w badaniach dawało przewagę →</a></p>
+          <button id="pelna" type="button" class="pr-pelna" aria-expanded="false">Pełna analiza krok po kroku ▾</button>`;
+        const ety = y.slice(-6).map((x) => x[0].slice(0, 4)), yy = y.slice(-6), qq = q.slice(-8);
+        if (ety.length) {
+            WY.slupki($("pr-w1"), ety, [{ nazwa: "Zysk netto", kolor: "#16a34a", w: yy.map((x) => x[2]) }, { nazwa: "FCF", kolor: "#10b981", w: yy.map((x) => x[3]) }], usdOs, 170);
+            WY.slupki($("pr-w3"), ety, [{ nazwa: "FCF", kolor: "#10b981", w: yy.map((x) => x[3]) }, { nazwa: "Wypłaty (dywidendy + skup)", kolor: "#2a78d6", w: yy.map((x) => (num(x[6]) === null && num(x[7]) === null ? null : (num(x[6]) || 0) + (num(x[7]) || 0))) }], usdOs, 170);
+        } else { $("pr-w1").innerHTML = '<p class="mut male">Brak rocznych raportów.</p>'; $("pr-w3").innerHTML = '<p class="mut male">Brak rocznych raportów.</p>'; }
+        if (qq.length) WY.slupki($("pr-w2"), qq.map((x) => x[0].slice(0, 7)), [{ nazwa: "Gotówka", kolor: "#2a78d6", w: qq.map((x) => x[4]) }, { nazwa: "Dług", kolor: "#eb6834", w: qq.map((x) => x[5]) }], usdOs, 170);
+        else $("pr-w2").innerHTML = '<p class="mut male">Brak kwartalnych bilansów.</p>';
+        $("pelna").addEventListener("click", () => pelna($("krok").hidden, true));
+        let st = null; try { st = localStorage.getItem(PELNA_KLUCZ); } catch (e) { /* tryb prywatny */ }
+        pelna(st === "1", false);
+    }
+    function pelna(otworz, przewin) {
+        const k = $("krok"), b = $("pelna");
+        k.hidden = !otworz;
+        if (b) { b.setAttribute("aria-expanded", String(otworz)); b.textContent = otworz ? "Zwiń pełną analizę ▴" : "Pełna analiza krok po kroku ▾"; }
+        try { localStorage.setItem(PELNA_KLUCZ, otworz ? "1" : "0"); } catch (e) { /* tryb prywatny */ }
+        if (otworz) krok();
+        if (otworz && przewin) przewinDo(k);
+    }
     function krok(i) {
         if (i !== undefined) S.krok = i;
         const k = S.krok || 0, el = $("krok");
@@ -1083,6 +1152,6 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
         WL = (czytajWl()[k.t] || {}).w || {};
         if (Object.keys(WL).length) zastosuj();
         if (!GPW) fetch("data/sektory.json").then((r) => r.json()).then((d) => { ROZ = d; if (Object.keys(WL).length) { zastosuj(); odswiez(); } }).catch(() => {});
-        domyslne(); top(); krok(0); liczby(); metryki(); strategie(); zyskZd(); lynch(); przyciskWiecej();
+        domyslne(); top(); krok(0); proste(); liczby(); metryki(); strategie(); zyskZd(); lynch(); przyciskWiecej();
     }).catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie ma danych spółki ${t} (${e.message}). ${GPW ? "Lista GPW obejmuje WIG20, mWIG40 i sWIG80 (bez wykluczonych sektorów)." : "Lista obejmuje 500 największych spółek USA."}`; });
 })();
