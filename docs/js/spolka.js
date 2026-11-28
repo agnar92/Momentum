@@ -816,10 +816,24 @@ dywidendy + skup: ${kw(sf.wyplaty[i])}</title></rect>`).join("");
         </svg>`;
     }
     // werdykt: co przemawia za, a co przeciw — zebrane z kryteriów 7/7, Buffetta i list Lyncha (bez ocen własnych) oraz ostrzeżeń
+    // momentum 12 mies. (użytkownik: „czy cena w ogóle rośnie, żeby nie wpaść w pułapkę samych fundamentów”; skala z jego platformy: 5 % = najgorzej, 20 % = najlepiej).
+    // Etap 119: nie jest sprawdzonym filtrem (przedziały z 0, druga połowa ujemna) — tylko fakt, bez wpływu na oceny i na regułę dokupu.
+    const MOM = { min: 0.05, max: 0.20 };
+    const mom12 = () => { const r = (K.zw || {})["1r"]; return W.ok(r) ? r : null; };
+    function momentumPyt() {
+        const r = mom12();
+        return ["Kurs rośnie? (12 mies., min. +5 %)", r === null ? null : r >= MOM.min, r === null ? "–" : W.fmtPct(r, 0, true), "fakt, nie ocena"];
+    }
+    function momentumPasek() {
+        const r = mom12(); if (r === null) return "";
+        return `<div class="kr-mom"><i class="kr-mom-d"></i><i class="kr-mom-g" style="width:${100 * (MOM.max - MOM.min) / (MOM.max + 0.2)}%"></i><span style="left:${Math.max(2, Math.min(98, 100 * (r + 0.2) / (MOM.max + 0.2)))}%" title="12 mies.: ${esc(W.fmtPct(r, 0, true))}"></span></div>
+          <div class="kr-mom-op mut male"><span>−20 %</span><span>+5 % (min.)</span><span>+20 % i więcej</span></div>`;
+    }
     function zaPrzeciwListy() {
         const za = [], przeciw = [], byl = new Set();
         const dodaj = (co, ok, zr) => { if (ok === null || ok === undefined || byl.has(co)) return; byl.add(co); (ok ? za : przeciw).push([co, zr]); };
         (lista77() || []).forEach(([co, , ok]) => dodaj(co, ok, "7/7"));
+        { const ok = momentumPyt()[1]; dodaj("Kurs rośnie (12 mies. ≥ +5 %)", ok, "momentum"); }
         const bf = K.strategie && Object.entries(K.strategie).find(([n]) => n.startsWith("Buffett"));
         (bf ? bf[1] : []).forEach(([co, , ok]) => dodaj(co, ok, "Buffett"));
         const L = K.lynch || {};
@@ -953,7 +967,7 @@ Raport roczny: opis działalności (w USA 10-K „Item 1. Business”), ryzyka (
             const h = peHistoria(), poPe = h ? (h.teraz <= h.t1 ? ["tanio", "kr-tak"] : h.teraz >= h.t2 ? ["drogo", "kr-nie"] : ["normalnie", ""]) : null;
             const wsk = [["P/S (cena / sprzedaż)", M.ps, null], ["P/E (cena / zysk)", M.pe, M.fpe], ["P/FCF (cena / wolne przepływy)", M.pfcf, null]];
             const cyOstr = cykliczna() ? `<div class="ostrzezenie">⚠ <b>Spółka cykliczna — PEG nie dotyczy.</b> Lynch: u cyklicznych niskie P/E przy rekordowych zyskach to często szczyt cyklu, a nie okazja; lepszy moment bywa przy niskich zyskach i wysokim P/E.${cyklSzczyt() ? ` <b>Teraz:</b> zysk ${W.fmtPct(M.ni_1y, 0, true)} r/r, P/E ${W.fmtNum(M.pe, 1)}×${W.ok(M.pe_med5) ? ` (mediana 5 lat ${W.fmtNum(M.pe_med5, 1)}×)` : ""}.` : ""} Ocena wyceny liczona bez PEG, etykieta z DCF.</div>` : "";
-            return `${cyOstr}${zwrotBlok()}${odwrotnyDcf()}${pytania(kr77("Wycena"))}
+            return `${cyOstr}${zwrotBlok()}${odwrotnyDcf()}${pytania([momentumPyt(), ...kr77("Wycena")])}${momentumPasek()}
               <div class="mut male" style="margin:12px 0 4px">Wskaźniki: ostatnie 12 mies. i prognoza na przyszły rok${GPW ? " (GPW: brak prognoz)" : ""}</div>
               <div class="kr-wsk"><div></div><div class="mut male">12 mies.</div><div class="mut male">prognoza</div>
                 ${wsk.map(([n, a, b]) => `<div class="kr-wsk-n">${esc(n)}</div><b>${W.ok(a) && a > 0 ? W.fmtNum(a, 1) + "×" : "–"}</b><b>${W.ok(b) && b > 0 ? W.fmtNum(b, 1) + "×" : "–"}</b>`).join("")}</div>

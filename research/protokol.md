@@ -1781,3 +1781,14 @@ Użytkownik: „czyli po tych badaniach musimy zmienić scoring … źle pokazuj
 wybór wg protokołu: **O3** (górne 20 % 36 mies. w sprawdzeniu +12,0 pp [+7,0; +17,8] vs O0 +10,0). Portfele top 20 2012–2026: O3 18,8 %/rok (2012–18 13,6 %, 2019–26
 23,8 %, obsunięcie −26 %), O2 18,5 %, O4 17,9 %, O1 17,4 %, O5 17,1 %, O0 16,1 % (9,8 / 22,0 %, −33 %), SPY 14,7 %. **Wdrożone na stronie** (decyzja użytkownika przed testem):
 ocena ogólna = Siła + SG&A ÷ zysk brutto + capex ÷ zysk netto; GPW — sama Siła (brak danych SG&A).
+
+## Etap 119 — momentum 12 mies. jako filtr „pułapki fundamentów” (protokół przed uruchomieniem, 2026-11-27)
+
+Użytkownik: „brakuje momentum z 12 miesięcy — prosta sprawa sprawdzenia, czy cena w ogóle rośnie, żeby nie wpaść w pułapkę samych fundamentów i czekać kilka lat na odrobinę ruchu ceny” (reguła z platformy do scoringu: zwrot 1 rok, skala 5 % → 20 %).
+- Pule jakości (styczeń): **Siła ≥ 7**, **Jakość 7/7**, **Buffett 3 + 6 + 8** (🏰). Zbiór: top 500 USA PIT bez wykluczonych sektorów.
+- Momentum = zwrot ceny z poprzednich 12 mies. (styczeń do stycznia). Grupy: **A** ≥ +5 % (dolna granica skali z platformy), **B** ≥ 0, **C** ≥ +20 %; porównanie z resztą puli (poniżej progu).
+- Miary: nadwyżka nad medianą zbioru 12 / 36 / 60 mies. (różnica median grupa vs reszta puli, bootstrap po latach startu, połowy 2012–17 / 2018–23); udział spółek ze stratą po 36 mies.
+- Filtr „działa”, gdy w którejś puli grupa A lub B ma po 36 lub 60 mies. różnicę > 0 z przedziałem bez 0 i dodatnią w obu połowach; ewentualnie gdy zmniejsza udział spółek ze stratą w obu połowach.
+- Na stronie (niezależnie od wyniku): zwykły fakt — zmiana ceny 1 rok jako jedno pytanie ✓/✗ z paskiem skali 5 % → 20 %, bez wpływu na oceny i na regułę dokupu.
+
+**Wynik etapu 119** (`r144_etap119.py`, `wyniki/r144_etap119.md`): **niepotwierdzone** — żadna z 27 kombinacji (3 pule × 3 progi × 3 horyzonty) nie spełnia warunku (przedział bez 0 i obie połowy dodatnie). W puli Siła ≥ 7 spółki z kursem rosnącym ≥ +5 % w 12 mies. mają po 36 / 60 mies. wyższą nadwyżkę (+16,5 / +22,5 pp), ale przedziały obejmują 0 [−27; +35] / [−39; +97], a w drugiej połowie (2018–23) znak jest ujemny (−20 / −33 pp); po 12 mies. −6,8 pp. Udział spółek ze stratą po 36 mies. mniejszy w Sile ≥ 7 (13 vs 19 %) i w 🏰 (16 vs 23 %), bez różnicy w Jakości 7/7 (20 vs 24 %) — bez podziału na połowy. W 2012–17 spółki jakościowe z malejącym kursem zwykle odrabiały, w 2018–23 nie. Wniosek: momentum 12 mies. nie jest sprawdzonym filtrem; pokazane na stronie wyłącznie jako fakt (bez wpływu na oceny i regułę dokupu).
