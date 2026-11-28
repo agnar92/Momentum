@@ -190,3 +190,11 @@ test("dokup: pierwszy zakup bez PEG 0–2, gdy fundamenty bardzo dobre (Jakość
     assert.deepStrictEqual(k, { H: 200, I: 200, J: 0, K: 0, L: 0 });     // J — zwykłe fundamenty, PEG 3; K — posiadana, PEG 3 → czeka; L — ⬇
     assert.ok(d.pozycje.find((x) => x.t === "K").powod.includes("dokup przy 0–2"));
 });
+
+test("przewaga: liczy 3 cechy z potwierdzoną przewagą", () => {
+    assert.strictEqual(W.przewaga({ o: { sila: 7.5 }, fm: 0.2, nc: 0.01, bf: 1 }).n, 3);
+    assert.strictEqual(W.przewaga({ o: { sila: 6.9 }, fm: 0.2, nc: -0.01 }).n, 0);
+    const p = W.przewaga({ o: { sila: 8 }, fm: 0.1, nc: 0.05 });
+    assert.deepStrictEqual([p.bf, p.sila, p.got, p.n], [false, true, true, 2]);
+    assert.strictEqual(W.przewaga({}).n, 0);
+});

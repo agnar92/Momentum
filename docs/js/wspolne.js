@@ -106,7 +106,7 @@
         return rows.filter((r) => (!q || r.t.toLowerCase().includes(q) || (r.n || "").toLowerCase().includes(q))
             && (!f.sektor || r.s === f.sektor) && (!f.typ || r.typ === f.typ) && (!f.wycena || r.et === f.wycena)
             && (!f.strategia || (r.st[f.strategia] && r.st[f.strategia][0] >= (f.min || r.st[f.strategia][1])))
-            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.buffett || !!r.bf) && (!f.insiderzy || !!r.ik) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)));
+            && (!f.obserwowane || (f.lista || []).includes(r.t)) && (!f.jakosc || jakosc77(r)) && (!f.duzy || duzy(r)) && (!f.dyw || !!r.dw) && (!f.buffett || !!r.bf) && (!f.insiderzy || !!r.ik) && (!f.sila || (r.o && ok(r.o.sila) && r.o.sila >= 7)) && (!f.przewaga || przewaga(r).n >= 2));
     }
     // znacznik jakości: spełnia wszystkie 7 kryteriów listy „Jakość” (etapy 74–75, 83)
     const JAKOSC = "Jakość (7 kryteriów)";
@@ -118,6 +118,20 @@
     // 🏰 Przewaga Buffetta (etap 111): marża netto > 20 % w 2 latach, dług długoterminowy ≤ 4 × zysk netto, SG&A < 30 % zysku brutto
     function buffettM(m) {
         return !!(m && ok(m.bf_nm) && m.bf_nm > 0.2 && ok(m.bf_dlug_lat) && m.bf_dlug_lat <= 4 && ok(m.bf_sga_gp) && m.bf_sga_gp < 0.3);
+    }
+    // ⭐ Przewaga potwierdzona testami (etapy 117 i 121; na stronie „Co działa”): 🏰 Buffett (marża netto > 20 %, dług ≤ 4× zysk, SG&A < 30 %), Siła finansowa ≥ 7,
+    // marża FCF ≥ 10 % przy gotówce netto > 0. Liczy się, ile z 3 spełnia spółka; to opis cech, nie rekomendacja.
+    const PRZEWAGA = [
+        { k: "bf", nazwa: "🏰 Przewaga Buffetta", skrot: "Buffett", edge: "+44 pp / 3 lata" },
+        { k: "sila", nazwa: "Siła finansowa ≥ 7", skrot: "Siła ≥ 7", edge: "+45 pp / 3 lata" },
+        { k: "got", nazwa: "FCF ≥ 10 % przychodów i gotówka netto", skrot: "FCF + gotówka", edge: "+25 pp / 5 lat" },
+    ];
+    function przewaga(r) {
+        const s = r && r.o && ok(r.o.sila) ? r.o.sila : (r && ok(r.sila) ? r.sila : null);
+        const fm = r && (ok(r.fm) ? r.fm : r.fcf_margin), nc = r && (ok(r.nc) ? r.nc : r.net_cash_mc);
+        const bf = !!(r && (r.bf || buffettM(r)));
+        const w = { bf, sila: s !== null && s >= 7, got: !!(ok(fm) && fm >= 0.10 && ok(nc) && nc > 0) };
+        return Object.assign(w, { n: (w.bf ? 1 : 0) + (w.sila ? 1 : 0) + (w.got ? 1 : 0) });
     }
     function jakosc77(r) {
         const s = r && r.st && r.st[JAKOSC];
@@ -400,7 +414,7 @@
         };
         if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", przycisk); else przycisk();
     }
-    const W = { WALUTA: "USD", OGOLNA, bardzoDobre, prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
+    const W = { WALUTA: "USD", OGOLNA, bardzoDobre, prognozaTypu, zwrotAkcjonariusza, ZAKRES_TYPU, buffettM, dokup, DOKUP, punkty, sredniKoszt, duzy, DUZY, CENA_TYPU, jakosc77, JAKOSC, przewaga, PRZEWAGA, etykietaPeg, pozycjaPeg, GRUPY, skladOceny, percentyl, ocenyZ, POLA_WLASNE, miejsce, fmtPct, fmtNum, fmtUsd, fmtCena, dcf, prognoza, implikowane, scenariusze, pegScen, pegEtykieta, etykieta, pozycjaWyceny, opisPercentyla, klasaOceny, filtruj, sortuj, ttmSeria, fazyLat, FAZY, peg25, LIMIT_LYNCH, ok };
     if (typeof module !== "undefined" && module.exports) module.exports = W;
     else root.W = W;
 })(typeof window !== "undefined" ? window : this);

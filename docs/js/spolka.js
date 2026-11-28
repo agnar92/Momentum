@@ -24,8 +24,10 @@
         if (W.ok(m.net_cash) && K.sector !== "Financial") fakty.push(m.net_cash >= 0 ? `więcej gotówki niż długu (${W.fmtUsd(m.net_cash)} ${WAL})` : `dług netto ${W.fmtUsd(-m.net_cash)} ${WAL}`);
         const typ = K.typy && K.typy[0];
         const wyc = K.etykieta ? `<div class="male" style="margin-top:6px">Wycena: <span class="pill p-${slug(K.etykieta)}">${esc(K.etykieta)}</span>${W.ok(m.peg) && m.peg > 0 ? ` PEG ${W.fmtNum(m.peg)}` : ""} · <a href="#wycena">PEG / DCF w podsumowaniu ↓</a></div>` : "";
+        const pr = GPW ? null : W.przewaga({ o: { sila: K.oceny && K.oceny.sila }, fm: m.fcf_margin, nc: m.net_cash_mc, bf: W.buffettM(m) ? 1 : 0 });
+        const przewagaHtml = pr ? `<div class="przew-pasek"><span class="przew-t">⭐ Przewaga potwierdzona testami <b>${pr.n}/3</b></span>${W.PRZEWAGA.map((p) => `<span class="przew-chip ${pr[p.k] ? "tak" : "nie"}" title="${esc(p.nazwa)} — ${p.edge} nad medianą (badania)">${pr[p.k] ? "✓" : "✗"} ${esc(p.skrot)}</span>`).join("")}<a href="dziala.html">co to znaczy →</a></div>` : "";
         $("top").innerHTML = `
-          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
+          <div class="naglowek"><h1>${esc(K.n)} <span class="tick">${esc(K.t)}</span>${pr && pr.n >= 2 ? ` <span class="przew duzy" title="Spełnia ${pr.n} z 3 cech z potwierdzoną przewagą">⭐ ${pr.n}/3</span>` : ""}${jak77() ? ' <span class="jakosc duzy" title="Spełnia wszystkie 7 kryteriów jakości — szczegóły w sekcji Strategie">✔ Jakość 7/7</span>' : ""}${duz6() ? ' <span class="jakosc duzy duzy-z" title="Duża spółka rosnąca od 10+ lat — PEG 1–2 to cena godziwa">🏛 Duży zwycięzca</span>' : ""}${M.dywidenda_stabilna ? ' <span class="jakosc duzy" title="Dywidenda co roku przez 5 lat, bez cięcia">💰 Stabilna dywidenda</span>' : ""}${W.buffettM(M) ? ' <span class="jakosc duzy" title="Marża netto > 20 % (2 lata), dług długoterminowy ≤ 4 × zysk, SG&A < 30 % zysku brutto — szczegóły w sekcji Strategie">🏰 Przewaga Buffetta</span>' : ""}</h1>
             <div class="mut">${esc(K.sector || "")} · ${esc(K.industry || "")} · ${esc(K.country || "")}${K.www ? ` · <a href="${esc(K.www)}" target="_blank" rel="noopener">strona firmy</a>` : ""}${K.cik ? ` · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(K.cik)}&type=10-K" target="_blank" rel="noopener">raporty w SEC</a>` : ""}</div>
             <div id="do-portfela" style="margin-top:10px"></div></div>
           <div class="siatka2">
@@ -36,7 +38,7 @@
               <div class="dopas"><i style="width:${typ[1]}%"></i></div><div class="mut male">${esc(typ[2])}</div>
               <details style="margin-top:8px"><summary class="mut male">Wszystkie typy</summary>${K.typy.map((x) => `<div class="male" style="display:flex;justify-content:space-between"><span>${esc(x[0])}</span><span>${x[1]} %</span></div>`).join("")}</details>` : '<p class="mut">–</p>'}
             </div>
-          </div>`;
+          </div>${przewagaHtml}`;
         przyciskPortfela();
     }
 
