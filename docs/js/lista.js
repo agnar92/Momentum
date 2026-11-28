@@ -15,7 +15,9 @@
     function rysuj() {
         const [strat, min] = ($("strategia").value || "|").split("|");
         const f = { q: $("q").value, sektor: $("sektor").value, typ: $("typ").value, wycena: $("wycena").value, strategia: strat, min: +min, obserwowane: $("obs").checked, lista: obs, jakosc: $("jak").checked, duzy: $("duz").checked, dyw: $("dyw").checked, buffett: $("buf").checked, insiderzy: $("ins").checked, sila: $("sila").checked, przewaga: $("prz").checked };
-        const rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
+        let rows = W.sortuj(W.filtruj(D.rows, f), st.sort, st.kier);
+        if (f.przewaga) rows = rows.map((r, i) => [r, i]).sort((a, b) => W.przewaga(b[0]).n - W.przewaga(a[0]).n || a[1] - b[1]).map((x) => x[0]);
+        $("prz-btn").setAttribute("aria-pressed", f.przewaga ? "true" : "false");
         $("ile").textContent = `${rows.length} z ${D.rows.length} spółek`;
         $("lista").innerHTML = rows.map((r) => `<tr data-t="${esc(r.t)}">
             <td><span class="gw ${obs.includes(r.t) ? "" : "off"}" data-gw="${esc(r.t)}" title="Obserwuj">★</span></td>
@@ -34,10 +36,12 @@
     }
     function opcje(id, wartosci) { $(id).insertAdjacentHTML("beforeend", wartosci.map((v) => `<option>${esc(v)}</option>`).join("")); }
     function podlacz() {
-        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw", "buf", "ins", "sila", "prz"].forEach((id) => $(id).addEventListener("input", rysuj));
+        ["q", "sektor", "typ", "wycena", "strategia", "obs", "jak", "duz", "dyw", "buf", "ins", "sila"].forEach((id) => $(id).addEventListener("input", rysuj));
         document.querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
             const k = th.dataset.k; st = { sort: k, kier: st.sort === k ? -st.kier : (k === "peg" || k === "nazwa" ? 1 : -1) }; zapisz(KLUCZ, st); rysuj();
         }));
+        $("prz-btn").addEventListener("click", () => { $("prz").checked = !$("prz").checked; try { localStorage.setItem("fundamenta_prz", $("prz").checked ? "1" : ""); } catch (e) { /* brak pamięci */ } rysuj(); });
+        try { $("prz").checked = localStorage.getItem("fundamenta_prz") === "1"; } catch (e) { /* brak pamięci */ }
         $("lista").addEventListener("click", (e) => {
             const g = e.target.closest("[data-gw]");
             if (g) { const t = g.dataset.gw; obs = obs.includes(t) ? obs.filter((x) => x !== t) : [...obs, t]; zapisz(OBS, obs); rysuj(); return; }
