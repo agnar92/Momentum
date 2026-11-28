@@ -601,18 +601,6 @@ def cykl_spadki(y, lat=10):
     return n
 
 
-def lynch_skrot(ly):
-    """Skrót list Lyncha do tabeli spółek: lz = [spełnione, sprawdzone] z listy kontrolnej przed zakupem (rozdz. 15, bez punktów „oceń sam”),
-    ls = liczba sygnałów sprzedaży (rozdz. 17), lu = liczba ostrzeżeń „czego unikać” (rozdz. 9), lw = wskaźnik Lyncha (wzrost % + dywidenda %) ÷ P/E."""
-    if not ly:
-        return {}
-    zak = [x for x in (ly.get("zakup") or []) if x[2] is not None]
-    return dict(lz=[sum(1 for x in zak if x[2]), len(zak)] if zak else None,
-                ls=sum(1 for x in (ly.get("lista") or []) if x[2] is False),
-                lu=sum(1 for x in (ly.get("unikaj") or []) if x[2] is False),
-                lw=round(ly["wskaznik"], 2) if ly.get("wskaznik") is not None else None)
-
-
 def typy_cykl(ty, m):
     """Lynch: cykliczna „przebrana” za szybko rosnącą to dalej cykliczna — gdy spółka spełnia `cykliczna(m)`, typ „Cykliczna” idzie na pierwsze miejsce."""
     if not cykliczna(m):

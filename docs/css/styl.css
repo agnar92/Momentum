@@ -374,32 +374,3 @@ button.maly { font-size: 11px; padding: 2px 8px; }
 /* wykres P/E: mediana 5 lat */
 .kr-pe-med { stroke: var(--tekst2); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .kr-ln { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--tekst2); vertical-align: middle; margin-right: 4px; }
-
-/* Lynch: szybka ocena */
-.ly-szukaj { display: flex; gap: 8px; margin: 10px 0; }
-.ly-szukaj input { flex: 1; max-width: 260px; text-transform: uppercase; }
-.ly-naglowek { font-size: 18px; margin: 6px 0 2px; }
-.ly-pyt { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
-.ly-p { border: 1px solid var(--linia); border-radius: 12px; padding: 10px 12px; }
-.ly-p-g { display: grid; grid-template-columns: 24px 1fr auto auto; align-items: center; gap: 8px; }
-.ly-nr { width: 22px; height: 22px; border-radius: 50%; background: var(--tlo2); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
-.ly-q { font-weight: 600; } .ly-a { font-size: 15px; white-space: nowrap; } .ly-i { font-size: 18px; }
-.ly-pod { margin: 2px 0 0 32px; }
-.ly-mini { width: 100%; max-width: 420px; height: 70px; margin: 6px 0 0 32px; display: block; }
-.ly-plus { fill: var(--zielony); background: var(--zielony); } .ly-minus { fill: var(--czerwony); } .ly-szary { background: var(--siatka); }
-.ly-dwa { display: grid; grid-template-columns: 70px 1fr 70px; gap: 4px 8px; align-items: center; margin: 6px 0 0 32px; max-width: 420px; font-size: 12px; }
-.ly-dwa i { display: block; height: 10px; border-radius: 5px; } .ly-dwa b { text-align: right; }
-.ly-pas { position: relative; display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 8px 0 0 32px; max-width: 420px; }
-.ly-pas i { display: block; height: 100%; } .ly-z0 { background: #15803d; } .ly-z1 { background: #4ade80; } .ly-z2 { background: #facc15; } .ly-z3 { background: #f87171; }
-.ly-pas span { position: absolute; top: -3px; width: 4px; height: 18px; background: var(--tekst); border-radius: 2px; transform: translateX(-2px); }
-.ly-pas-op { display: grid; grid-template-columns: 1fr 1fr 2fr 2fr; margin-left: 32px; max-width: 420px; font-size: 11px; }
-.ly-flagi { margin: 6px 0 0 50px; padding: 0; font-size: 13px; color: var(--czerwony-t); }
-.ly-kand { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
-.ly-kand .male:first-child { min-width: 150px; }
-.ly-kand button { padding: 4px 10px; border-radius: 14px; }
-@media (max-width: 700px) { .ly-p-g { grid-template-columns: 24px 1fr auto; } .ly-p-g .ly-a { grid-column: 2 / 4; white-space: normal; } .ly-mini, .ly-dwa, .ly-pas, .ly-pas-op, .ly-pod { margin-left: 0; } }
-.ly-prog { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
-.ly-prog button.akt { background: var(--tekst); color: var(--tlo); }
-.ly-tab tr[data-t] { cursor: pointer; } .ly-tab tr[data-t]:hover { background: var(--tlo2); }
-.ly-s { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--tlo2); }
-.ly-s-t { background: #bbf7d0; color: #14532d; } .ly-s-u { background: #fef08a; color: #713f12; } .ly-s-d { background: #fecaca; color: #7f1d1d; }

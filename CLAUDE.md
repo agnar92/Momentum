@@ -182,15 +182,6 @@ percentile 0, falling 3-year profit → PEG 0, FCF ≤ 0 → P/FCF 0 (real missi
   scoring dodatkowy”; `#szczegoly-tresc` hidden, `szczegoly(otworz)` draws charts on first open because they size from the element width, state in localStorage
   `fundamenta_szczegoly`, `a[href="#szczegoly"]` opens it). Clicking any step / Dalej / Wstecz scrolls to the top of `#krok` (`przewinDo`, minus the sticky header;
   user: „jeżeli klikam następny, daj stronę na początek tego kroku”).
-- `lynch.html` + `js/lynch.js` (user, Nov 2026: „pełna strategia Petera Lyncha … sugestie potencjalnych inwestycji”, then „to jest blok tekstu … proste lekkie
-  narzędzie … pytanie za pytaniem … potencjał wzrostowy i wycena, czy nie przepłacamy” — NO long texts): ticker input (?t=) → 3 tiles (potential 5 y from
-  `W.prognozaTypu` + `W.zwrotAkcjonariusza` like the card; price = PEG vs type limit `W.CENA_TYPU`, cyclicals „nie dotyczy”; Lynch x of y ✓) + 7 one-line questions
-  with ✓/✗, answer and a mini chart (type, profit up, revenue up — mini bars from hist.y; safety cash vs debt; PEG zone bar; P/E vs 5-year median; red flags = Lynch
-  „unikaj” + sell signals + ⬇) + link to the full card; candidates per type as ticker buttons (no ⬇, no `ls`, no `lu`, price by type, slow growers 💰, cyclicals strict
-  `cy`, turnarounds D/E < 1; sorted by `lz` then Ogólna; ≤ 8) — REPLACED by the user's flow (user: „najpierw 8 kryteriów Buffetta … potem metodą Lyncha … czy są
-  wycenione uczciwie”): table 1. Buffett (8 reguł) ≥ 8 / ≥ 7 / ≥ 6 of 8 (buttons, default ≥ 7) → 2. Lynch buy-checklist `lz` + flags (`ls` + `lu` + ⬇) → 3. price zone
-  (PEG < 1 tanio, 1–2 uczciwie, > 2 drogo, cyclicals „nie dotyczy”); sorted Buffett desc, flags asc, `lz` desc; row click → the quick assessment below.
-  lista fields from `ocena.lynch_skrot` (lz, ls, lu, lw) + `div`. Nav link „Lynch” on every page.
 - `metoda.html`: formulas and thresholds (keep in sync with `momentum/ocena.py`).
 - Dark theme (user, Nov 2026): colors are CSS variables in `css/styl.css`; `:root[data-motyw="ciemny"]` and `prefers-color-scheme: dark` (unless
   `data-motyw="jasny"`) override them; toggle button ☀/🌙 injected into the header by `wspolne.js` (localStorage `fundamenta_motyw`; an inline script in
