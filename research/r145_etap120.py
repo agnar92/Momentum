@@ -3,7 +3,7 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 _s113 = open(os.path.join(HERE, 'r138_etap113.py')).read()
 exec(_s113[:_s113.index("print('z DCF")])
-exec(_s113[_s113.index("def portfel_k"):_s113.index("POL = {")])
+_a = _s113.index("def portfel_k"); exec(_s113[_a:_s113.index("return s, liczba, sklady", _a) + len("return s, liczba, sklady")])
 exec(_s113[_s113.index("POL = {"):_s113.index("D10 = ")])
 rng = np.random.default_rng(120)
 nz = lambda A_, v: np.nan_to_num(A_, nan=v)
