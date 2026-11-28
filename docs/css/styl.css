@@ -396,3 +396,18 @@ button.maly { font-size: 11px; padding: 2px 8px; }
 .prz-btn { font: inherit; font-weight: 700; font-size: 15px; padding: 10px 18px; border-radius: 999px; border: 2px solid #f59e0b; background: transparent; color: var(--tekst); cursor: pointer; }
 .prz-btn:hover { background: rgba(245, 158, 11, .15); }
 .prz-btn[aria-pressed="true"] { background: #f59e0b; color: #1f1300; }
+
+/* prosty widok spółki: 3 pytania */
+.pr-werdykt { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border-left: 6px solid #94a3b8; padding: 4px 0 4px 14px; margin-bottom: 14px; }
+.pr-siatka { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.pr-kafel { border: 1px solid var(--siatka); border-top: 5px solid #94a3b8; border-radius: 12px; padding: 12px; background: var(--pole); min-width: 0; }
+.pr-gl { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.pr-gl b { font-size: 16px; }
+.pr-kropka { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; flex: none; }
+.pr-kropka.duza { width: 32px; height: 32px; font-size: 18px; }
+.pr-wykres { min-height: 170px; margin-bottom: 6px; }
+.pr-linia { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--siatka); font-size: 13px; }
+.pr-linia span:nth-child(2) { flex: 1; }
+.pr-pelna { margin-top: 14px; width: 100%; font: inherit; font-weight: 600; padding: 10px; border-radius: 10px; border: 1px solid var(--siatka); background: var(--tlo2); color: var(--tekst); cursor: pointer; }
+.pr-pelna:hover { background: var(--hover); }
+@media (max-width: 800px) { .pr-siatka { grid-template-columns: 1fr; } }
